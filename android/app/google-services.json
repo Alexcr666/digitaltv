@@ -1,0 +1,215 @@
+{
+  "project_info": {
+    "project_number": "659987129698",
+    "firebase_url": "https://notes-4c618.firebaseio.com",
+    "project_id": "notes-4c618",
+    "storage_bucket": "notes-4c618.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659987129698:android:f5cbefc4e2397314",
+        "android_client_info": {
+          "package_name": "com.example.alexenriquecabarca.validathon"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "659987129698-mekuno66r1sq2mshrokf06tni5dbhqpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuDeqMQ0wvuGNWqK0-_O-UzeWSOqUpwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "659987129698-m7lmm2v3e833g67rive5v5l2skr7fe83.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "659987129698-inlk0daavf6gregj52ujjamlgd45pitt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.transcribeai"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659987129698:android:62943813926f71480cf83b",
+        "android_client_info": {
+          "package_name": "com.example.digitaltv"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "659987129698-mekuno66r1sq2mshrokf06tni5dbhqpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuDeqMQ0wvuGNWqK0-_O-UzeWSOqUpwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "659987129698-m7lmm2v3e833g67rive5v5l2skr7fe83.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "659987129698-inlk0daavf6gregj52ujjamlgd45pitt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.transcribeai"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659987129698:android:0c8ea03532b0e8390cf83b",
+        "android_client_info": {
+          "package_name": "com.example.transcribeai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "659987129698-mekuno66r1sq2mshrokf06tni5dbhqpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuDeqMQ0wvuGNWqK0-_O-UzeWSOqUpwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "659987129698-m7lmm2v3e833g67rive5v5l2skr7fe83.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "659987129698-inlk0daavf6gregj52ujjamlgd45pitt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.transcribeai"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659987129698:android:4e43bd1e215d580b",
+        "android_client_info": {
+          "package_name": "com.innomake.todo.notes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "659987129698-7j559p67rigckj3odvucrn66sf75ibei.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.innomake.todo.notes",
+            "certificate_hash": "caff6f1951de3127576c8ec43cf660f367cd2b1b"
+          }
+        },
+        {
+          "client_id": "659987129698-mekuno66r1sq2mshrokf06tni5dbhqpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuDeqMQ0wvuGNWqK0-_O-UzeWSOqUpwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "659987129698-m7lmm2v3e833g67rive5v5l2skr7fe83.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "659987129698-inlk0daavf6gregj52ujjamlgd45pitt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.transcribeai"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659987129698:android:1f54383a093573c6",
+        "android_client_info": {
+          "package_name": "com.innomake.todo.notes.list"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "659987129698-ctfm4kt88hlggsaa24smhhuhujt6uge0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.innomake.todo.notes.list",
+            "certificate_hash": "caff6f1951de3127576c8ec43cf660f367cd2b1b"
+          }
+        },
+        {
+          "client_id": "659987129698-ftloklmeg38tunssr9jqn7ffvbkfblf0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.innomake.todo.notes.list",
+            "certificate_hash": "18c766250917de38606dc73b7a1765f0ba35f392"
+          }
+        },
+        {
+          "client_id": "659987129698-mekuno66r1sq2mshrokf06tni5dbhqpd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuDeqMQ0wvuGNWqK0-_O-UzeWSOqUpwmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "659987129698-m7lmm2v3e833g67rive5v5l2skr7fe83.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "659987129698-inlk0daavf6gregj52ujjamlgd45pitt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.transcribeai"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
