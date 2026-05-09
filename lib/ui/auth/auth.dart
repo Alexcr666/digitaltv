@@ -18,6 +18,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 // =============================================================================
 // 1. MODELO DE ROL
@@ -944,11 +945,19 @@ class _FormHeader extends StatelessWidget {
           ]),
           const SizedBox(height: 28),
         ],
-        Text(title,
+      GestureDetector(onTap: (){
+
+          GoRoute(path: '/devices',     builder: (_, __) => const DevicesScreen());
+//   GoRoute(path: '/playlists',   builder: (_, __) => const PlaylistsScreen()),
+//   GoRoute(
+//     path: '/display/:token',
+//     builder: (_, s) => DisplayViewerScreen(token: s.pathParameters['token']!),
+//   ),
+      },child:  Text(title,
           style: const TextStyle(
             color: _C.textHi, fontSize: 26,
             fontWeight: FontWeight.w800, letterSpacing: -0.8,
-          )),
+          ))),
         const SizedBox(height: 6),
         Text(subtitle,
           style: const TextStyle(color: _C.textMid, fontSize: 14)),

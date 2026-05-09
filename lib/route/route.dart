@@ -12,15 +12,15 @@ import 'package:go_router/go_router.dart';
 
 // Route names
 class AppRoutes {
-  static const login       = '/login';
-  static const dashboard   = '/dashboard';
-  static const devices     = '/devices';
+  static const login        = '/login';
+  static const dashboard    = '/dashboard';
+  static const devices      = '/devices';
   static const deviceDetail = '/devices/:id';
-  static const content     = '/content';
-  static const assignments = '/assignments';
-  static const roles       = '/roles';
+  static const content      = '/content';
+  static const assignments  = '/assignments';
+  static const roles        = '/roles';
+  static const display      = '/display/:token';   // ← NUEVO
 }
-
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authNotifierProvider);
 
@@ -30,70 +30,56 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isLoggedIn = authState.valueOrNull != null;
       final isLoading  = authState.isLoading;
       final isOnLogin  = state.matchedLocation == AppRoutes.login;
+      final path       = state.matchedLocation;
+      final isOnDisplay = path.startsWith('/display');
 
-      if (isLoading) return null;
+      if (isLoading)   return null;
+      if (isOnDisplay) return null;
       if (!isLoggedIn && !isOnLogin) return AppRoutes.login;
       if (isLoggedIn  && isOnLogin)  return AppRoutes.dashboard;
       return null;
     },
     routes: [
-      GoRoute(path: '/devices',   builder: (_, __) => const DevicesScreen()),
-GoRoute(path: '/playlists', builder: (_, __) => const PlaylistsScreen()),
-GoRoute(
-  path: '/display/:token',
-  builder: (_, s) => DisplayViewerScreen(token: s.pathParameters['token']!),
-),
       GoRoute(
-        path: AppRoutes.login,
-           builder: (_, __) => const AuthScreen(),
-      //  builder: (_, __) => const LoginScreen(),
+        path: '/login',
+        builder: (_, __) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: '/display/:token',
+        builder: (_, state) => DisplayViewerScreen(
+          token: state.pathParameters['token']!,
+        ),
       ),
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
           GoRoute(
-            path: AppRoutes.dashboard,
+            path: '/dashboard',
             builder: (_, __) => const DashboardScreen(),
           ),
           GoRoute(
-            path: AppRoutes.devices,
-               builder: (_, __) => const DashboardScreen(),
-           // builder: (_, __) => const DevicesScreen(),
-            routes: [
-              GoRoute(
-                path: ':id',
-                   builder: (_, __) => const DashboardScreen(),
-               /* builder: (_, state) => DeviceDetailScreen(
-                  deviceId: state.pathParameters['id']!,
-                ),*/
-              ),
-            ],
+            path: '/devices',
+            builder: (_, __) => const DevicesScreen(),
           ),
           GoRoute(
-            path: AppRoutes.content,
-               builder: (_, __) => const DashboardScreen(),
-        //    builder: (_, __) => const ContentScreen(),
+            path: '/content',
+            builder: (_, __) => const PlaylistsScreen(),
           ),
           GoRoute(
-            path: AppRoutes.assignments,
-               builder: (_, __) => const DashboardScreen(),
-          //  builder: (_, __) => const AssignmentsScreen(),
+            path: '/assignments',
+            builder: (_, __) => const DashboardScreen(),
           ),
           GoRoute(
-            path: AppRoutes.roles,
-            // Guard: only admin+ can view roles
+            path: '/roles',
             redirect: (context, state) {
               final user = ref.read(authNotifierProvider).valueOrNull;
               if (user != null && !user.role.canManageUsers) {
-                return AppRoutes.dashboard;
+                return '/dashboard';
               }
               return null;
             },
-               builder: (_, __) => const  AuthScreen(),
-           // builder: (_, __) => const RolesScreen(),
+            builder: (_, __) => const AuthScreen(),
           ),
-
-        
         ],
       ),
     ],

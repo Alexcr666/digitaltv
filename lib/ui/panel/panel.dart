@@ -83,6 +83,11 @@ class DeviceModel {
   final DateTime? lastSeen;
   final Map<String, dynamic> metadata;
   final String displayUrl;
+  final String? location;
+  final String? resolution;
+  final String? orientation;
+  final String? notes;
+  final List<String> tags;
 
   const DeviceModel({
     required this.id,
@@ -96,6 +101,11 @@ class DeviceModel {
     this.lastSeen,
     this.metadata = const {},
     required this.displayUrl,
+    this.location,
+    this.resolution,
+    this.orientation,
+    this.notes,
+    this.tags = const [],
   });
 
   factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
@@ -112,6 +122,11 @@ class DeviceModel {
       lastSeen:              (d['lastSeen'] as Timestamp?)?.toDate(),
       metadata:              d['metadata'] ?? {},
       displayUrl:            d['displayUrl'] ?? '',
+      location:              d['location'],
+      resolution:            d['resolution'],
+      orientation:           d['orientation'],
+      notes:                 d['notes'],
+      tags:                  List<String>.from(d['tags'] ?? []),
     );
   }
 
@@ -134,9 +149,13 @@ class DeviceModel {
     'lastSeen':       FieldValue.serverTimestamp(),
     'metadata':       metadata,
     'displayUrl':     displayUrl,
+    'location':       location,
+    'resolution':     resolution,
+    'orientation':    orientation,
+    'notes':          notes,
+    'tags':           tags,
   };
 }
-
 class PlaylistItemModel {
   final String id;
   final ContentType type;
@@ -267,6 +286,11 @@ class DeviceService {
     required String name,
     String? groupId,
     String? groupName,
+    String? location,
+    String? resolution,
+    String? orientation,
+    String? notes,
+    List<String> tags = const [],
   }) async {
     final deviceId = _uuid.v4().substring(0, 8).toUpperCase();
     final token    = _uuid.v4().replaceAll('-', '');
@@ -281,6 +305,11 @@ class DeviceService {
         groupId:        groupId,
         groupName:      groupName,
         displayUrl:     '/display/$token',
+        location:       location,
+        resolution:     resolution,
+        orientation:    orientation,
+        notes:          notes,
+        tags:           tags,
       ).toMap(),
       'createdAt':    FieldValue.serverTimestamp(),
       'displayToken': token,
@@ -296,6 +325,19 @@ class DeviceService {
 
   Future<void> deleteDevice(String deviceId) async {
     await _db.collection('devices').doc(deviceId).delete();
+  }
+
+  Future<void> updateDevice(DeviceModel device) async {
+    await _db.collection('devices').doc(device.id).update({
+      'name':        device.name,
+      'groupId':     device.groupId,
+      'groupName':   device.groupName,
+      'location':    device.location,
+      'resolution':  device.resolution,
+      'orientation': device.orientation,
+      'notes':       device.notes,
+      'tags':        device.tags,
+    });
   }
 }
 
@@ -606,7 +648,6 @@ class _DeviceCardState extends ConsumerState<_DeviceCard> {
 // =============================================================================
 // ADD DEVICE BOTTOM SHEET
 // =============================================================================
-
 class _AddDeviceSheet extends ConsumerStatefulWidget {
   const _AddDeviceSheet();
 
@@ -615,22 +656,44 @@ class _AddDeviceSheet extends ConsumerStatefulWidget {
 }
 
 class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
-  final _formKey  = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  final _groupCtrl= TextEditingController();
-  bool _loading   = false;
+  final _formKey       = GlobalKey<FormState>();
+  final _nameCtrl      = TextEditingController();
+  final _groupCtrl     = TextEditingController();
+  final _locationCtrl  = TextEditingController();
+  final _notesCtrl     = TextEditingController();
+  final _tagCtrl       = TextEditingController();
+  String _resolution   = '1920x1080';
+  String _orientation  = 'landscape';
+  List<String> _tags   = [];
+  bool _loading        = false;
   String? _error;
 
   @override
-  void dispose() { _nameCtrl.dispose(); _groupCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _nameCtrl.dispose(); _groupCtrl.dispose(); _locationCtrl.dispose();
+    _notesCtrl.dispose(); _tagCtrl.dispose();
+    super.dispose();
+  }
+
+  void _addTag() {
+    final t = _tagCtrl.text.trim();
+    if (t.isNotEmpty && !_tags.contains(t)) {
+      setState(() { _tags.add(t); _tagCtrl.clear(); });
+    }
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
       await DeviceService().addDevice(
-        name:      _nameCtrl.text.trim(),
-        groupName: _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+        name:        _nameCtrl.text.trim(),
+        groupName:   _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+        location:    _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+        resolution:  _resolution,
+        orientation: _orientation,
+        notes:       _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        tags:        _tags,
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -651,6 +714,9 @@ class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_error != null) _ErrorBanner(message: _error!),
+
+            // ── Información básica ─────────────────────────────────────────
+            _SectionTitle('Información básica'),
             _SheetLabel('Nombre del dispositivo *'),
             _SheetField(
               controller: _nameCtrl,
@@ -659,14 +725,115 @@ class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
               validator: (v) => (v == null || v.trim().isEmpty)
                   ? 'El nombre es obligatorio' : null,
             ),
-            const SizedBox(height: 16),
-            _SheetLabel('Grupo (opcional)'),
+            const SizedBox(height: 14),
+            _SheetLabel('Grupo'),
             _SheetField(
               controller: _groupCtrl,
               hint: 'Ej: Lobby, Piso 2, Cafetería',
               icon: Icons.group_work_outlined,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+            _SheetLabel('Ubicación'),
+            _SheetField(
+              controller: _locationCtrl,
+              hint: 'Ej: Entrada principal, Oficina 301',
+              icon: Icons.location_on_outlined,
+            ),
+
+            const SizedBox(height: 20),
+            // ── Configuración técnica ──────────────────────────────────────
+            _SectionTitle('Configuración técnica'),
+            _SheetLabel('Resolución'),
+            _DropdownField<String>(
+              value: _resolution,
+              items: const ['1920x1080', '3840x2160', '1280x720', '1024x768', '1366x768'],
+              icon: Icons.monitor_rounded,
+              onChanged: (v) => setState(() => _resolution = v!),
+            ),
+            const SizedBox(height: 14),
+            _SheetLabel('Orientación'),
+            Row(
+              children: [
+                _OrientationChip(
+                  label: 'Horizontal',
+                  icon: Icons.stay_current_landscape_rounded,
+                  selected: _orientation == 'landscape',
+                  onTap: () => setState(() => _orientation = 'landscape'),
+                ),
+                const SizedBox(width: 10),
+                _OrientationChip(
+                  label: 'Vertical',
+                  icon: Icons.stay_current_portrait_rounded,
+                  selected: _orientation == 'portrait',
+                  onTap: () => setState(() => _orientation = 'portrait'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+            // ── Etiquetas ──────────────────────────────────────────────────
+            _SectionTitle('Etiquetas'),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetField(
+                    controller: _tagCtrl,
+                    hint: 'Ej: principal, promocional, entrada',
+                    icon: Icons.tag_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _addTag,
+                  child: Container(
+                    height: 44, width: 44,
+                    decoration: BoxDecoration(
+                      color: _C.primaryLo,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _C.primary.withOpacity(0.3)),
+                    ),
+                    child: const Icon(Icons.add_rounded, color: _C.primary, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            if (_tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6, runSpacing: 6,
+                children: _tags.map((tag) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _C.primaryLo,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _C.primary.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(tag, style: const TextStyle(color: _C.primary, fontSize: 11)),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _tags.remove(tag)),
+                        child: const Icon(Icons.close_rounded, size: 12, color: _C.primary),
+                      ),
+                    ],
+                  ),
+                )).toList(),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+            // ── Notas ──────────────────────────────────────────────────────
+            _SectionTitle('Notas'),
+            _SheetField(
+              controller: _notesCtrl,
+              hint: 'Observaciones, instrucciones especiales...',
+              icon: Icons.notes_rounded,
+              maxLines: 3,
+            ),
+
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -680,7 +847,7 @@ class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Se generará un ID único y una URL de visualización automáticamente.',
+                      'Se generará un ID único y URL de visualización automáticamente.',
                       style: TextStyle(color: _C.textMid, fontSize: 11, height: 1.5),
                     ),
                   ),
@@ -694,6 +861,118 @@ class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
               onTap: _save,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Helpers para el sheet ─────────────────────────────────────────────────────
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Text(text,
+          style: const TextStyle(
+            color: _C.textHi, fontSize: 12,
+            fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: _C.divider)),
+      ],
+    ),
+  );
+}
+
+class _DropdownField<T> extends StatelessWidget {
+  final T value;
+  final List<T> items;
+  final IconData icon;
+  final ValueChanged<T?> onChanged;
+  const _DropdownField({
+    required this.value,
+    required this.items,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: _C.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _C.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _C.textMid),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                dropdownColor: _C.card,
+                style: const TextStyle(color: _C.textHi, fontSize: 13),
+                icon: const Icon(Icons.expand_more_rounded, color: _C.textMid, size: 18),
+                items: items.map((i) => DropdownMenuItem(
+                  value: i,
+                  child: Text(i.toString()),
+                )).toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrientationChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _OrientationChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: 150.ms,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? _C.primaryLo : _C.card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? _C.primary.withOpacity(0.5) : _C.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 20, color: selected ? _C.primary : _C.textMid),
+              const SizedBox(height: 4),
+              Text(label,
+                style: TextStyle(
+                  color: selected ? _C.primary : _C.textMid,
+                  fontSize: 11, fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );
@@ -1009,11 +1288,14 @@ class _PlaylistCardState extends ConsumerState<_PlaylistCard> {
                     tooltip: 'Copiar URL',
                     color: _C.primary,
                     onTap: () {
-                      final url = 'https://tu-dominio.com/display/${pl.displayToken}';
-                      Clipboard.setData(ClipboardData(text: url));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        _snack('URL copiada al portapapeles'),
-                      );
+                       final uri = Uri.base;
+    final port = uri.port;
+    final showPort = port != 0 && port != 80 && port != 443;
+    final base = '${uri.scheme}://${uri.host}${showPort ? ':$port' : ''}';
+    final url = '$base/display/${pl.displayToken}';
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(
+      _snack('URL copiada al portapapeles'));
                     },
                   ),
                 ],
@@ -1149,7 +1431,11 @@ class _PlaylistEditorScreenState extends ConsumerState<PlaylistEditorScreen> {
   late String _name;
   bool _saving = false;
   bool _dirty  = false;
-
+String get _baseUrl {
+  // ignore: undefined_prefixed_name
+  final uri = Uri.base;
+  return '${uri.scheme}://${uri.host}${uri.port != 80 && uri.port != 443 ? ':${uri.port}' : ''}';
+}
   @override
   void initState() {
     super.initState();
@@ -1209,7 +1495,22 @@ class _PlaylistEditorScreenState extends ConsumerState<PlaylistEditorScreen> {
       setState(() => _saving = false);
     }
   }
-
+void _showEditItem(BuildContext context, int index) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _EditItemSheet(
+      item: _items[index],
+      onSave: (updated) {
+        setState(() {
+          _items[index] = updated.copyWith(order: index);
+          _dirty = true;
+        });
+      },
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final totalDuration = _items.fold(0, (sum, i) => sum + i.durationSeconds);
@@ -1261,11 +1562,9 @@ class _PlaylistEditorScreenState extends ConsumerState<PlaylistEditorScreen> {
                         tooltip: 'Copiar URL del display',
                         color: _C.accent,
                         onTap: () {
-                          final url = 'https://tu-dominio.com/display/'
-                              '${widget.playlist.displayToken}';
-                          Clipboard.setData(ClipboardData(text: url));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            _snack('URL copiada: $url'));
+                          final url = '$_baseUrl/display/${widget.playlist.displayToken}';
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(_snack('URL copiada: $url'));
                         },
                       ),
                       const SizedBox(width: 8),
@@ -1305,19 +1604,17 @@ class _PlaylistEditorScreenState extends ConsumerState<PlaylistEditorScreen> {
                       const Icon(Icons.link_rounded, size: 14, color: _C.accent),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          'URL de visualización: https://tu-dominio.com/display/${widget.playlist.displayToken}',
-                          style: const TextStyle(color: _C.accent, fontSize: 11),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+        child: Text(
+          '$_baseUrl/display/${widget.playlist.displayToken}',
+          style: const TextStyle(color: _C.accent, fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
                       GestureDetector(
                         onTap: () {
-                          Clipboard.setData(ClipboardData(
-                            text: 'https://tu-dominio.com/display/'
-                                  '${widget.playlist.displayToken}'));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            _snack('URL copiada'));
+                             Clipboard.setData(ClipboardData(
+            text: '$_baseUrl/display/${widget.playlist.displayToken}'));
+          ScaffoldMessenger.of(context).showSnackBar(_snack('URL copiada'));
                         },
                         child: const Icon(Icons.copy_rounded,
                           size: 14, color: _C.accent),
@@ -1329,25 +1626,116 @@ class _PlaylistEditorScreenState extends ConsumerState<PlaylistEditorScreen> {
                 const SizedBox(height: 16),
 
                 // Item list (reorderable)
-                Expanded(
-                  child: _items.isEmpty
-                    ? _EmptyState(
-                        icon: Icons.add_circle_outline_rounded,
-                        title: 'Playlist vacía',
-                        subtitle: 'Agrega contenido desde el panel derecho.',
-                      )
-                    : ReorderableListView.builder(
-                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                        itemCount: _items.length,
-                        onReorder: _reorderItems,
-                        itemBuilder: (_, i) => _PlaylistItemTile(
-                          key:   ValueKey(_items[i].id),
-                          item:  _items[i],
-                          index: i,
-                          onRemove: () => _removeItem(i),
-                        ).animate().fadeIn(duration: 200.ms),
+   // En _PlaylistEditorScreenState, reemplaza el Expanded del item list:
+Expanded(
+  child: _items.isEmpty
+    ? _EmptyState(
+        icon: Icons.add_circle_outline_rounded,
+        title: 'Playlist vacía',
+        subtitle: 'Agrega contenido desde el panel derecho.',
+      )
+    : ListView.builder(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        itemCount: _items.length,
+        itemBuilder: (_, i) {
+          final item = _items[i];
+          final typeColor = item.type == ContentType.image ? _C.accent
+                          : item.type == ContentType.video ? _C.purple
+                          : item.type == ContentType.text  ? _C.green : _C.amber;
+          final typeIcon  = item.type == ContentType.image ? Icons.image_rounded
+                          : item.type == ContentType.video ? Icons.videocam_rounded
+                          : item.type == ContentType.text  ? Icons.text_fields_rounded
+                          : Icons.language_rounded;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: _C.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _C.border),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: i > 0 ? () => _reorderItems(i, i - 1) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 4, 2),
+                        child: Icon(Icons.arrow_drop_up_rounded,
+                          size: 20, color: i > 0 ? _C.textMid : _C.textLo),
                       ),
+                    ),
+                    GestureDetector(
+                      onTap: i < _items.length - 1 ? () => _reorderItems(i, i + 2) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 2, 4, 8),
+                        child: Icon(Icons.arrow_drop_down_rounded,
+                          size: 20, color: i < _items.length - 1 ? _C.textMid : _C.textLo),
+                      ),
+                    ),
+                  ],
                 ),
+                Container(
+                  width: 24, height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: typeColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('${i + 1}',
+                    style: TextStyle(color: typeColor, fontSize: 10, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: typeColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(typeIcon, size: 16, color: typeColor),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _C.textHi, fontWeight: FontWeight.w500, fontSize: 13)),
+                      Text(
+                        item.url?.isNotEmpty == true ? item.url!
+                          : item.textContent?.isNotEmpty == true ? item.textContent!
+                          : item.type.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _C.textLo, fontSize: 11)),
+                    ],
+                  ),
+                ),
+                _Badge(label: '${item.durationSeconds}s', color: _C.textMid),
+                const SizedBox(width: 8),
+                _IconBtn(
+                  icon: Icons.edit_outlined,
+                  tooltip: 'Editar',
+                  color: _C.accent,
+                  size: 16,
+                  onTap: () => _showEditItem(context, i),
+                ),
+                const SizedBox(width: 4),
+                _IconBtn(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Quitar',
+                  color: _C.red,
+                  size: 16,
+                  onTap: () => _removeItem(i),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          );
+        },
+      ),
+),
               ],
             ),
           ),
@@ -1403,110 +1791,7 @@ class _PlaylistItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final typeColor = _typeColor(item.type);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: _C.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _C.border),
-      ),
-      child: Row(
-        children: [
-          // Drag handle
-          ReorderableDragStartListener(
-            index: index,
-            child: Container(
-              width: 36,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: const Icon(Icons.drag_indicator_rounded,
-                size: 18, color: _C.textLo),
-            ),
-          ),
-
-          // Order badge
-          Container(
-            width: 24, height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: typeColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text('${index + 1}',
-              style: TextStyle(
-                color: typeColor, fontSize: 10, fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(width: 12),
-
-          // Type icon
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: typeColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(_typeIcon(item.type), size: 16, color: typeColor),
-          ),
-          const SizedBox(width: 12),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.title,
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _C.textHi, fontWeight: FontWeight.w500, fontSize: 13)),
-                Text(
-                  item.url?.isNotEmpty == true
-                      ? item.url!
-                      : item.textContent?.isNotEmpty == true
-                          ? item.textContent!
-                          : item.type.name,
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.textLo, fontSize: 11)),
-              ],
-            ),
-          ),
-
-          // Duration
-          _Badge(
-            label: '${item.durationSeconds}s',
-            color: _C.textMid,
-          ),
-          const SizedBox(width: 12),
-
-          // Remove
-          _IconBtn(
-            icon: Icons.close_rounded,
-            tooltip: 'Quitar',
-            color: _C.red,
-            size: 16,
-            onTap: onRemove,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-    );
-  }
-
-  Color _typeColor(ContentType t) {
-    switch (t) {
-      case ContentType.image: return _C.accent;
-      case ContentType.video: return _C.purple;
-      case ContentType.text:  return _C.green;
-      case ContentType.url:   return _C.amber;
-    }
-  }
-
-  IconData _typeIcon(ContentType t) {
-    switch (t) {
-      case ContentType.image: return Icons.image_rounded;
-      case ContentType.video: return Icons.videocam_rounded;
-      case ContentType.text:  return Icons.text_fields_rounded;
-      case ContentType.url:   return Icons.language_rounded;
-    }
+    return const SizedBox.shrink(); // clase ya no se usa, se dejó vacía
   }
 }
 
@@ -1849,27 +2134,27 @@ class _DisplayViewerScreenState extends ConsumerState<DisplayViewerScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
+void _startTimer(PlaylistModel pl) {
+  _timer?.cancel();
+  if (pl.items.isEmpty) return;
+  final idx = _currentIndex.clamp(0, pl.items.length - 1);
+  final duration = pl.items[idx].durationSeconds;
+  _timer = Timer(Duration(seconds: duration), () => _nextSlide(pl));
+}
 
-  void _startTimer(PlaylistModel pl) {
-    _timer?.cancel();
-    if (pl.items.isEmpty) return;
-    final duration = pl.items[_currentIndex].durationSeconds;
-    _timer = Timer(Duration(seconds: duration), () => _nextSlide(pl));
-  }
+Future<void> _nextSlide(PlaylistModel pl) async {
+  if (_transitioning || !mounted) return;
+  _transitioning = true;
 
-  Future<void> _nextSlide(PlaylistModel pl) async {
-    if (_transitioning || !mounted) return;
-    _transitioning = true;
-
-    await _fadeCtrl.reverse();
-    if (!mounted) return;
-    setState(() {
-      _currentIndex = (_currentIndex + 1) % pl.items.length;
-    });
-    await _fadeCtrl.forward();
-    _transitioning = false;
-    _startTimer(pl);
-  }
+  await _fadeCtrl.reverse();
+  if (!mounted) return;
+  setState(() {
+    _currentIndex = (_currentIndex + 1) % pl.items.length;
+  });
+  await _fadeCtrl.forward();
+  _transitioning = false;
+  _startTimer(pl);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1881,75 +2166,74 @@ class _DisplayViewerScreenState extends ConsumerState<DisplayViewerScreen>
         loading: () => const _DisplayLoading(),
         error:   (_, __) => const _DisplayError(
           message: 'Error al cargar el contenido'),
-        data: (playlist) {
-          if (playlist == null) {
-            return const _DisplayError(message: 'Display no encontrado');
-          }
-          if (playlist.items.isEmpty) {
-            return const _DisplayError(message: 'No hay contenido en esta playlist');
-          }
+data: (playlist) {
+  if (playlist == null) {
+    return const _DisplayError(message: 'Display no encontrado');
+  }
+  if (playlist.items.isEmpty) {
+    return const _DisplayError(message: 'No hay contenido en esta playlist');
+  }
 
-          // Restart timer when playlist changes
-          if (_lastPlaylist?.id != playlist.id ||
-              _lastPlaylist?.items.length != playlist.items.length) {
-            _lastPlaylist = playlist;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _currentIndex = 0;
-              _startTimer(playlist);
-            });
-          }
+  // Reinicia si cambió la playlist o sus items
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    if (_lastPlaylist?.id != playlist.id ||
+        _lastPlaylist?.items.length != playlist.items.length) {
+      _lastPlaylist = playlist;
+      setState(() => _currentIndex = 0);
+      _startTimer(playlist);
+    } else if (_timer == null || !_timer!.isActive) {
+      _lastPlaylist = playlist;
+      _startTimer(playlist);
+    }
+  });
 
-          final item = playlist.items[math.min(_currentIndex, playlist.items.length - 1)];
+  final safeIndex = _currentIndex.clamp(0, playlist.items.length - 1);
+  final item = playlist.items[safeIndex];
 
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              // ── Content ─────────────────────────────────────────────────
-              FadeTransition(
-                opacity: _fadeAnim,
-                child: _DisplayContent(item: item),
-              ),
-
-              // ── Progress bar (bottom) ────────────────────────────────────
-              Positioned(
-                bottom: 0, left: 0, right: 0,
-                child: _DisplayProgressBar(
-                  index:       _currentIndex,
-                  total:       playlist.items.length,
-                  durationSec: item.durationSeconds,
-                  key: ValueKey('progress_${_currentIndex}'),
-                ),
-              ),
-
-              // ── Nav hints (hover in preview mode) ───────────────────────
-              Positioned(
-                top: 12, left: 12,
-                child: GestureDetector(
-                  onTap: () => Navigator.maybePop(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.arrow_back_rounded,
-                          size: 14, color: Colors.white54),
-                        const SizedBox(width: 6),
-                        Text(playlist.name,
-                          style: const TextStyle(
-                            color: Colors.white54, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      FadeTransition(
+        opacity: _fadeAnim,
+        child: _DisplayContent(item: item),
+      ),
+      Positioned(
+        bottom: 0, left: 0, right: 0,
+        child: _DisplayProgressBar(
+          index:       safeIndex,
+          total:       playlist.items.length,
+          durationSec: item.durationSeconds,
+          key: ValueKey('progress_$safeIndex'),
+        ),
+      ),
+      Positioned(
+        top: 12, left: 12,
+        child: GestureDetector(
+          onTap: () => Navigator.maybePop(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.arrow_back_rounded,
+                  size: 14, color: Colors.white54),
+                const SizedBox(width: 6),
+                Text(playlist.name,
+                  style: const TextStyle(
+                    color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+},
       ),
     );
   }
@@ -1975,28 +2259,74 @@ class _DisplayContent extends StatelessWidget {
     }
   }
 }
-
 class _DisplayImage extends StatelessWidget {
   final String url;
   const _DisplayImage({required this.url});
 
+  String _buildUrl(String original) {
+    // Firebase Storage: convierte a URL de descarga directa via proxy
+    if (original.contains('firebasestorage.googleapis.com')) {
+      return 'https://wsrv.nl/?url=${Uri.encodeComponent(original)}&output=webp&n=-1';
+    }
+    return 'https://wsrv.nl/?url=${Uri.encodeComponent(original)}&n=-1';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      fit: BoxFit.contain,
-      width: double.infinity,
-      height: double.infinity,
-      loadingBuilder: (_, child, progress) {
-        if (progress == null) return child;
-        return const _DisplayLoading();
-      },
-      errorBuilder: (_, __, ___) => const _DisplayError(
-        message: 'No se pudo cargar la imagen'),
+    return Container(
+      color: Colors.black,
+      child: Image.network(
+        _buildUrl(url),
+        fit: BoxFit.contain,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          final percent = progress.expectedTotalBytes != null
+              ? (progress.cumulativeBytesLoaded /
+                      progress.expectedTotalBytes! *
+                      100)
+                  .toInt()
+              : null;
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                    color: _C.primary, strokeWidth: 2),
+                const SizedBox(height: 12),
+                Text(
+                  percent != null ? 'Cargando $percent%' : 'Cargando...',
+                  style:
+                      const TextStyle(color: _C.textMid, fontSize: 12)),
+              ],
+            ),
+          );
+        },
+        errorBuilder: (_, __, ___) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.broken_image_rounded,
+                  color: _C.red, size: 48),
+              const SizedBox(height: 12),
+              const Text('No se pudo cargar la imagen',
+                  style:
+                      TextStyle(color: Colors.white54, fontSize: 14)),
+              const SizedBox(height: 8),
+              Text(url,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(color: _C.textLo, fontSize: 10)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
-
 class _DisplayVideo extends StatelessWidget {
   final String url;
   const _DisplayVideo({required this.url});
@@ -2911,7 +3241,149 @@ class _SheetSubmitButton extends StatelessWidget {
     );
   }
 }
+class _EditItemSheet extends StatefulWidget {
+  final PlaylistItemModel item;
+  final void Function(PlaylistItemModel) onSave;
+  const _EditItemSheet({required this.item, required this.onSave});
 
+  @override
+  State<_EditItemSheet> createState() => _EditItemSheetState();
+}
+
+class _EditItemSheetState extends State<_EditItemSheet> {
+  late ContentType _type;
+  late TextEditingController _titleCtrl;
+  late TextEditingController _urlCtrl;
+  late TextEditingController _textCtrl;
+  late int _duration;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _type     = widget.item.type;
+    _titleCtrl= TextEditingController(text: widget.item.title);
+    _urlCtrl  = TextEditingController(text: widget.item.url ?? '');
+    _textCtrl = TextEditingController(text: widget.item.textContent ?? '');
+    _duration = widget.item.durationSeconds;
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose(); _urlCtrl.dispose(); _textCtrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (_titleCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'El título es obligatorio');
+      return;
+    }
+    if (_type != ContentType.text && _urlCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'La URL es obligatoria');
+      return;
+    }
+    if (_type == ContentType.text && _textCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'El texto es obligatorio');
+      return;
+    }
+    widget.onSave(PlaylistItemModel(
+      id:              widget.item.id,
+      type:            _type,
+      title:           _titleCtrl.text.trim(),
+      url:             _type != ContentType.text ? _urlCtrl.text.trim() : null,
+      textContent:     _type == ContentType.text  ? _textCtrl.text.trim() : null,
+      durationSeconds: _duration,
+      order:           widget.item.order,
+    ));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Sheet(
+      title: 'Editar elemento',
+      subtitle: 'Modifica el contenido de este elemento',
+      icon: Icons.edit_outlined,
+      iconColor: _C.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_error != null) _ErrorBanner(message: _error!),
+
+          const _SheetLabel('Tipo de contenido'),
+          const SizedBox(height: 8),
+          _ContentTypeSelector(
+            selected: _type,
+            onChanged: (t) => setState(() { _type = t; _error = null; }),
+          ),
+          const SizedBox(height: 16),
+
+          const _SheetLabel('Título *'),
+          _SheetField(
+            controller: _titleCtrl,
+            hint: 'Título del elemento',
+            icon: Icons.label_outline_rounded,
+          ),
+          const SizedBox(height: 16),
+
+          if (_type == ContentType.text) ...[
+            const _SheetLabel('Contenido de texto *'),
+            _SheetField(
+              controller: _textCtrl,
+              hint: 'Texto que se mostrará en pantalla',
+              icon: Icons.text_fields_rounded,
+              maxLines: 4,
+            ),
+          ] else ...[
+            _SheetLabel(_type == ContentType.image ? 'URL de la imagen *'
+                       : _type == ContentType.video ? 'URL del video *'
+                       : 'URL del sitio web *'),
+            _SheetField(
+              controller: _urlCtrl,
+              hint: _type == ContentType.image ? 'https://example.com/imagen.jpg'
+                  : _type == ContentType.video ? 'https://example.com/video.mp4'
+                  : 'https://tu-sitio.com',
+              icon: Icons.link_rounded,
+              keyboardType: TextInputType.url,
+            ),
+          ],
+          const SizedBox(height: 16),
+
+          _SheetLabel('Duración: ${_duration}s'),
+          SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 3,
+              thumbColor: _C.accent,
+              activeTrackColor: _C.accent,
+              inactiveTrackColor: _C.border,
+              overlayShape: SliderComponentShape.noOverlay,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            ),
+            child: Slider(
+              value: _duration.toDouble(),
+              min: 3, max: 120, divisions: 39,
+              onChanged: (v) => setState(() => _duration = v.round()),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text('3s',   style: TextStyle(color: _C.textLo, fontSize: 10)),
+              Text('120s', style: TextStyle(color: _C.textLo, fontSize: 10)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _SheetSubmitButton(
+            label: 'Guardar cambios',
+            loading: false,
+            onTap: _save,
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _ConfirmDialog extends StatelessWidget {
   final String title;
   final String message;
