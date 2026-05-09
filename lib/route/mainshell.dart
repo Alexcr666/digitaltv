@@ -118,12 +118,21 @@ class _Sidebar extends ConsumerWidget {
               route: AppRoutes.content, current: location),
           _NavItem(icon: Icons.send_outlined, label: 'Assignments',
               route: AppRoutes.assignments, current: location),
+   
+   
+   _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+              route: "/schedules", current: location),
+  _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+              route: "/analytics", current: location),
+
+  _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+              route: "/media", current: location),
 
           const SizedBox(height: 8),
           _NavLabel('Admin'),
           _NavItem(icon: Icons.manage_accounts_outlined, label: 'Roles & Access',
               route: AppRoutes.roles, current: location,
-              hidden: !(currentUser?.role.canManageUsers ?? false)),
+              hidden: /*!(currentUser?.role.canManageUsers ?? false*/true),
 
           const Spacer(),
           const Divider(height: 1),

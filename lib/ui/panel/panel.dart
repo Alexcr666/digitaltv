@@ -1,33 +1,7 @@
-// =============================================================================
-// devices_and_playlists_screen.dart
-// SignageOS Enterprise — Devices + Playlists + Display Viewer
-// =============================================================================
-// RUTAS PARA AGREGAR AL ROUTER:
-//
-//   GoRoute(path: '/devices',     builder: (_, __) => const DevicesScreen()),
-//   GoRoute(path: '/playlists',   builder: (_, __) => const PlaylistsScreen()),
-//   GoRoute(
-//     path: '/display/:token',
-//     builder: (_, s) => DisplayViewerScreen(token: s.pathParameters['token']!),
-//   ),
-//
-// DEPENDENCIAS (pubspec.yaml):
-//   cloud_firestore: ^4.x
-//   firebase_auth: ^4.x
-//   flutter_riverpod: ^2.x
-//   flutter_animate: ^4.x
-//   go_router: ^13.x
-//   uuid: ^4.x
-//   url_launcher: ^6.x
-//   video_player: ^2.x          ← para preview de video
-//   cached_network_image: ^3.x
-// =============================================================================
-
-// ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:math' as math;
-
+import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -88,6 +62,8 @@ class DeviceModel {
   final String? orientation;
   final String? notes;
   final List<String> tags;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const DeviceModel({
     required this.id,
@@ -106,6 +82,8 @@ class DeviceModel {
     this.orientation,
     this.notes,
     this.tags = const [],
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
@@ -127,6 +105,8 @@ class DeviceModel {
       orientation:           d['orientation'],
       notes:                 d['notes'],
       tags:                  List<String>.from(d['tags'] ?? []),
+      createdAt:             (d['createdAt'] as Timestamp?)?.toDate(),
+      updatedAt:             (d['updatedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -267,14 +247,33 @@ final playlistsStreamProvider = StreamProvider<List<PlaylistModel>>((ref) {
 });
 
 // Playlist por token (para el display viewer)
+// Playlist por displayToken de playlist
 final playlistByTokenProvider =
     StreamProvider.family<PlaylistModel?, String>((ref, token) {
   return _db.collection('playlists')
     .where('displayToken', isEqualTo: token)
-    .where('isActive',     isEqualTo: true)
+    .where('isActive', isEqualTo: true)
     .limit(1)
     .snapshots()
     .map((s) => s.docs.isEmpty ? null : PlaylistModel.fromFirestore(s.docs.first));
+});
+
+// Playlist por token de dispositivo (busca el dispositivo y luego su playlist asignada)
+final playlistByDeviceTokenProvider =
+    StreamProvider.family<PlaylistModel?, String>((ref, token) {
+  return _db.collection('devices')
+    .where('displayToken', isEqualTo: token)
+    .limit(1)
+    .snapshots()
+    .asyncMap((deviceSnap) async {
+      if (deviceSnap.docs.isEmpty) return null;
+      final device = deviceSnap.docs.first.data() as Map<String, dynamic>;
+      final playlistId = device['currentPlaylistId'] as String?;
+      if (playlistId == null || playlistId.isEmpty) return null;
+      final playlistDoc = await _db.collection('playlists').doc(playlistId).get();
+      if (!playlistDoc.exists) return null;
+      return PlaylistModel.fromFirestore(playlistDoc);
+    });
 });
 
 // =============================================================================
@@ -282,6 +281,17 @@ final playlistByTokenProvider =
 // =============================================================================
 
 class DeviceService {
+  Future<void> updateDeviceStatus(String token, DeviceStatus status) async {
+  final snap = await _db.collection('devices')
+    .where('displayToken', isEqualTo: token)
+    .limit(1)
+    .get();
+  if (snap.docs.isEmpty) return;
+  await snap.docs.first.reference.update({
+    'status':   status.name,
+    'lastSeen': FieldValue.serverTimestamp(),
+  });
+}
   Future<void> addDevice({
     required String name,
     String? groupId,
@@ -326,19 +336,19 @@ class DeviceService {
   Future<void> deleteDevice(String deviceId) async {
     await _db.collection('devices').doc(deviceId).delete();
   }
-
-  Future<void> updateDevice(DeviceModel device) async {
-    await _db.collection('devices').doc(device.id).update({
-      'name':        device.name,
-      'groupId':     device.groupId,
-      'groupName':   device.groupName,
-      'location':    device.location,
-      'resolution':  device.resolution,
-      'orientation': device.orientation,
-      'notes':       device.notes,
-      'tags':        device.tags,
-    });
-  }
+Future<void> updateDevice(DeviceModel device) async {
+  await _db.collection('devices').doc(device.id).update({
+    'name':        device.name,
+    'groupId':     device.groupId,
+    'groupName':   device.groupName,
+    'location':    device.location,
+    'resolution':  device.resolution,
+    'orientation': device.orientation,
+    'notes':       device.notes,
+    'tags':        device.tags,
+    'updatedAt':   FieldValue.serverTimestamp(),
+  });
+}
 }
 
 // =============================================================================
@@ -482,7 +492,287 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
 }
 
 // ── Device Card ───────────────────────────────────────────────────────────────
+class _EditDeviceSheet extends ConsumerStatefulWidget {
+  final DeviceModel device;
+  const _EditDeviceSheet({required this.device});
 
+  @override
+  ConsumerState<_EditDeviceSheet> createState() => _EditDeviceSheetState();
+}
+
+class _EditDeviceSheetState extends ConsumerState<_EditDeviceSheet> {
+  final _formKey      = GlobalKey<FormState>();
+  late TextEditingController _nameCtrl;
+  late TextEditingController _groupCtrl;
+  late TextEditingController _locationCtrl;
+  late TextEditingController _notesCtrl;
+  late TextEditingController _tagCtrl;
+  late String _resolution;
+  late String _orientation;
+  late List<String> _tags;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl     = TextEditingController(text: widget.device.name);
+    _groupCtrl    = TextEditingController(text: widget.device.groupName ?? '');
+    _locationCtrl = TextEditingController(text: widget.device.location ?? '');
+    _notesCtrl    = TextEditingController(text: widget.device.notes ?? '');
+    _tagCtrl      = TextEditingController();
+    _resolution   = widget.device.resolution ?? '1920x1080';
+    _orientation  = widget.device.orientation ?? 'landscape';
+    _tags         = List.from(widget.device.tags);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose(); _groupCtrl.dispose(); _locationCtrl.dispose();
+    _notesCtrl.dispose(); _tagCtrl.dispose();
+    super.dispose();
+  }
+
+  void _addTag() {
+    final t = _tagCtrl.text.trim();
+    if (t.isNotEmpty && !_tags.contains(t)) {
+      setState(() { _tags.add(t); _tagCtrl.clear(); });
+    }
+  }
+
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return '—';
+    return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final updated = DeviceModel(
+        id:             widget.device.id,
+        name:           _nameCtrl.text.trim(),
+        uniqueDeviceId: widget.device.uniqueDeviceId,
+        status:         widget.device.status,
+        groupId:        _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+        groupName:      _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+        displayUrl:     widget.device.displayUrl,
+        currentPlaylistId:   widget.device.currentPlaylistId,
+        currentPlaylistName: widget.device.currentPlaylistName,
+        location:    _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+        resolution:  _resolution,
+        orientation: _orientation,
+        notes:       _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        tags:        _tags,
+        createdAt:   widget.device.createdAt,
+      );
+      await DeviceService().updateDevice(updated);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Sheet(
+      title: 'Editar dispositivo',
+      subtitle: 'ID: ${widget.device.uniqueDeviceId}',
+      icon: Icons.edit_outlined,
+      iconColor: _C.primary,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_error != null) _ErrorBanner(message: _error!),
+
+            // ── Fechas ────────────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: _DateInfoBox(
+                    label: 'Creado',
+                    value: _formatDate(widget.device.createdAt),
+                    icon: Icons.calendar_today_rounded,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _DateInfoBox(
+                    label: 'Actualizado',
+                    value: _formatDate(widget.device.updatedAt),
+                    icon: Icons.update_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── Info básica ───────────────────────────────────────────────
+            _SectionTitle('Información básica'),
+            _SheetLabel('Nombre *'),
+            _SheetField(
+              controller: _nameCtrl,
+              hint: 'Nombre del dispositivo',
+              icon: Icons.label_outline_rounded,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'El nombre es obligatorio' : null,
+            ),
+            const SizedBox(height: 14),
+            _SheetLabel('Grupo'),
+            _SheetField(
+              controller: _groupCtrl,
+              hint: 'Ej: Lobby, Piso 2',
+              icon: Icons.group_work_outlined,
+            ),
+            const SizedBox(height: 14),
+            _SheetLabel('Ubicación'),
+            _SheetField(
+              controller: _locationCtrl,
+              hint: 'Ej: Entrada principal',
+              icon: Icons.location_on_outlined,
+            ),
+
+            const SizedBox(height: 20),
+            _SectionTitle('Configuración técnica'),
+            _SheetLabel('Resolución'),
+            _DropdownField<String>(
+              value: _resolution,
+              items: const ['1920x1080','3840x2160','1280x720','1024x768','1366x768'],
+              icon: Icons.monitor_rounded,
+              onChanged: (v) => setState(() => _resolution = v!),
+            ),
+            const SizedBox(height: 14),
+            _SheetLabel('Orientación'),
+            Row(
+              children: [
+                _OrientationChip(
+                  label: 'Horizontal',
+                  icon: Icons.stay_current_landscape_rounded,
+                  selected: _orientation == 'landscape',
+                  onTap: () => setState(() => _orientation = 'landscape'),
+                ),
+                const SizedBox(width: 10),
+                _OrientationChip(
+                  label: 'Vertical',
+                  icon: Icons.stay_current_portrait_rounded,
+                  selected: _orientation == 'portrait',
+                  onTap: () => setState(() => _orientation = 'portrait'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+            _SectionTitle('Etiquetas'),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetField(
+                    controller: _tagCtrl,
+                    hint: 'Nueva etiqueta',
+                    icon: Icons.tag_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _addTag,
+                  child: Container(
+                    height: 44, width: 44,
+                    decoration: BoxDecoration(
+                      color: _C.primaryLo,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _C.primary.withOpacity(0.3)),
+                    ),
+                    child: const Icon(Icons.add_rounded, color: _C.primary, size: 20),
+                  ),
+                ),
+              ],
+            ),
+            if (_tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6, runSpacing: 6,
+                children: _tags.map((tag) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _C.primaryLo,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _C.primary.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(tag, style: const TextStyle(color: _C.primary, fontSize: 11)),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _tags.remove(tag)),
+                        child: const Icon(Icons.close_rounded, size: 12, color: _C.primary),
+                      ),
+                    ],
+                  ),
+                )).toList(),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+            _SectionTitle('Notas'),
+            _SheetField(
+              controller: _notesCtrl,
+              hint: 'Observaciones...',
+              icon: Icons.notes_rounded,
+              maxLines: 3,
+            ),
+            const SizedBox(height: 24),
+            _SheetSubmitButton(
+              label: 'Guardar cambios',
+              loading: _loading,
+              onTap: _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateInfoBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _DateInfoBox({required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _C.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _C.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: _C.textMid),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                  style: const TextStyle(color: _C.textLo, fontSize: 10)),
+                const SizedBox(height: 2),
+                Text(value,
+                  style: const TextStyle(color: _C.textMid, fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _DeviceCard extends ConsumerStatefulWidget {
   final DeviceModel device;
   final int index;
@@ -494,7 +784,14 @@ class _DeviceCard extends ConsumerStatefulWidget {
 
 class _DeviceCardState extends ConsumerState<_DeviceCard> {
   bool _hovered = false;
-
+void _showEditDevice(BuildContext ctx, DeviceModel device) {
+  showModalBottomSheet(
+    context: ctx,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _EditDeviceSheet(device: device),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final d = widget.device;
@@ -582,30 +879,37 @@ class _DeviceCardState extends ConsumerState<_DeviceCard> {
               const SizedBox(width: 12),
 
               // Actions
-              Row(
-                children: [
-                  _IconBtn(
-                    icon: Icons.playlist_add_rounded,
-                    tooltip: 'Asignar playlist',
-                    color: _C.accent,
-                    onTap: () => _showAssignPlaylist(context, d),
-                  ),
-                  const SizedBox(width: 8),
-                  _IconBtn(
-                    icon: Icons.open_in_new_rounded,
-                    tooltip: 'Ver display',
-                    color: _C.green,
-                    onTap: () => _openDisplay(context, d),
-                  ),
-                  const SizedBox(width: 8),
-                  _IconBtn(
-                    icon: Icons.delete_outline_rounded,
-                    tooltip: 'Eliminar',
-                    color: _C.red,
-                    onTap: () => _confirmDelete(context, d),
-                  ),
-                ],
-              ),
+         Row(
+  children: [
+    _IconBtn(
+      icon: Icons.edit_outlined,
+      tooltip: 'Editar',
+      color: _C.primary,
+      onTap: () => _showEditDevice(context, d),
+    ),
+    const SizedBox(width: 8),
+    _IconBtn(
+      icon: Icons.playlist_add_rounded,
+      tooltip: 'Asignar playlist',
+      color: _C.accent,
+      onTap: () => _showAssignPlaylist(context, d),
+    ),
+    const SizedBox(width: 8),
+    _IconBtn(
+      icon: Icons.open_in_new_rounded,
+      tooltip: 'Ver display',
+      color: _C.green,
+      onTap: () => _openDisplay(context, d),
+    ),
+    const SizedBox(width: 8),
+    _IconBtn(
+      icon: Icons.delete_outline_rounded,
+      tooltip: 'Eliminar',
+      color: _C.red,
+      onTap: () => _confirmDelete(context, d),
+    ),
+  ],
+),
             ],
           ),
         ),
@@ -622,14 +926,20 @@ class _DeviceCardState extends ConsumerState<_DeviceCard> {
     );
   }
 
-  void _openDisplay(BuildContext ctx, DeviceModel device) {
-    // En web, abre la URL del display en nueva pestaña
-    // En Flutter puro, navega a la pantalla
-    Navigator.of(ctx).push(MaterialPageRoute(
-      builder: (_) => DisplayViewerScreen(token: device.displayUrl.split('/').last),
-    ));
+void _openDisplay(BuildContext ctx, DeviceModel device) {
+  // displayUrl viene como '/display/TOKEN' — extraemos el token
+  final parts = device.displayUrl.split('/');
+  final token = parts.isNotEmpty ? parts.last : device.displayUrl;
+  
+  if (token.isEmpty) {
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      _snack('Este dispositivo no tiene display asignado'));
+    return;
   }
 
+  // Navega usando go_router para respetar las rutas
+  ctx.go('/display/$token');
+}
   void _confirmDelete(BuildContext ctx, DeviceModel device) {
     showDialog(
       context: ctx,
@@ -1274,14 +1584,12 @@ class _PlaylistCardState extends ConsumerState<_PlaylistCard> {
                     onTap: () => _openEditor(context, pl),
                   ),
                   const SizedBox(width: 6),
-                  _IconBtn(
-                    icon: Icons.open_in_new_rounded,
-                    tooltip: 'Ver display',
-                    color: _C.green,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => DisplayViewerScreen(token: pl.displayToken),
-                    )),
-                  ),
+                 _IconBtn(
+  icon: Icons.open_in_new_rounded,
+  tooltip: 'Ver display',
+  color: _C.green,
+  onTap: () => context.go('/display/${pl.displayToken}'),
+),
                   const SizedBox(width: 6),
                   _IconBtn(
                     icon: Icons.copy_rounded,
@@ -1569,16 +1877,12 @@ void _showEditItem(BuildContext context, int index) {
                       ),
                       const SizedBox(width: 8),
                       // Preview
-                      _IconBtn(
-                        icon: Icons.preview_rounded,
-                        tooltip: 'Previsualizar display',
-                        color: _C.green,
-                        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => DisplayViewerScreen(
-                            token: widget.playlist.displayToken,
-                          ),
-                        )),
-                      ),
+                    _IconBtn(
+  icon: Icons.preview_rounded,
+  tooltip: 'Previsualizar display',
+  color: _C.green,
+  onTap: () => context.go('/display/${widget.playlist.displayToken}'),
+),
                       const SizedBox(width: 8),
                       // Save
                       AnimatedOpacity(
@@ -2103,11 +2407,11 @@ class DisplayViewerScreen extends ConsumerStatefulWidget {
   ConsumerState<DisplayViewerScreen> createState() =>
       _DisplayViewerScreenState();
 }
-
 class _DisplayViewerScreenState extends ConsumerState<DisplayViewerScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
   Timer? _timer;
+  Timer? _heartbeatTimer;  // ← NUEVO
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
   PlaylistModel? _lastPlaylist;
@@ -2122,121 +2426,142 @@ class _DisplayViewerScreenState extends ConsumerState<DisplayViewerScreen>
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
     _fadeCtrl.forward();
-
-    // Kiosk mode (for TV/Android)
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+    // ── Heartbeat: marca online cada 30s ──────────────────────────────────
+    _setOnline();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _setOnline();
+    });
+  }
+
+  void _setOnline() {
+    DeviceService().updateDeviceStatus(widget.token, DeviceStatus.online);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _heartbeatTimer?.cancel();
+    // Marca offline al salir
+    DeviceService().updateDeviceStatus(widget.token, DeviceStatus.offline);
     _fadeCtrl.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
-void _startTimer(PlaylistModel pl) {
-  _timer?.cancel();
-  if (pl.items.isEmpty) return;
-  final idx = _currentIndex.clamp(0, pl.items.length - 1);
-  final duration = pl.items[idx].durationSeconds;
-  _timer = Timer(Duration(seconds: duration), () => _nextSlide(pl));
-}
 
-Future<void> _nextSlide(PlaylistModel pl) async {
-  if (_transitioning || !mounted) return;
-  _transitioning = true;
-
-  await _fadeCtrl.reverse();
-  if (!mounted) return;
-  setState(() {
-    _currentIndex = (_currentIndex + 1) % pl.items.length;
-  });
-  await _fadeCtrl.forward();
-  _transitioning = false;
-  _startTimer(pl);
-}
-
-  @override
-  Widget build(BuildContext context) {
-    final playlistAsync = ref.watch(playlistByTokenProvider(widget.token));
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: playlistAsync.when(
-        loading: () => const _DisplayLoading(),
-        error:   (_, __) => const _DisplayError(
-          message: 'Error al cargar el contenido'),
-data: (playlist) {
-  if (playlist == null) {
-    return const _DisplayError(message: 'Display no encontrado');
-  }
-  if (playlist.items.isEmpty) {
-    return const _DisplayError(message: 'No hay contenido en esta playlist');
+  void _startTimer(PlaylistModel pl) {
+    _timer?.cancel();
+    if (pl.items.isEmpty) return;
+    final idx = _currentIndex.clamp(0, pl.items.length - 1);
+    final duration = pl.items[idx].durationSeconds;
+    _timer = Timer(Duration(seconds: duration), () => _nextSlide(pl));
   }
 
-  // Reinicia si cambió la playlist o sus items
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  Future<void> _nextSlide(PlaylistModel pl) async {
+    if (_transitioning || !mounted) return;
+    _transitioning = true;
+    await _fadeCtrl.reverse();
     if (!mounted) return;
-    if (_lastPlaylist?.id != playlist.id ||
-        _lastPlaylist?.items.length != playlist.items.length) {
-      _lastPlaylist = playlist;
-      setState(() => _currentIndex = 0);
-      _startTimer(playlist);
-    } else if (_timer == null || !_timer!.isActive) {
-      _lastPlaylist = playlist;
-      _startTimer(playlist);
-    }
-  });
-
-  final safeIndex = _currentIndex.clamp(0, playlist.items.length - 1);
-  final item = playlist.items[safeIndex];
-
-  return Stack(
-    fit: StackFit.expand,
-    children: [
-      FadeTransition(
-        opacity: _fadeAnim,
-        child: _DisplayContent(item: item),
-      ),
-      Positioned(
-        bottom: 0, left: 0, right: 0,
-        child: _DisplayProgressBar(
-          index:       safeIndex,
-          total:       playlist.items.length,
-          durationSec: item.durationSeconds,
-          key: ValueKey('progress_$safeIndex'),
-        ),
-      ),
-      Positioned(
-        top: 12, left: 12,
-        child: GestureDetector(
-          onTap: () => Navigator.maybePop(context),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.arrow_back_rounded,
-                  size: 14, color: Colors.white54),
-                const SizedBox(width: 6),
-                Text(playlist.name,
-                  style: const TextStyle(
-                    color: Colors.white54, fontSize: 11)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-},
-      ),
-    );
+    setState(() {
+      _currentIndex = (_currentIndex + 1) % pl.items.length;
+    });
+    await _fadeCtrl.forward();
+    _transitioning = false;
+    _startTimer(pl);
   }
+ 
+@override
+Widget build(BuildContext context) {
+  final playlistAsync    = ref.watch(playlistByTokenProvider(widget.token));
+  final playlistByDevice = ref.watch(playlistByDeviceTokenProvider(widget.token));
+
+  // Combina ambos: usa el primero que tenga datos
+  final combined = playlistAsync.when(
+    data: (pl) => pl != null
+        ? AsyncValue.data(pl)
+        : playlistByDevice,
+    loading: () => playlistByDevice.isLoading
+        ? const AsyncValue.loading()
+        : playlistByDevice,
+    error: (e, s) => playlistByDevice,
+  );
+
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: combined.when(
+      loading: () => const _DisplayLoading(),
+      error: (_, __) => const _DisplayError(message: 'Error al cargar el contenido'),
+      data: (playlist) {
+        if (playlist == null) {
+          return _DisplayError(
+            message: 'Display no encontrado\nToken: ${widget.token}',
+          );
+        }
+        if (playlist.items.isEmpty) {
+          return const _DisplayError(message: 'No hay contenido en esta playlist');
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (_lastPlaylist?.id != playlist.id ||
+              _lastPlaylist?.items.length != playlist.items.length) {
+            _lastPlaylist = playlist;
+            setState(() => _currentIndex = 0);
+            _startTimer(playlist);
+          } else if (_timer == null || !(_timer?.isActive ?? false)) {
+            _lastPlaylist = playlist;
+            _startTimer(playlist);
+          }
+        });
+
+      final safeIndex = _currentIndex.clamp(0, playlist.items.length - 1).toInt();
+        final item = playlist.items[safeIndex];
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: _DisplayContent(item: item),
+            ),
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: _DisplayProgressBar(
+                index:       safeIndex,
+                total:       playlist.items.length,
+                durationSec: item.durationSeconds,
+                key: ValueKey('progress_$safeIndex'),
+              ),
+            ),
+            Positioned(
+              top: 12, left: 12,
+              child: GestureDetector(
+                onTap: () => context.go('/dashboard'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_back_rounded, size: 14, color: Colors.white54),
+                      const SizedBox(width: 6),
+                      Text(playlist.name,
+                        style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
 }
 
 // ── Display Content ───────────────────────────────────────────────────────────
