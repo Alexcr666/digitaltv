@@ -11,7 +11,19 @@ import 'package:digitaltv/ui/panel/playlist2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+class PlaylistsListScreen extends ConsumerWidget {
+  const PlaylistsListScreen({super.key});
 
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF070B12),
+      body: Center(
+        child: PlaylistsListDialog(ref: ref),
+      ),
+    );
+  }
+}
 
 // Route names
 class AppRoutes {
@@ -43,6 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+    
       GoRoute(
         path: '/login',
         builder: (_, __) => const AuthScreen(),
@@ -57,7 +70,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __, child) => MainShell(child: child),
         routes: [
 
-         
+           GoRoute(
+  path: '/playlist2',
+  builder: (_, __) => const PlaylistsListScreen(),
+),
 
         
 GoRoute(path: '/editor', builder: (_, __) => const ScreenEditorScreen()),

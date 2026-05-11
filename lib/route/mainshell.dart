@@ -116,19 +116,20 @@ class _Sidebar extends ConsumerWidget {
               badge: onlineCount.valueOrNull?.toString()),
           _NavItem(icon: Icons.perm_media_outlined, label: 'Content',
               route: AppRoutes.content, current: location),
-          _NavItem(icon: Icons.send_outlined, label: 'Assignments',
-              route: AppRoutes.assignments, current: location),
+        
    
-   
-   _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+      
+   _NavItem(icon: Icons.send_outlined, label: 'Lista de reproducción',
+              route: "/playlist2", current: location),
+   _NavItem(icon: Icons.send_outlined, label: 'Programación',
               route: "/schedules", current: location),
-  _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+  _NavItem(icon: Icons.send_outlined, label: 'Analitica',
               route: "/analytics", current: location),
 
-  _NavItem(icon: Icons.send_outlined, label: 'Playlists',
+  _NavItem(icon: Icons.send_outlined, label: 'Biblioteca de medios',
               route: "/media", current: location),
 
-  _NavItem(icon: Icons.send_outlined, label: 'Playlists1',
+  _NavItem(icon: Icons.send_outlined, label: 'Editor Playlists',
               route: "/editor", current: location),
           const SizedBox(height: 8),
           _NavLabel('Admin'),

@@ -742,6 +742,15 @@ void _showAddAudioDialog(BuildContext ctx, WidgetRef ref) {
   );
 }
 
+void _showTVColombia(BuildContext ctx, WidgetRef ref) {
+  showDialog(
+    context: ctx,
+    builder: (_) => _TVColombiaDialog(
+      onAdd: (clip) => ref.read(editorClipsProvider.notifier).add(clip),
+    ),
+  );
+}
+
   Widget _buildMediaTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
@@ -795,6 +804,12 @@ void _showAddAudioDialog(BuildContext ctx, WidgetRef ref) {
             color: _EC.amber, delay: 150,
             onTap: () => _showAddClipDialog(context, ref, EditorLayerType.overlay),
           ),
+          const SizedBox(height: 6),
+_AnimatedMediaBtn(
+  icon: Icons.tv_rounded, label: 'TV Colombia en vivo',
+  color: const Color(0xFFEC4899), delay: 225,
+  onTap: () => _showTVColombia(context, ref),
+),
 
           const SizedBox(height: 6),
 _AnimatedMediaBtn(
@@ -2003,8 +2018,28 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
         child: Center(child: Icon(Icons.image_rounded, color: _EC.accent, size: 22 * sx)),
       );
 
-    case EditorLayerType.video:
+   case EditorLayerType.video:
       if (clip.url != null && clip.url!.isNotEmpty) {
+        // Si es YouTube embed (TV en vivo o video normal) → iframe
+        if (clip.url!.contains('youtube.com/embed')) {
+          final viewId = 'yt-embed-${clip.id}';
+          try {
+            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+              final iframe = html.IFrameElement()
+                ..src = clip.url!
+                ..style.border = 'none'
+                ..style.width = '100%'
+                ..style.height = '100%'
+                ..allowFullscreen = true
+                ..setAttribute('allow',
+                  'accelerometer; autoplay; clipboard-write; '
+                  'encrypted-media; gyroscope; picture-in-picture');
+              return iframe;
+            });
+          } catch (_) {}
+          return HtmlElementView(viewType: viewId);
+        }
+        // Video normal (blob: / https:)
         final viewId = 'vid-${clip.id}';
         ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
           final video = html.VideoElement()
@@ -2024,11 +2059,14 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
               bottom: 4 * sy, left: 0, right: 0,
               child: Center(
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 6 * sx, vertical: 2 * sy),
                   decoration: BoxDecoration(
-                    color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4)),
                   child: Text(clip.label,
-                    style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+                    style: TextStyle(
+                      color: Colors.white70, fontSize: 9 * sx,
                       fontWeight: FontWeight.w600),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
@@ -2040,25 +2078,30 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
       return Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [_EC.purple.withOpacity(0.3), _EC.purple.withOpacity(0.1)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight)),
+            colors: [
+              _EC.purple.withOpacity(0.3),
+              _EC.purple.withOpacity(0.1)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight)),
         child: Center(child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 36 * sx, height: 36 * sx,
               decoration: BoxDecoration(
-                color: _EC.purple.withOpacity(0.85), shape: BoxShape.circle),
-              child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx)),
+                color: _EC.purple.withOpacity(0.85),
+                shape: BoxShape.circle),
+              child: Icon(Icons.play_arrow_rounded,
+                color: Colors.white, size: 22 * sx)),
             SizedBox(height: 5 * sy),
             Text(clip.label,
-              style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+              style: TextStyle(
+                color: Colors.white70, fontSize: 9 * sx,
                 fontWeight: FontWeight.w600),
               maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         )),
       );
-
     case EditorLayerType.audio:
       // Reproduce el audio invisible; muestra barra visual
       if (clip.url != null && clip.url!.isNotEmpty) {
@@ -6441,3 +6484,362 @@ class _ExportVideoDialogState extends State<_ExportVideoDialog> {
 
 // Cache global de imágenes para el renderizado
 final _imageCache = <String, html.ImageElement>{};
+
+
+// =============================================================================
+// TV COLOMBIA EN VIVO — Dialog con canales nacionales
+// =============================================================================
+
+class _TVChannel {
+  final String name;
+  final String logo;        // emoji o texto corto
+  final Color color;
+  final String embedUrl;
+  final String youtubeChannelId;  // ID del canal de YouTube (live_stream)
+  final String description;
+
+  const _TVChannel({
+    required this.name,
+    required this.logo,
+    required this.color,
+    required this.embedUrl,
+    required this.youtubeChannelId,
+    required this.description,
+  });
+
+ 
+}
+
+class _TVColombiaDialog extends StatefulWidget {
+  final void Function(EditorClip) onAdd;
+  const _TVColombiaDialog({required this.onAdd});
+
+  @override
+  State<_TVColombiaDialog> createState() => _TVColombiaDialogState();
+}
+
+class _TVColombiaDialogState extends State<_TVColombiaDialog> {
+ static const _channels = [
+  _TVChannel(
+    name: 'Noticias Caracol',
+    logo: '📡',
+    color: Color(0xFFD4001A),
+    embedUrl: 'https://www.youtube.com/embed/zBOHpar2Vi4?autoplay=1&controls=1',
+    description: '24/7 noticias · Colombia y mundo', youtubeChannelId: '',
+  ),
+  _TVChannel(
+    name: 'Canal RCN Noticias',
+    logo: '🔵',
+    color: Color(0xFF0057A8),
+    embedUrl: 'https://www.youtube.com/embed/OBLqkxmSRlI?autoplay=1&controls=1',
+    description: 'Noticias en vivo · Canal RCN', youtubeChannelId: '',
+  ),
+  _TVChannel(
+    name: 'Señal Colombia',
+    logo: '🇨🇴',
+    color: Color(0xFF007A33),
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCY3WPKPVHM0xYsGqhGKkHcQ&autoplay=1&controls=1',
+    description: 'Canal público cultural · RTVC', youtubeChannelId: '',
+  ),
+  _TVChannel(
+    name: 'NTN24',
+    logo: '🌐',
+    color: Color(0xFF1D3557),
+    embedUrl: 'https://www.youtube.com/embed/JUYFBGpR7W0?autoplay=1&controls=1',
+    description: 'Noticias internacionales 24h', youtubeChannelId: '',
+  ),
+  _TVChannel(
+    name: 'Blu Radio',
+    logo: '🎙',
+    color: Color(0xFF0EA5E9),
+    embedUrl: 'https://www.youtube.com/embed/cGNJkIJKRBs?autoplay=1&controls=1',
+    description: 'Radio y noticias en vivo', youtubeChannelId: '',
+  ),
+  _TVChannel(
+    name: 'Telemedellín',
+    logo: '🏙',
+    color: Color(0xFF6B21A8),
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCO2yELJy1kMImYJhbwZzJqQ&autoplay=1&controls=1',
+    description: 'Canal regional · Medellín', youtubeChannelId: '',
+  ),
+];
+
+  _TVChannel? _selected;
+  double _start = 0;
+  double _duration = 30;
+
+String _getViewId(_TVChannel ch) => 'tv-live-${ch.name.replaceAll(' ', '-').toLowerCase()}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _EC.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: _EC.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SizedBox(
+          width: 600,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──────────────────────────────────────────
+              Row(children: [
+                const Icon(Icons.tv_rounded, size: 16, color: Color(0xFFEC4899)),
+                const SizedBox(width: 8),
+                const Text('TV Colombia en Vivo',
+                  style: TextStyle(color: _EC.textHi,
+                    fontWeight: FontWeight.w700, fontSize: 14)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close_rounded,
+                    size: 16, color: _EC.textMid),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                'Selecciona un canal para previsualizarlo y agregarlo al timeline como clip de video.',
+                style: TextStyle(color: _EC.textMid, fontSize: 11)),
+              const SizedBox(height: 14),
+
+              // ── Grid de canales ──────────────────────────────────
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: _channels.map((ch) {
+                  final sel = _selected?.name == ch.name;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selected = ch),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 130),
+                      width: 170,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: sel
+                          ? ch.color.withOpacity(0.15) : _EC.card,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: sel ? ch.color : _EC.border,
+                          width: sel ? 2 : 1),
+                        boxShadow: sel
+                          ? [BoxShadow(
+                              color: ch.color.withOpacity(0.25),
+                              blurRadius: 10)]
+                          : [],
+                      ),
+                      child: Row(children: [
+                        Text(ch.logo, style: const TextStyle(fontSize: 22)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(ch.name, style: TextStyle(
+                              color: sel ? ch.color : _EC.textHi,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700),
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 2),
+                            Text(ch.description, style: const TextStyle(
+                              color: _EC.textMid, fontSize: 8),
+                              maxLines: 2),
+                          ],
+                        )),
+                        if (sel)
+                          Container(
+                            width: 8, height: 8,
+                            decoration: BoxDecoration(
+                              color: ch.color, shape: BoxShape.circle),
+                          ),
+                      ]),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              // ── Preview embebido ──────────────────────────────────
+              if (_selected != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _selected!.color.withOpacity(0.4), width: 1.5)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: _YoutubeEmbedView(
+                      key: ValueKey(_selected!.name),
+viewId: _getViewId(_selected!),
+                        embedUrl: _selected!.embedUrl,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Tiempos
+                Row(children: [
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Inicio en timeline: ${_start.toStringAsFixed(1)}s',
+                        style: const TextStyle(
+                          color: _EC.textMid, fontSize: 10)),
+                      Slider(
+                        value: _start, min: 0, max: 120,
+                        activeColor: _selected!.color,
+                        inactiveColor: _EC.border,
+                        onChanged: (v) => setState(() => _start = v),
+                      ),
+                    ],
+                  )),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Duración: ${_duration.toStringAsFixed(0)}s',
+                        style: const TextStyle(
+                          color: _EC.textMid, fontSize: 10)),
+                      Slider(
+                        value: _duration, min: 5, max: 3600,
+                        activeColor: _selected!.color,
+                        inactiveColor: _EC.border,
+                        onChanged: (v) => setState(() => _duration = v),
+                      ),
+                    ],
+                  )),
+                ]),
+
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _EC.amber.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: _EC.amber.withOpacity(0.3)),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.info_outline_rounded,
+                      size: 13, color: _EC.amber),
+                    SizedBox(width: 6),
+                    Expanded(child: Text(
+                      'La señal en vivo se reproduce vía YouTube. '
+                      'Requiere conexión a internet en el dispositivo de pantalla.',
+                      style: TextStyle(color: _EC.amber, fontSize: 10, height: 1.4))),
+                  ]),
+                ),
+              ],
+
+              const SizedBox(height: 14),
+
+              // ── Botones ──────────────────────────────────────────
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _EC.textMid,
+                    side: const BorderSide(color: _EC.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Cancelar'),
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: ElevatedButton.icon(
+                  onPressed: _selected == null ? null : () {
+                    final ch = _selected!;
+                    widget.onAdd(EditorClip(
+                      id:          _uuid.v4(),
+                      type:        EditorLayerType.video,
+                      label:       ch.name,
+                      // Guardamos el embedUrl en url para renderizado
+                      url:         ch.embedUrl,
+                      startSec:    _start,
+                      durationSec: _duration,
+                      trackIndex:  0,
+                      x: 640, y: 360,
+                      width: 1280, height: 720,
+                    ));
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                        '📺 ${ch.name} agregado al timeline'),
+                      backgroundColor: ch.color.withOpacity(0.9),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                      duration: const Duration(seconds: 2),
+                    ));
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 14),
+                  label: const Text('Agregar al timeline',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _selected?.color ??
+                      const Color(0xFFEC4899),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8))),
+                )),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Widget que embebe el iframe de YouTube Live usando ui_web (mismo patrón que el resto del código)
+class _YoutubeEmbedView extends StatefulWidget {
+  final String viewId;
+  final String embedUrl;
+  const _YoutubeEmbedView({super.key, required this.viewId, required this.embedUrl});
+
+  @override
+  State<_YoutubeEmbedView> createState() => _YoutubeEmbedViewState();
+}
+
+class _YoutubeEmbedViewState extends State<_YoutubeEmbedView> {
+  bool _registered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _registerView();
+  }
+
+  void _registerView() {
+    if (_registered) return;
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(
+        widget.viewId,
+        (int id) {
+          final iframe = html.IFrameElement()
+            ..src = widget.embedUrl
+            ..style.border = 'none'
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..allowFullscreen = true
+            ..setAttribute('allow',
+              'accelerometer; autoplay; clipboard-write; '
+              'encrypted-media; gyroscope; picture-in-picture');
+          return iframe;
+        },
+      );
+      _registered = true;
+    } catch (_) {
+      // Ya registrado — no hay problema
+      _registered = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HtmlElementView(viewType: widget.viewId);
+  }
+}

@@ -1,4 +1,5 @@
 // lib/main.dart
+import 'package:digitaltv/auth/authSystem.dart';
 import 'package:digitaltv/firestore/apptheme.dart';
 
 import 'package:digitaltv/route/route.dart';
@@ -7,7 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
-
+/*
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -16,8 +17,15 @@ Future<void> main() async {
   );
 
   runApp(const ProviderScope(child: DigitalSignageApp()));
-}
+}*/
 
+ void main() async {
+     WidgetsFlutterBinding.ensureInitialized();
+     await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+     runApp(const ProviderScope(child: SignageApp()));
+   }
+/*
 class DigitalSignageApp extends ConsumerWidget {
   const DigitalSignageApp({super.key});
 
@@ -35,4 +43,4 @@ class DigitalSignageApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
-}
+}*/
