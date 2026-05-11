@@ -6,6 +6,8 @@ import 'package:digitaltv/ui/auth/auth.dart';
 import 'package:digitaltv/ui/dashboard.dart';
 import 'package:digitaltv/ui/panel/panel.dart';
 import 'package:digitaltv/ui/panel/panel2.dart';
+import 'package:digitaltv/ui/panel/panel3.dart';
+import 'package:digitaltv/ui/panel/playlist2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,6 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __, child) => MainShell(child: child),
         routes: [
 
+         
+
+        
+GoRoute(path: '/editor', builder: (_, __) => const ScreenEditorScreen()),
           GoRoute(path: '/schedules', builder: (_, __) => const SchedulesScreen()),
 GoRoute(path: '/analytics', builder: (_, __) => const AnalyticsScreen()),
 GoRoute(path: '/media',     builder: (_, __) => const MediaLibraryScreen()),

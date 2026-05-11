@@ -1477,124 +1477,170 @@ class _MediaLibraryScreenState extends ConsumerState<MediaLibraryScreen> {
 
   @override
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ScreenHeader(
-            title: 'Biblioteca de medios',
-            subtitle: 'Gestiona todas tus imágenes, videos y recursos',
-            action: _AddButton(
-              label: '+ Agregar URL',
-              onTap: () => _showAddMedia(context),
-            ),
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: _C.bg,
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ScreenHeader(
+          title: 'Biblioteca de medios',
+          subtitle: 'Gestiona todas tus imágenes, videos y recursos',
+          action: _AddButton(
+            label: '+ Agregar URL',
+            onTap: () => _showAddMedia(context),
           ),
+        ),
 
-          // Search + filter
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _C.card,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _C.border),
+        // Search + filtros
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _C.card,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _C.border),
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: const TextStyle(color: _C.textHi, fontSize: 13),
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar medios...',
+                      hintStyle: TextStyle(color: _C.textLo, fontSize: 13),
+                      prefixIcon: Icon(Icons.search_rounded,
+                        size: 16, color: _C.textMid),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
                     ),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      style: const TextStyle(color: _C.textHi, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: 'Buscar medios...',
-                        hintStyle: TextStyle(color: _C.textLo, fontSize: 13),
-                        prefixIcon: Icon(Icons.search_rounded,
-                          size: 16, color: _C.textMid),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      onChanged: (v) => setState(() => _search = v),
-                    ),
+                    onChanged: (v) => setState(() => _search = v),
                   ),
                 ),
-                const SizedBox(width: 12),
-                _FilterTabs(
-                  selected: _filter,
-                  tabs: [
-                    ('all',   'Todos',    0),
-                    ('image', 'Imágenes', 0),
-                    ('video', 'Videos',   0),
-                    ('url',   'URLs',     0),
-                  ],
-                  onChanged: (v) => setState(() => _filter = v),
-                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Tabs de tipo
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _filterChip('all',   'Todos'),
+                _filterChip('image', 'Imágenes'),
+                _filterChip('video', 'Videos'),
+                _filterChip('url',   'URLs'),
+                const SizedBox(width: 16),
+                // Filtro por categoría
+                _filterChip('cat:Sin categoría', 'Sin categoría'),
+                _filterChip('cat:Banner',        'Banner'),
+                _filterChip('cat:Logo',          'Logo'),
+                _filterChip('cat:Animación',     'Animación'),
+                _filterChip('cat:Audio',         'Audio'),
+                _filterChip('cat:Otro',          'Otro'),
               ],
             ),
           ),
+        ),
+        const SizedBox(height: 10),
 
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                .collection('media_library')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-              builder: (context, snap) {
-                if (!snap.hasData) return const _SkeletonList();
-                var docs = snap.data!.docs;
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+              .collection('media_library')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+            builder: (context, snap) {
+              if (!snap.hasData) return const _SkeletonList();
+              var docs = snap.data!.docs;
 
-                // Filter
-                if (_filter != 'all') {
-                  docs = docs.where((d) {
-                    final data = d.data() as Map<String, dynamic>;
-                    return data['type'] == _filter;
-                  }).toList();
-                }
-                if (_search.isNotEmpty) {
-                  docs = docs.where((d) {
-                    final data = d.data() as Map<String, dynamic>;
-                    return (data['name'] ?? '')
-                      .toString().toLowerCase()
-                      .contains(_search.toLowerCase());
-                  }).toList();
-                }
+              // Filtro tipo
+              if (_filter != 'all' && !_filter.startsWith('cat:')) {
+                docs = docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  return data['type'] == _filter;
+                }).toList();
+              }
 
-                if (docs.isEmpty) {
-                  return _EmptyState(
-                    icon: Icons.photo_library_rounded,
-                    title: 'Sin medios',
-                    subtitle: 'Agrega URLs de imágenes y videos a tu biblioteca.',
-                  );
-                }
+              // Filtro categoría
+              if (_filter.startsWith('cat:')) {
+                final cat = _filter.substring(4);
+                docs = docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  return (data['category'] ?? 'Sin categoría') == cat;
+                }).toList();
+              }
 
-                return GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisExtent: 200,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: docs.length,
-                  itemBuilder: (_, i) {
-                    final d = docs[i].data() as Map<String, dynamic>;
-                    return _MediaCard(
-                      id:   docs[i].id,
-                      data: d,
-                    ).animate().fadeIn(delay: Duration(milliseconds: i * 30));
-                  },
+              // Filtro búsqueda
+              if (_search.isNotEmpty) {
+                docs = docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  return (data['name'] ?? '')
+                    .toString().toLowerCase()
+                    .contains(_search.toLowerCase());
+                }).toList();
+              }
+
+              if (docs.isEmpty) {
+                return _EmptyState(
+                  icon: Icons.photo_library_rounded,
+                  title: 'Sin medios',
+                  subtitle: 'Agrega URLs de imágenes y videos a tu biblioteca.',
                 );
-              },
-            ),
+              }
+
+              return GridView.builder(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  mainAxisExtent: 240,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: docs.length,
+                itemBuilder: (_, i) {
+                  final d = docs[i].data() as Map<String, dynamic>;
+                  return _MediaCard(
+                    id:   docs[i].id,
+                    data: d,
+                  ).animate().fadeIn(delay: Duration(milliseconds: i * 30));
+                },
+              );
+            },
           ),
-        ],
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _filterChip(String id, String label) {
+  final sel = _filter == id;
+  return GestureDetector(
+    onTap: () => setState(() => _filter = id),
+    child: AnimatedContainer(
+      duration: 130.ms,
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: sel ? _C.primaryLo : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: sel ? _C.primary.withOpacity(0.4) : _C.border),
       ),
-    );
-  }
+      child: Text(label,
+        style: TextStyle(
+          color: sel ? _C.primary : _C.textMid,
+          fontSize: 11, fontWeight: FontWeight.w600)),
+    ),
+  );
+}
 
   void _showAddMedia(BuildContext context) {
     showModalBottomSheet(
@@ -1605,7 +1651,6 @@ class _MediaLibraryScreenState extends ConsumerState<MediaLibraryScreen> {
     );
   }
 }
-
 class _MediaCard extends StatefulWidget {
   final String id;
   final Map<String, dynamic> data;
@@ -1617,12 +1662,29 @@ class _MediaCard extends StatefulWidget {
 
 class _MediaCardState extends State<_MediaCard> {
   bool _hovered = false;
+  bool _previewing = false;
+
+  String _fmtDate(dynamic raw) {
+    if (raw == null) return '—';
+    DateTime? dt;
+    if (raw is Timestamp) dt = raw.toDate();
+    else if (raw is String) dt = DateTime.tryParse(raw);
+    if (dt == null) return '—';
+    return '${dt.day.toString().padLeft(2,'0')}/'
+        '${dt.month.toString().padLeft(2,'0')}/'
+        '${dt.year}  '
+        '${dt.hour.toString().padLeft(2,'0')}:'
+        '${dt.minute.toString().padLeft(2,'0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.data['name'] ?? 'Sin nombre';
-    final type = widget.data['type'] ?? 'image';
-    final url  = widget.data['url']  ?? '';
+    final name      = widget.data['name']      ?? 'Sin nombre';
+    final type      = widget.data['type']      ?? 'image';
+    final url       = widget.data['url']       ?? '';
+    final category  = widget.data['category']  ?? '';
+    final playlist  = widget.data['playlist']  ?? '';
+    final createdAt = widget.data['createdAt'];
 
     final typeColor = type == 'image' ? _C.accent
                     : type == 'video' ? _C.purple : _C.amber;
@@ -1644,72 +1706,273 @@ class _MediaCardState extends State<_MediaCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Preview
+            // ── Preview ──────────────────────────────────────────────
             Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(11)),
-                child: type == 'image'
-                  ? Image.network(
-                      'https://wsrv.nl/?url=${Uri.encodeComponent(url)}&w=200&h=120&fit=cover',
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: _C.surface,
-                        child: Center(
-                          child: Icon(typeIcon, color: typeColor, size: 32)),
+              child: GestureDetector(
+                onTap: () => setState(() => _previewing = !_previewing),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(11)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Contenido según tipo
+                      if (type == 'image' && url.isNotEmpty)
+                        Image.network(
+                          'https://wsrv.nl/?url=${Uri.encodeComponent(url)}&w=200&h=120&fit=cover',
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => _iconPlaceholder(typeIcon, typeColor),
+                        )
+                      else if (type == 'video' && url.isNotEmpty)
+                        Container(
+                          color: _C.surface,
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.play_circle_outline_rounded,
+                                  color: typeColor, size: 36),
+                                const SizedBox(height: 4),
+                                Text('Video', style: TextStyle(
+                                  color: typeColor, fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        _iconPlaceholder(typeIcon, typeColor),
+
+                      // Overlay de preview al hacer tap
+                      if (_previewing && url.isNotEmpty)
+                        Container(
+                          color: Colors.black87,
+                          child: Center(
+                            child: type == 'image'
+                              ? Image.network(url,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                    Icon(typeIcon, color: typeColor, size: 32))
+                              : Icon(typeIcon, color: typeColor, size: 40),
+                          ),
+                        ),
+
+                      // Badge de tipo
+                      Positioned(
+                        top: 6, left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: typeColor.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(4)),
+                          child: Text(type,
+                            style: const TextStyle(
+                              color: Colors.white, fontSize: 9,
+                              fontWeight: FontWeight.w700)),
+                        ),
                       ),
-                    )
-                  : Container(
-                      color: _C.surface,
-                      child: Center(
-                        child: Icon(typeIcon, color: typeColor, size: 32)),
-                    ),
+
+                      // Ícono de preview
+                      Positioned(
+                        top: 6, right: 6,
+                        child: Icon(
+                          _previewing
+                            ? Icons.close_rounded
+                            : Icons.zoom_in_rounded,
+                          color: Colors.white70, size: 14),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
 
+            // ── Info ─────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                  // Nombre
+                  Text(name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _C.textHi, fontWeight: FontWeight.w600,
+                      fontSize: 11)),
+                  const SizedBox(height: 2),
+
+                  // Fecha de creación
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded,
+                        size: 9, color: _C.textLo),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(_fmtDate(createdAt),
                           style: const TextStyle(
-                            color: _C.textHi, fontWeight: FontWeight.w500,
-                            fontSize: 12)),
-                        _Badge(label: type, color: typeColor),
+                            color: _C.textLo, fontSize: 9),
+                          overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+
+                  // Playlist origen
+                  if (playlist.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.playlist_play_rounded,
+                          size: 9, color: _C.textMid),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(playlist,
+                            style: const TextStyle(
+                              color: _C.textMid, fontSize: 9),
+                            overflow: TextOverflow.ellipsis),
+                        ),
                       ],
                     ),
-                  ),
-                  _IconBtn(
-                    icon: Icons.copy_rounded,
-                    tooltip: 'Copiar URL',
-                    color: _C.accent,
-                    size: 14,
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: url));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        _snack('URL copiada'));
-                    },
-                  ),
-                  _IconBtn(
-                    icon: Icons.delete_outline_rounded,
-                    tooltip: 'Eliminar',
-                    color: _C.red,
-                    size: 14,
-                    onTap: () {
-                      FirebaseFirestore.instance
-                        .collection('media_library').doc(widget.id).delete();
-                    },
+                  ],
+
+                  // Categoría
+                  if (category.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    _Badge(label: category, color: _C.primary),
+                  ],
+
+                  const SizedBox(height: 4),
+
+                  // Acciones
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _IconBtn(
+                        icon: Icons.copy_rounded,
+                        tooltip: 'Copiar URL',
+                        color: _C.accent,
+                        size: 14,
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: url));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            _snack('URL copiada'));
+                        },
+                      ),
+                      _IconBtn(
+                        icon: Icons.edit_rounded,
+                        tooltip: 'Editar categoría',
+                        color: _C.primary,
+                        size: 14,
+                        onTap: () => _showEditDialog(context),
+                      ),
+                      _IconBtn(
+                        icon: Icons.delete_outline_rounded,
+                        tooltip: 'Eliminar',
+                        color: _C.red,
+                        size: 14,
+                        onTap: () {
+                          FirebaseFirestore.instance
+                            .collection('media_library')
+                            .doc(widget.id).delete();
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconPlaceholder(IconData icon, Color color) => Container(
+    color: _C.surface,
+    child: Center(child: Icon(icon, color: color, size: 32)),
+  );
+
+  void _showEditDialog(BuildContext context) {
+    final cats = ['Sin categoría', 'Imagen', 'Video', 'Audio',
+      'Animación', 'Banner', 'Logo', 'Otro'];
+    String selected = widget.data['category'] ?? 'Sin categoría';
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (_, setState2) => Dialog(
+          backgroundColor: _C.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: _C.border)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Editar categoría',
+                    style: TextStyle(color: _C.textHi,
+                      fontWeight: FontWeight.w700, fontSize: 14)),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 6, runSpacing: 6,
+                    children: cats.map((c) {
+                      final sel = c == selected;
+                      return GestureDetector(
+                        onTap: () => setState2(() => selected = c),
+                        child: AnimatedContainer(
+                          duration: 120.ms,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: sel ? _C.primary : _C.card,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: sel ? _C.primary : _C.border)),
+                          child: Text(c, style: TextStyle(
+                            color: sel ? Colors.white : _C.textMid,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Expanded(child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _C.textMid,
+                        side: const BorderSide(color: _C.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
+                      child: const Text('Cancelar'),
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: ElevatedButton(
+                      onPressed: () {
+                        FirebaseFirestore.instance
+                          .collection('media_library')
+                          .doc(widget.id)
+                          .update({'category': selected});
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _C.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
+                      child: const Text('Guardar',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    )),
+                  ]),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

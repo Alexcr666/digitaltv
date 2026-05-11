@@ -128,6 +128,8 @@ class _Sidebar extends ConsumerWidget {
   _NavItem(icon: Icons.send_outlined, label: 'Playlists',
               route: "/media", current: location),
 
+  _NavItem(icon: Icons.send_outlined, label: 'Playlists1',
+              route: "/editor", current: location),
           const SizedBox(height: 8),
           _NavLabel('Admin'),
           _NavItem(icon: Icons.manage_accounts_outlined, label: 'Roles & Access',

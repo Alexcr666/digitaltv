@@ -46,6 +46,7 @@ dependencies:
   intl: ^0.20.2
   firebase_auth: ^4.20.0
   google_fonts: ^6.2.0
+  file_picker: ^8.0.5
 
 dev_dependencies:
   flutter_test:
