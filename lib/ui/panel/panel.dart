@@ -85,9 +85,22 @@ class DeviceModel {
     this.createdAt,
     this.updatedAt,
   });
+factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
+  final d = doc.data() as Map<String, dynamic>;
 
-  factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
+  DateTime? parseDate(dynamic val) {
+    try {
+      if (val == null) return null;
+      if (val is Timestamp) return val.toDate();
+      if (val is String && val.isNotEmpty) return DateTime.tryParse(val);
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    } catch (e) {
+      debugPrint('[DeviceModel] parseDate error: $e — val=$val');
+    }
+    return null;
+  }
+
+  try {
     return DeviceModel(
       id:                    doc.id,
       name:                  d['name'] ?? 'Dispositivo',
@@ -97,18 +110,31 @@ class DeviceModel {
       groupName:             d['groupName'],
       currentPlaylistId:     d['currentPlaylistId'],
       currentPlaylistName:   d['currentPlaylistName'],
-      lastSeen:              (d['lastSeen'] as Timestamp?)?.toDate(),
-      metadata:              d['metadata'] ?? {},
+      lastSeen:              parseDate(d['lastSeen']),
+      metadata:              (d['metadata'] as Map<String, dynamic>?) ?? {},
       displayUrl:            d['displayUrl'] ?? '',
       location:              d['location'],
       resolution:            d['resolution'],
       orientation:           d['orientation'],
       notes:                 d['notes'],
       tags:                  List<String>.from(d['tags'] ?? []),
-      createdAt:             (d['createdAt'] as Timestamp?)?.toDate(),
-      updatedAt:             (d['updatedAt'] as Timestamp?)?.toDate(),
+      createdAt:             parseDate(d['createdAt']),
+      updatedAt:             parseDate(d['updatedAt']),
+    );
+  } catch (e, stack) {
+    debugPrint('[DeviceModel.fromFirestore] ERROR doc=${doc.id}: $e');
+    debugPrint('[DeviceModel.fromFirestore] data=$d');
+    debugPrint(stack.toString());
+    // Retorna modelo mínimo para no romper la lista
+    return DeviceModel(
+      id:             doc.id,
+      name:           d['name'] ?? 'Dispositivo (error)',
+      uniqueDeviceId: d['uniqueDeviceId'] ?? '',
+      status:         DeviceStatus.offline,
+      displayUrl:     d['displayUrl'] ?? '',
     );
   }
+}
 
   static DeviceStatus _parseStatus(String? s) {
     switch (s) {
@@ -196,8 +222,22 @@ class PlaylistModel {
     this.isActive = true,
   });
 
-  factory PlaylistModel.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
+factory PlaylistModel.fromFirestore(DocumentSnapshot doc) {
+  DateTime parseDate(dynamic val, DateTime fallback) {
+    try {
+      if (val == null) return fallback;
+      if (val is Timestamp) return val.toDate();
+      if (val is String && val.isNotEmpty) return DateTime.tryParse(val) ?? fallback;
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    } catch (e) {
+      debugPrint('[PlaylistModel] parseDate error: $e — val=$val');
+    }
+    return fallback;
+  }
+
+  final d = doc.data() as Map<String, dynamic>;
+
+  try {
     final rawItems = (d['items'] as List<dynamic>?) ?? [];
     return PlaylistModel(
       id:           doc.id,
@@ -207,11 +247,23 @@ class PlaylistModel {
                       .map((i) => PlaylistItemModel.fromMap(i as Map<String, dynamic>))
                       .toList()
                         ..sort((a, b) => a.order.compareTo(b.order)),
-      createdAt:    (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt:    parseDate(d['createdAt'], DateTime.now()),
       displayToken: d['displayToken'] ?? '',
       isActive:     d['isActive'] ?? true,
     );
+  } catch (e, stack) {
+    debugPrint('[PlaylistModel.fromFirestore] ERROR doc=${doc.id}: $e');
+    debugPrint('[PlaylistModel.fromFirestore] data=$d');
+    debugPrint(stack.toString());
+    return PlaylistModel(
+      id:           doc.id,
+      name:         d['name'] ?? 'Playlist (error)',
+      items:        [],
+      createdAt:    DateTime.now(),
+      displayToken: d['displayToken'] ?? '',
+    );
   }
+}
 
   Map<String, dynamic> toMap() => {
     'name':         name,
@@ -991,26 +1043,58 @@ class _AddDeviceSheetState extends ConsumerState<_AddDeviceSheet> {
       setState(() { _tags.add(t); _tagCtrl.clear(); });
     }
   }
+Future<void> _save() async {
+  if (!_formKey.currentState!.validate()) return;
+  setState(() { _loading = true; _error = null; });
+  try {
+    final deviceId = _uuid.v4().substring(0, 8).toUpperCase();
+    final token    = _uuid.v4().replaceAll('-', '');
+    final docRef   = _db.collection('devices').doc();
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
-    try {
-      await DeviceService().addDevice(
-        name:        _nameCtrl.text.trim(),
-        groupName:   _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
-        location:    _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
-        resolution:  _resolution,
-        orientation: _orientation,
-        notes:       _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        tags:        _tags,
+    // Genera usuario y contraseña automáticos
+    final username = _nameCtrl.text.trim()
+        .toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '') +
+        '_${deviceId.toLowerCase()}';
+    final password = _uuid.v4().substring(0, 10);
+
+    await docRef.set({
+      'name':           _nameCtrl.text.trim(),
+      'uniqueDeviceId': deviceId,
+      'status':         'offline',
+      'groupId':        _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+      'groupName':      _groupCtrl.text.trim().isEmpty ? null : _groupCtrl.text.trim(),
+      'displayUrl':     '/display/$token',
+      'displayToken':   token,
+      'location':       _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+      'resolution':     _resolution,
+      'orientation':    _orientation,
+      'notes':          _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      'tags':           _tags,
+      'portalUsername': username,
+      'portalPassword': password,
+      'createdAt':      FieldValue.serverTimestamp(),
+      'lastSeen':       FieldValue.serverTimestamp(),
+      'metadata':       {},
+    });
+
+    if (mounted) {
+      Navigator.pop(context);
+      // Muestra las credenciales generadas
+      showDialog(
+        context: context,
+        builder: (_) => _CredentialsDialog(
+          deviceName: _nameCtrl.text.trim(),
+          username: username,
+          password: password,
+        ),
       );
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
     }
+  } catch (e) {
+    setState(() { _error = e.toString(); _loading = false; });
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return _Sheet(
@@ -1436,7 +1520,7 @@ class PlaylistsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ScreenHeader(
-            title: 'Playlists',
+            title: 'Playlists1',
             subtitle: 'Crea y edita colecciones de contenido',
             action: _AddButton(
               label: '+ Nueva playlist',
@@ -3811,3 +3895,195 @@ SnackBar _snack(String message) => SnackBar(
   margin: const EdgeInsets.all(12),
   duration: const Duration(seconds: 2),
 );
+
+class _CredentialsDialog extends StatelessWidget {
+  final String deviceName;
+  final String username;
+  final String password;
+  const _CredentialsDialog({
+    required this.deviceName,
+    required this.username,
+    required this.password,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _C.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: _C.border)),
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: _C.greenLo,
+                    borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.check_circle_rounded,
+                    color: _C.green, size: 22)),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Dispositivo creado',
+                      style: TextStyle(color: _C.textHi,
+                        fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text(deviceName,
+                      style: const TextStyle(color: _C.textMid, fontSize: 12)),
+                  ],
+                )),
+              ]),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _C.card,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _C.border)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Credenciales del portal',
+                      style: TextStyle(color: _C.textMid, fontSize: 11,
+                        fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                    const SizedBox(height: 12),
+                    _CredRow(label: 'Usuario', value: username,
+                      icon: Icons.person_outline_rounded, color: _C.primary),
+                    const SizedBox(height: 10),
+                    _CredRow(label: 'Contraseña', value: password,
+                      icon: Icons.lock_outline_rounded, color: _C.accent),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _C.amberLo,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _C.amber.withOpacity(0.3))),
+                      child: const Row(children: [
+                        Icon(Icons.warning_amber_rounded,
+                          size: 14, color: _C.amber),
+                        SizedBox(width: 8),
+                        Expanded(child: Text(
+                          'Guarda estas credenciales. El dispositivo las usará para acceder al portal.',
+                          style: TextStyle(color: _C.amber, fontSize: 10, height: 1.5))),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(
+                      text: 'Usuario: $username\nContraseña: $password'));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Credenciales copiadas'),
+                        backgroundColor: _C.card,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _C.textMid,
+                    side: const BorderSide(color: _C.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8))),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.copy_rounded, size: 14),
+                      SizedBox(width: 6),
+                      Text('Copiar todo'),
+                    ],
+                  ),
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _C.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Listo',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                )),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CredRow extends StatefulWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _CredRow({
+    required this.label, required this.value,
+    required this.icon, required this.color});
+
+  @override
+  State<_CredRow> createState() => _CredRowState();
+}
+
+class _CredRowState extends State<_CredRow> {
+  bool _copied = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Icon(widget.icon, size: 14, color: widget.color),
+      const SizedBox(width: 8),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(widget.label,
+          style: const TextStyle(color: _C.textLo, fontSize: 9)),
+        const SizedBox(height: 1),
+        Text(widget.value,
+          style: TextStyle(color: widget.color, fontSize: 13,
+            fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+      ]),
+      const Spacer(),
+      GestureDetector(
+        onTap: () {
+          Clipboard.setData(ClipboardData(text: widget.value));
+          setState(() => _copied = true);
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) setState(() => _copied = false);
+          });
+        },
+        child: AnimatedContainer(
+          duration: 200.ms,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _copied
+              ? _C.greenLo : widget.color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _copied
+                ? _C.green.withOpacity(0.4) : widget.color.withOpacity(0.3))),
+          child: Text(_copied ? '✓ Copiado' : 'Copiar',
+            style: TextStyle(
+              color: _copied ? _C.green : widget.color,
+              fontSize: 10, fontWeight: FontWeight.w600)),
+        ),
+      ),
+    ]);
+  }
+}

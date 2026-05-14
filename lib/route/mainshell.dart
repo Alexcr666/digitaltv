@@ -10,6 +10,94 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 
+abstract class _T {
+  // Surface
+  static const bg        = Color(0xFF080C14);
+  static const surface   = Color(0xFF0E1420);
+  static const card      = Color(0xFF131B2B);
+  static const cardHover = Color(0xFF172035);
+  static const border    = Color(0xFF1E2D47);
+  static const divider   = Color(0xFF1A2540);
+
+  // Brand
+  static const primary    = Color(0xFF6366F1);
+  static const primaryLo  = Color(0x1A6366F1);
+  static const primaryMid = Color(0x336366F1);
+  static const accent     = Color(0xFF38BDF8);
+
+  // Text
+  static const textHi  = Color(0xFFF0F4FF);
+  static const textMid = Color(0xFF8B9CC8);
+  static const textLo  = Color(0xFF3D4F72);
+
+  // Semantic
+  static const success  = Color(0xFF22C55E);
+  static const warning  = Color(0xFFF59E0B);
+  static const error    = Color(0xFFEF4444);
+  static const errorLo  = Color(0x1AEF4444);
+
+  // Radius
+  static const r8  = BorderRadius.all(Radius.circular(8));
+  static const r12 = BorderRadius.all(Radius.circular(12));
+  static const r16 = BorderRadius.all(Radius.circular(16));
+  static const r20 = BorderRadius.all(Radius.circular(20));
+
+  static ThemeData get theme => ThemeData(
+        useMaterial3:       true,
+        scaffoldBackgroundColor: bg,
+        colorScheme: ColorScheme.dark(
+          primary:   primary,
+          secondary: accent,
+          surface:   surface,
+          error:     error,
+        ),
+        textTheme: const TextTheme().apply(
+          bodyColor:    textMid,
+          displayColor: textHi,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled:       true,
+          fillColor:    card,
+          hintStyle:    const TextStyle(color: textLo, fontSize: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          border: OutlineInputBorder(
+              borderRadius: r12, borderSide: const BorderSide(color: border)),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: r12, borderSide: const BorderSide(color: border)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: primary, width: 1.5)),
+          errorBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: error)),
+          focusedErrorBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: error, width: 1.5)),
+          errorStyle: const TextStyle(color: error, fontSize: 11),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor:         primary,
+            foregroundColor:         Colors.white,
+            disabledBackgroundColor: card,
+            elevation:               0,
+            shape: RoundedRectangleBorder(borderRadius: r12),
+            minimumSize:             const Size(double.infinity, 48),
+            textStyle: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+          ),
+        ),
+        cardTheme: CardTheme(
+          color: card,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: r16,
+            side: const BorderSide(color: border),
+          ),
+        ),
+      );
+}
 class MainShell extends ConsumerWidget {
   final Widget child;
   const MainShell({super.key, required this.child});
@@ -107,6 +195,39 @@ class _Sidebar extends ConsumerWidget {
           const Divider(height: 1),
           const SizedBox(height: 8),
 
+
+           Row(children: [
+          Container(
+            width: 34, height: 34,
+            decoration: BoxDecoration(
+              color: _T.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.grid_view_rounded,
+                color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 10),
+          const Text('SignageOS',
+            style: TextStyle(
+              color: _T.textHi, fontSize: 16,
+              fontWeight: FontWeight.w700)),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _T.primaryLo,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                  color: _T.primary.withOpacity(0.3)),
+            ),
+            child: const Text('ENTERPRISE',
+              style: TextStyle(
+                color: _T.primary, fontSize: 9,
+                fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          ),
+        ]),
+
           // Nav sections
           _NavLabel('Workspace'),
           _NavItem(icon: Icons.space_dashboard_outlined, label: 'Dashboard',
@@ -114,8 +235,8 @@ class _Sidebar extends ConsumerWidget {
           _NavItem(icon: Icons.tv_outlined, label: 'Devices',
               route: AppRoutes.devices, current: location,
               badge: onlineCount.valueOrNull?.toString()),
-          _NavItem(icon: Icons.perm_media_outlined, label: 'Content',
-              route: AppRoutes.content, current: location),
+        //  _NavItem(icon: Icons.perm_media_outlined, label: 'Content',
+          //    route: AppRoutes.content, current: location),
         
    
       

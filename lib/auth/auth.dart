@@ -26,6 +26,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -423,8 +424,14 @@ class Failure<T> extends Result<T> {
 // 3. FIREBASE SERVICE
 // =============================================================================
 
-class FirebaseService {
+
+  class FirebaseService {
+  // ← NUEVO: flag para pausar el redirect de auth
+  static bool suppressAuthRedirect = false;
+
   final FirebaseAuth      _auth      = FirebaseAuth.instance;
+  // ... resto igual
+
   final FirebaseFirestore _db        = FirebaseFirestore.instance;
   final FirebaseStorage   _storage   = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
@@ -440,8 +447,68 @@ class FirebaseService {
   // =========================================================================
   // AUTH
   // =========================================================================
+Future<Result<AppUser>> createUserAsAdmin({
+  required String name,
+  required String email,
+  required String password,
+  AppRole role = AppRole.user,
+}) async {
+  final adminUser = _auth.currentUser;
+  if (adminUser == null) return const Failure('No hay sesión activa.');
 
-  /// Sign in with email + password. Updates lastLogin on success.
+  FirebaseApp? secondaryApp;
+
+  try {
+    // ← Pausar redirect mientras creamos el usuario
+    FirebaseService.suppressAuthRedirect = true;
+
+    final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
+    secondaryApp = await Firebase.initializeApp(
+      name:    appName,
+      options: Firebase.app().options,
+    );
+
+    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+    final cred = await secondaryAuth.createUserWithEmailAndPassword(
+      email:    email.trim(),
+      password: password,
+    );
+    await cred.user!.updateDisplayName(name.trim());
+
+    final uid   = cred.user!.uid;
+    final now   = DateTime.now();
+    final perms = kDefaultRolePermissions[role] ?? [];
+
+    final appUser = AppUser(
+      uid:         uid,
+      name:        name.trim(),
+      email:       email.trim(),
+      roles:       [role],
+      permissions: perms,
+      createdAt:   now,
+      updatedAt:   now,
+    );
+
+    await _db.collection('users').doc(uid).set(appUser.toFirestore());
+    await secondaryAuth.signOut();
+    await secondaryApp.delete();
+    secondaryApp = null;
+
+    return Success(appUser);
+
+  } on FirebaseAuthException catch (e) {
+    await secondaryApp?.delete();
+    return Failure(_authErrorMessage(e.code));
+  } catch (e) {
+    await secondaryApp?.delete();
+    return Failure('Error al crear usuario: $e');
+  } finally {
+    // ← Siempre reactivar el redirect
+    FirebaseService.suppressAuthRedirect = false;
+  }
+}
+  
   Future<Result<AppUser>> signIn({
     required String email,
     required String password,

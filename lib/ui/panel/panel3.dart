@@ -1,10 +1,12 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously
-
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+import 'dart:typed_data';
 import 'dart:async';
 import 'dart:ui' as ui show TextDirection, Color, Gradient, Shadow, FontWeight;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:ui_web' as ui_web;
 // ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html_lib;
 import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -72,7 +74,37 @@ class EditorClip {
   final double volume;
   final double trimStart;
   final double trimEnd;
-
+// Pega esto dentro de la clase EditorClip
+  factory EditorClip.fromMap(Map<String, dynamic> c) {
+    final typeStr = c['type'] as String? ?? 'text';
+    final type = EditorLayerType.values.firstWhere(
+      (e) => e.name == typeStr, orElse: () => EditorLayerType.text);
+    final colorVal = c['textColor'];
+    
+    return EditorClip(
+      id:              c['id'] ?? const Uuid().v4(),
+      type:            type,
+      label:           c['label'] ?? '',
+      url:             c['url'],
+      text:            c['text'],
+      startSec:        (c['startSec'] as num).toDouble(),
+      durationSec:     (c['durationSec'] as num).toDouble(),
+      trackIndex:      (c['trackIndex'] as num).toInt(),
+      x:               (c['x'] as num?)?.toDouble() ?? 640,
+      y:               (c['y'] as num?)?.toDouble() ?? 360,
+      width:           (c['width'] as num?)?.toDouble() ?? 1280,
+      height:          (c['height'] as num?)?.toDouble() ?? 720,
+      opacity:         (c['opacity'] as num?)?.toDouble() ?? 1.0,
+      rotation:        (c['rotation'] as num?)?.toDouble() ?? 0,
+      textColor:       colorVal != null ? Color(colorVal as int) : null,
+      fontSize:        (c['fontSize'] as num?)?.toDouble() ?? 48,
+      bold:            c['bold'] as bool? ?? false,
+      backgroundColor: c['backgroundColor'],
+      volume:          (c['volume'] as num?)?.toDouble() ?? 1.0,
+      trimStart:       (c['trimStart'] as num?)?.toDouble() ?? 0,
+      trimEnd:         (c['trimEnd'] as num?)?.toDouble() ?? 0,
+    );
+  }
   const EditorClip({
     required this.id,
     required this.type,
@@ -188,56 +220,32 @@ class SavedPlaylist {
     }).toList(),
   };
 
- static SavedPlaylist fromFirestore(Map<String, dynamic> data) {
-  final clipsList = (data['clips'] as List? ?? []).map((c) {
-    final typeStr = c['type'] as String? ?? 'text';
-    final type = EditorLayerType.values.firstWhere(
-      (e) => e.name == typeStr, orElse: () => EditorLayerType.text);
-    final colorVal = c['textColor'];
-    return EditorClip(
-      id:              c['id'] ?? _uuid.v4(),
-      type:            type,
-      label:           c['label'] ?? '',
-      url:             c['url'],
-      text:            c['text'],
-      startSec:        (c['startSec'] as num).toDouble(),
-      durationSec:     (c['durationSec'] as num).toDouble(),
-      trackIndex:      (c['trackIndex'] as num).toInt(),
-      x:               (c['x'] as num?)?.toDouble() ?? 640,
-      y:               (c['y'] as num?)?.toDouble() ?? 360,
-      width:           (c['width'] as num?)?.toDouble() ?? 1280,
-      height:          (c['height'] as num?)?.toDouble() ?? 720,
-      opacity:         (c['opacity'] as num?)?.toDouble() ?? 1.0,
-      rotation:        (c['rotation'] as num?)?.toDouble() ?? 0,
-      textColor:       colorVal != null ? Color(colorVal as int) : null,
-      fontSize:        (c['fontSize'] as num?)?.toDouble() ?? 48,
-      bold:            c['bold'] as bool? ?? false,
-      backgroundColor: c['backgroundColor'],
-      volume:          (c['volume'] as num?)?.toDouble() ?? 1.0,
-      trimStart:       (c['trimStart'] as num?)?.toDouble() ?? 0,
-      trimEnd:         (c['trimEnd'] as num?)?.toDouble() ?? 0,
+
+
+  static SavedPlaylist fromFirestore(Map<String, dynamic> data) {
+    final rawItems = (data['clips'] as List<dynamic>?) ?? [];
+    
+    DateTime createdAt;
+    final rawDate = data['createdAt'];
+    
+    if (rawDate is Timestamp) {
+      createdAt = rawDate.toDate();
+    } else if (rawDate is String) {
+      createdAt = DateTime.tryParse(rawDate) ?? DateTime.now();
+    } else {
+      createdAt = DateTime.now();
+    }
+
+    return SavedPlaylist(
+      id:        data['id'] ?? '',
+      name:      data['name'] ?? 'Playlist',
+      createdAt: createdAt,
+      viewLink:  data['viewLink'] ?? '',
+      clips:     rawItems
+                   .map((i) => EditorClip.fromMap(i as Map<String, dynamic>))
+                   .toList(),
     );
-  }).toList();
-
-  // ✅ Maneja tanto String como Timestamp de Firestore
-  DateTime createdAt;
-  final raw = data['createdAt'];
-  if (raw is Timestamp) {
-    createdAt = raw.toDate();
-  } else if (raw is String) {
-    createdAt = DateTime.tryParse(raw) ?? DateTime.now();
-  } else {
-    createdAt = DateTime.now();
   }
-
-  return SavedPlaylist(
-    id:        data['id'] ?? '',
-    name:      data['name'] ?? '',
-    clips:     clipsList,
-    createdAt: createdAt,
-    viewLink:  data['viewLink'] ?? '',
-  );
-}
 }
 
 final savedPlaylistsProvider =
@@ -598,11 +606,11 @@ void _showSaveDialog(BuildContext ctx, WidgetRef ref, List<EditorClip> clips) {
   );
 }
   void _showPlaylistsDialog(BuildContext ctx, WidgetRef ref) {
-    showDialog(
-      context: ctx,
-      builder: (_) => _PlaylistsListDialog(ref: ref),
-    );
-  }
+  showDialog(
+    context: ctx,
+    builder: (_) => const _PlaylistsListDialog(), // ya no pasa ref
+  );
+}
 }
 
 class _TransportBtn extends StatelessWidget {
@@ -1809,7 +1817,7 @@ Widget build(BuildContext context) {
                       // ── MODIFICACIÓN: orden de capas ──
                       ...(() {
                         final sorted = [...activeClips];
-                        sorted.sort((a, b) => b.trackIndex.compareTo(a.trackIndex));
+                   sorted.sort((a, b) => a.trackIndex.compareTo(b.trackIndex));
                         return sorted;
                       }()).map((clip) {
                         final isSelected = clip.id == selectedId;
@@ -2018,90 +2026,141 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
         child: Center(child: Icon(Icons.image_rounded, color: _EC.accent, size: 22 * sx)),
       );
 
-   case EditorLayerType.video:
-      if (clip.url != null && clip.url!.isNotEmpty) {
-        // Si es YouTube embed (TV en vivo o video normal) → iframe
-        if (clip.url!.contains('youtube.com/embed')) {
-          final viewId = 'yt-embed-${clip.id}';
-          try {
-            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-              final iframe = html.IFrameElement()
-                ..src = clip.url!
-                ..style.border = 'none'
-                ..style.width = '100%'
-                ..style.height = '100%'
-                ..allowFullscreen = true
-                ..setAttribute('allow',
-                  'accelerometer; autoplay; clipboard-write; '
-                  'encrypted-media; gyroscope; picture-in-picture');
-              return iframe;
-            });
-          } catch (_) {}
-          return HtmlElementView(viewType: viewId);
-        }
-        // Video normal (blob: / https:)
-        final viewId = 'vid-${clip.id}';
+ case EditorLayerType.video:
+  if (clip.url != null && clip.url!.isNotEmpty) {
+    // HLS stream (.m3u8) → iframe con HLS.js
+    if (clip.url!.contains('.m3u8') || clip.url!.contains('streaming.rtvc') 
+        || clip.url!.contains('cdnmedia') || clip.url!.contains('logicideas')
+        || clip.url!.contains('multistream') || clip.url!.contains('mediaserver')) {
+      final viewId = 'hls-${clip.id}';
+      final hlsUrl = clip.url!;
+      final label  = clip.label;
+      try {
         ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final video = html.VideoElement()
-            ..src = clip.url!
+          final iframe = html.IFrameElement()
+            ..srcdoc = '''
+<!DOCTYPE html><html><head><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;width:100vw;height:100vh;overflow:hidden;
+     display:flex;align-items:center;justify-content:center;}
+video{width:100%;height:100%;object-fit:cover;}
+#info{position:absolute;bottom:4px;left:0;right:0;text-align:center;}
+#info span{background:rgba(0,0,0,0.6);color:#fff;font-size:9px;
+           padding:2px 6px;border-radius:3px;font-family:sans-serif;}
+</style></head><body>
+<div id="root" style="width:100%;height:100%;position:relative;">
+  <div id="info"><span>$label</span></div>
+</div>
+<script>
+const url=\'$hlsUrl\';
+const root=document.getElementById(\'root\');
+function start(){
+  const v=document.createElement(\'video\');
+  v.autoplay=true;v.muted=true;v.controls=false;
+  v.style.cssText=\'width:100%;height:100%;object-fit:cover;\';
+  if(typeof Hls!==\'undefined\'&&Hls.isSupported()){
+    const h=new Hls({enableWorker:false});
+    h.loadSource(url);h.attachMedia(v);
+    h.on(Hls.Events.MANIFEST_PARSED,()=>{v.play();
+      root.innerHTML=\'\';root.appendChild(v);});
+  } else if(v.canPlayType(\'application/vnd.apple.mpegurl\')){
+    v.src=url;v.addEventListener(\'loadedmetadata\',()=>{
+      v.play();root.innerHTML=\'\';root.appendChild(v);});
+  }
+}
+const s=document.createElement(\'script\');
+s.src=\'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js\';
+s.onload=start;document.head.appendChild(s);
+</script></body></html>'''
+            ..style.border = 'none'
             ..style.width = '100%'
             ..style.height = '100%'
-            ..style.objectFit = 'cover'
-            ..autoplay = false
-            ..controls = false
-            ..muted = true;
-          return video;
+            ..setAttribute('sandbox',
+                'allow-scripts allow-same-origin');
+          return iframe;
         });
-        return Stack(
-          children: [
-            Positioned.fill(child: HtmlElementView(viewType: viewId)),
-            Positioned(
-              bottom: 4 * sy, left: 0, right: 0,
-              child: Center(
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 6 * sx, vertical: 2 * sy),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(4)),
-                  child: Text(clip.label,
-                    style: TextStyle(
-                      color: Colors.white70, fontSize: 9 * sx,
-                      fontWeight: FontWeight.w600),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-      return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              _EC.purple.withOpacity(0.3),
-              _EC.purple.withOpacity(0.1)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight)),
-        child: Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36 * sx, height: 36 * sx,
+      } catch (_) {}
+      return HtmlElementView(viewType: viewId);
+    }
+
+    // YouTube embed
+    if (clip.url!.contains('youtube.com/embed')) {
+      final viewId = 'yt-embed-${clip.id}';
+      try {
+        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          final iframe = html.IFrameElement()
+            ..src = clip.url!
+            ..style.border = 'none'
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..allowFullscreen = true
+            ..setAttribute('allow',
+              'accelerometer; autoplay; clipboard-write; '
+              'encrypted-media; gyroscope; picture-in-picture');
+          return iframe;
+        });
+      } catch (_) {}
+      return HtmlElementView(viewType: viewId);
+    }
+
+    // Video normal (blob: / https:)
+    final viewId = 'vid-${clip.id}';
+    ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+      final video = html.VideoElement()
+        ..src = clip.url!
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover'
+        ..autoplay = false
+        ..controls = false
+        ..muted = true;
+      return video;
+    });
+    return Stack(
+      children: [
+        Positioned.fill(child: HtmlElementView(viewType: viewId)),
+        Positioned(
+          bottom: 4 * sy, left: 0, right: 0,
+          child: Center(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 6 * sx, vertical: 2 * sy),
               decoration: BoxDecoration(
-                color: _EC.purple.withOpacity(0.85),
-                shape: BoxShape.circle),
-              child: Icon(Icons.play_arrow_rounded,
-                color: Colors.white, size: 22 * sx)),
-            SizedBox(height: 5 * sy),
-            Text(clip.label,
-              style: TextStyle(
-                color: Colors.white70, fontSize: 9 * sx,
-                fontWeight: FontWeight.w600),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        )),
-      );
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(4)),
+              child: Text(clip.label,
+                style: TextStyle(
+                  color: Colors.white70, fontSize: 9 * sx,
+                  fontWeight: FontWeight.w600),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [_EC.purple.withOpacity(0.3), _EC.purple.withOpacity(0.1)],
+        begin: Alignment.topLeft, end: Alignment.bottomRight)),
+    child: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 36 * sx, height: 36 * sx,
+          decoration: BoxDecoration(
+            color: _EC.purple.withOpacity(0.85), shape: BoxShape.circle),
+          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx)),
+        SizedBox(height: 5 * sy),
+        Text(clip.label,
+          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+            fontWeight: FontWeight.w600),
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    )),
+  );
+    
     case EditorLayerType.audio:
       // Reproduce el audio invisible; muestra barra visual
       if (clip.url != null && clip.url!.isNotEmpty) {
@@ -2645,6 +2704,7 @@ class _PropRow extends StatefulWidget {
 
 class _PropRowState extends State<_PropRow> {
   late TextEditingController _ctrl;
+  bool _hasFocus = false;
 
   @override
   void initState() {
@@ -2655,7 +2715,8 @@ class _PropRowState extends State<_PropRow> {
   @override
   void didUpdateWidget(_PropRow old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value && !_ctrl.text.contains('.')) {
+    // Solo actualiza si no tiene foco (el usuario no está escribiendo)
+    if (!_hasFocus && old.value != widget.value) {
       _ctrl.text = widget.value;
     }
   }
@@ -2676,28 +2737,38 @@ class _PropRowState extends State<_PropRow> {
           Expanded(
             child: SizedBox(
               height: 28,
-              child: TextField(
-                controller: _ctrl,
-                style: const TextStyle(
-                  color: _EC.textHi, fontSize: 11),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: _EC.card,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(5),
-                    borderSide: const BorderSide(color: _EC.border)),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(5),
-                    borderSide: const BorderSide(color: _EC.border)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(5),
-                    borderSide: const BorderSide(color: _EC.primary)),
+              child: Focus(
+                onFocusChange: (hasFocus) {
+                  setState(() => _hasFocus = hasFocus);
+                  if (!hasFocus) {
+                    // Al perder foco, sincroniza si el valor externo cambió
+                    if (_ctrl.text != widget.value) {
+                      widget.onChanged(_ctrl.text);
+                    }
+                  }
+                },
+                child: TextField(
+                  controller: _ctrl,
+                  style: const TextStyle(color: _EC.textHi, fontSize: 11),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: _EC.card,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(5),
+                      borderSide: const BorderSide(color: _EC.border)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(5),
+                      borderSide: const BorderSide(color: _EC.border)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(5),
+                      borderSide: const BorderSide(color: _EC.primary)),
+                  ),
+                  onChanged: widget.onChanged,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true, signed: true),
                 ),
-                onChanged: widget.onChanged,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true, signed: true),
               ),
             ),
           ),
@@ -2706,6 +2777,7 @@ class _PropRowState extends State<_PropRow> {
     );
   }
 }
+
 
 // =============================================================================
 // TIMELINE PANEL
@@ -3120,87 +3192,87 @@ class _TrackRow extends ConsumerWidget {
     required this.clips, required this.selectedId, required this.trackColor,
   });
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return GestureDetector(
-      onTapUp: (d) {
-        // Click on empty track — deselect
-        ref.read(selectedClipIdProvider.notifier).state = null;
-      },
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: _EC.bg,
-          border: Border(bottom: BorderSide(color: _EC.divider)),
-        ),
-        child: Stack(
-          children: clips.map((clip) {
-            final left = clip.startSec * zoom;
-            final w    = clip.durationSec * zoom;
-            final isSelected = clip.id == selectedId;
+ @override
+Widget build(BuildContext context, WidgetRef ref) {
+  return GestureDetector(
+    onTapUp: (d) {
+      ref.read(selectedClipIdProvider.notifier).state = null;
+    },
+    child: Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: _EC.bg,
+        border: Border(bottom: BorderSide(color: _EC.divider)),
+      ),
+      child: Stack(
+        children: clips.map((clip) {
+          final left = clip.startSec * zoom;
+          final w    = clip.durationSec * zoom;
+          final isSelected = clip.id == selectedId;
 
-            return Positioned(
-              left: left,
-              top: 3,
-              width: math.max(w, 20),
-              height: height - 6,
-              child: GestureDetector(
-                onTap: () =>
-                  ref.read(selectedClipIdProvider.notifier).state = clip.id,
-                onHorizontalDragUpdate: (d) {
-                  final newStart = (clip.startSec + d.delta.dx / zoom)
-                    .clamp(0.0, 9999.0);
-                  ref.read(editorClipsProvider.notifier)
-                    .reorder(clip.id, newStart, clip.trackIndex);
-                },
-                child: AnimatedContainer(
-                  duration: 100.ms,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                      ? trackColor.withOpacity(0.8)
-                      : trackColor.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: isSelected ? Colors.white : trackColor,
-                      width: isSelected ? 1.5 : 1,
-                    ),
+          return Positioned(
+            left: left,
+            top: 3,
+            width: math.max(w, 20),
+            height: height - 6,
+            child: GestureDetector(
+              onTap: () =>
+                ref.read(selectedClipIdProvider.notifier).state = clip.id,
+              onHorizontalDragUpdate: (d) {
+                final newStart = (clip.startSec + d.delta.dx / zoom)
+                  .clamp(0.0, 9999.0);
+                // Solo mueve en X, mantiene el mismo trackIndex
+                ref.read(editorClipsProvider.notifier)
+                  .reorder(clip.id, newStart, clip.trackIndex);
+              },
+              child: AnimatedContainer(
+                duration: 100.ms,
+                decoration: BoxDecoration(
+                  color: isSelected
+                    ? trackColor.withOpacity(0.8)
+                    : trackColor.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isSelected ? Colors.white : trackColor,
+                    width: isSelected ? 1.5 : 1,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Row(
-                      children: [
-                        Icon(_clipIcon(clip.type), size: 10,
-                          color: Colors.white70),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(clip.label,
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600)),
-                        ),
-                      ],
-                    ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Row(
+                    children: [
+                      Icon(_clipIcon(clip.type), size: 10,
+                        color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(clip.label,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600)),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }).toList(),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  IconData _clipIcon(EditorLayerType t) {
-    switch (t) {
-      case EditorLayerType.video:   return Icons.videocam_rounded;
-      case EditorLayerType.image:   return Icons.image_rounded;
-      case EditorLayerType.text:    return Icons.text_fields_rounded;
-      case EditorLayerType.audio:   return Icons.music_note_rounded;
-      case EditorLayerType.overlay: return Icons.layers_rounded;
-    }
+IconData _clipIcon(EditorLayerType t) {
+  switch (t) {
+    case EditorLayerType.video:   return Icons.videocam_rounded;
+    case EditorLayerType.image:   return Icons.image_rounded;
+    case EditorLayerType.text:    return Icons.text_fields_rounded;
+    case EditorLayerType.audio:   return Icons.music_note_rounded;
+    case EditorLayerType.overlay: return Icons.layers_rounded;
   }
+}
 }
 
 class _TLBtn extends StatelessWidget {
@@ -3758,34 +3830,32 @@ class _SavePlaylistDialogState extends State<_SavePlaylistDialog> {
 
   @override
   void dispose() { _nameCtrl.dispose(); super.dispose(); }
+void _save() async {
+  if (_nameCtrl.text.trim().isEmpty) return;
+  setState(() => _loading = true);
+  final id = 'PL-${DateTime.now().millisecondsSinceEpoch}';
+  
+  final currentUri = Uri.base;
+  final baseUrl = '${currentUri.scheme}://${currentUri.host}${currentUri.hasPort ? ':${currentUri.port}' : ''}';
+  
+  // Quitamos el #/dashboard para que sea una ruta limpia
+  final viewLink = '$baseUrl/view/$id'; 
 
-  void _save() async {
-    if (_nameCtrl.text.trim().isEmpty) return;
-    setState(() => _loading = true);
-    final id = 'PL-${DateTime.now().millisecondsSinceEpoch}';
-
-    // URL dinámica real del navegador
-    final origin   = Uri.base.origin;
-    final pathBase = Uri.base.path.replaceAll(RegExp(r'[^/]*$'), '');
-    final viewLink = '$origin${pathBase}view/$id';
-
-    final pl = SavedPlaylist(
-      id:        id,
-      name:      _nameCtrl.text.trim(),
-      clips:     List.from(widget.clips),
-      createdAt: DateTime.now(),
-      viewLink:  viewLink,
-    );
-
-    await widget.onSaved(pl);
-
-    setState(() {
-      _playlist = pl;
-      _saved    = true;
-      _loading  = false;
-    });
-  }
-
+  final pl = SavedPlaylist(
+    id: id,
+    name: _nameCtrl.text.trim(),
+    clips: List.from(widget.clips),
+    createdAt: DateTime.now(),
+    viewLink: viewLink,
+  );
+  
+  await widget.onSaved(pl);
+  setState(() {
+    _playlist = pl;
+    _saved = true;
+    _loading = false;
+  });
+}
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -3963,21 +4033,19 @@ class _SavePlaylistDialogState extends State<_SavePlaylistDialog> {
 // =============================================================================
 // LISTADO DE PLAYLISTS GUARDADAS
 // =============================================================================
-
-class _PlaylistsListDialog extends StatefulWidget {
-  final WidgetRef ref;
-  const _PlaylistsListDialog({required this.ref});
+class _PlaylistsListDialog extends ConsumerStatefulWidget {
+  const _PlaylistsListDialog();
 
   @override
-  State<_PlaylistsListDialog> createState() => _PlaylistsListDialogState();
+  ConsumerState<_PlaylistsListDialog> createState() => _PlaylistsListDialogState();
 }
 
-class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
+class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
   String? _confirmDeleteId;
 
   @override
   Widget build(BuildContext context) {
-    final playlists = widget.ref.watch(savedPlaylistsProvider);
+    final playlists = ref.watch(savedPlaylistsProvider);
 
     return Dialog(
       backgroundColor: const Color(0xFF0C1018),
@@ -3992,7 +4060,6 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 children: [
                   const Icon(Icons.video_library_rounded,
@@ -4019,12 +4086,10 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
                   alignment: Alignment.center,
                   child: const Column(
                     children: [
-                      Icon(Icons.inbox_rounded,
-                          color: _EC.textLo, size: 40),
+                      Icon(Icons.inbox_rounded, color: _EC.textLo, size: 40),
                       SizedBox(height: 10),
                       Text('No hay playlists guardadas aún',
-                          style: TextStyle(
-                              color: _EC.textLo, fontSize: 12)),
+                          style: TextStyle(color: _EC.textLo, fontSize: 12)),
                     ],
                   ),
                 )
@@ -4044,26 +4109,20 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
                             vertical: 12, horizontal: 4),
                         child: Row(
                           children: [
-                            // Icono
                             Container(
-                              width: 38,
-                              height: 38,
+                              width: 38, height: 38,
                               decoration: BoxDecoration(
                                 color: _EC.primaryLo,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
                                   Icons.play_circle_outline_rounded,
-                                  color: _EC.primary,
-                                  size: 20),
+                                  color: _EC.primary, size: 20),
                             ),
                             const SizedBox(width: 12),
-
-                            // Info
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(pl.name,
                                       style: const TextStyle(
@@ -4072,41 +4131,31 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
                                           fontSize: 13)),
                                   const SizedBox(height: 2),
                                   Text(
-                                    '${pl.clips.length} clips • '
-                                    '${_fmtDate(pl.createdAt)}',
+                                    '${pl.clips.length} clips • ${_fmtDate(pl.createdAt)}',
                                     style: const TextStyle(
-                                        color: _EC.textMid,
-                                        fontSize: 10),
+                                        color: _EC.textMid, fontSize: 10),
                                   ),
                                 ],
                               ),
                             ),
-
-                            // Acciones
                             if (isConfirming) ...[
                               const Text('¿Eliminar?',
-                                  style: TextStyle(
-                                      color: _EC.red, fontSize: 11)),
+                                  style: TextStyle(color: _EC.red, fontSize: 11)),
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () {
-                                  widget.ref
-                                      .read(savedPlaylistsProvider
-                                          .notifier)
+                                  ref.read(savedPlaylistsProvider.notifier)
                                       .remove(pl.id);
-                                  setState(
-                                      () => _confirmDeleteId = null);
+                                  setState(() => _confirmDeleteId = null);
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: _EC.red.withOpacity(0.12),
-                                    borderRadius:
-                                        BorderRadius.circular(6),
+                                    borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
-                                        color:
-                                            _EC.red.withOpacity(0.4)),
+                                        color: _EC.red.withOpacity(0.4)),
                                   ),
                                   child: const Text('Sí',
                                       style: TextStyle(
@@ -4117,74 +4166,61 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
                               ),
                               const SizedBox(width: 4),
                               GestureDetector(
-                                onTap: () => setState(
-                                    () => _confirmDeleteId = null),
+                                onTap: () =>
+                                    setState(() => _confirmDeleteId = null),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: _EC.card,
-                                    borderRadius:
-                                        BorderRadius.circular(6),
-                                    border:
-                                        Border.all(color: _EC.border),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: _EC.border),
                                   ),
                                   child: const Text('No',
                                       style: TextStyle(
-                                          color: _EC.textMid,
-                                          fontSize: 11)),
+                                          color: _EC.textMid, fontSize: 11)),
                                 ),
                               ),
                             ] else ...[
-                              // Visualizar
                               _IconAction(
                                 icon: Icons.play_arrow_rounded,
                                 color: _EC.accent,
                                 tooltip: 'Visualizar',
-                                onTap: () =>
-                                    _visualize(context, pl),
+                                onTap: () => _visualize(context, pl),
                               ),
                               const SizedBox(width: 4),
-                              // Cargar en editor
                               _IconAction(
                                 icon: Icons.edit_rounded,
                                 color: _EC.primary,
                                 tooltip: 'Editar',
-                                onTap: () =>
-                                    _loadInEditor(context, pl),
+                                onTap: () => _loadInEditor(context, pl),
                               ),
                               const SizedBox(width: 4),
-                              // Copiar link
                               _IconAction(
                                 icon: Icons.link_rounded,
                                 color: _EC.green,
                                 tooltip: 'Copiar link',
                                 onTap: () {
-                                  Clipboard.setData(ClipboardData(
-                                      text: pl.viewLink));
+                                  Clipboard.setData(
+                                      ClipboardData(text: pl.viewLink));
                                   ScaffoldMessenger.of(context)
                                       .showSnackBar(SnackBar(
-                                    content:
-                                        const Text('Link copiado'),
+                                    content: const Text('Link copiado'),
                                     backgroundColor: _EC.card,
-                                    behavior:
-                                        SnackBarBehavior.floating,
+                                    behavior: SnackBarBehavior.floating,
                                     shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(8)),
-                                    duration:
-                                        const Duration(seconds: 2),
+                                        borderRadius: BorderRadius.circular(8)),
+                                    duration: const Duration(seconds: 2),
                                   ));
                                 },
                               ),
                               const SizedBox(width: 4),
-                              // Eliminar
                               _IconAction(
                                 icon: Icons.delete_outline_rounded,
                                 color: _EC.red,
                                 tooltip: 'Eliminar',
-                                onTap: () => setState(
-                                    () => _confirmDeleteId = pl.id),
+                                onTap: () =>
+                                    setState(() => _confirmDeleteId = pl.id),
                               ),
                             ],
                           ],
@@ -4227,15 +4263,12 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
     Navigator.pop(context);
     showDialog(
       context: context,
-      builder: (_) => _PlaylistViewerDialog(playlist: pl),
+      builder: (_) => PlaylistViewerDialog(playlist: pl),
     );
   }
 
   void _loadInEditor(BuildContext context, SavedPlaylist pl) {
-    // Carga los clips de la playlist en el editor
-    final notifier =
-        widget.ref.read(editorClipsProvider.notifier);
-    // Limpia y carga
+    final notifier = ref.read(editorClipsProvider.notifier);
     for (final c in notifier.state.toList()) {
       notifier.remove(c.id);
     }
@@ -4247,8 +4280,7 @@ class _PlaylistsListDialogState extends State<_PlaylistsListDialog> {
       content: Text('"${pl.name}" cargada en el editor'),
       backgroundColor: _EC.card,
       behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ));
   }
 }
@@ -4303,15 +4335,15 @@ class _IconActionState extends State<_IconAction> {
 }
 
 // Visor de playlist
-class _PlaylistViewerDialog extends StatefulWidget {
+class PlaylistViewerDialog extends StatefulWidget {
   final SavedPlaylist playlist;
-  const _PlaylistViewerDialog({required this.playlist});
+  const PlaylistViewerDialog({required this.playlist});
 
   @override
-  State<_PlaylistViewerDialog> createState() => _PlaylistViewerDialogState();
+  State<PlaylistViewerDialog> createState() => _PlaylistViewerDialogState();
 }
 
-class _PlaylistViewerDialogState extends State<_PlaylistViewerDialog> {
+class _PlaylistViewerDialogState extends State<PlaylistViewerDialog> {
   Timer? _timer;
   double _playhead = 0;
   bool _playing = false;
@@ -4418,7 +4450,7 @@ Widget build(BuildContext context) {
                   // ── MODIFICACIÓN: orden de capas ──
                   ...(() {
                     final sorted = [...active];
-                    sorted.sort((a, b) => b.trackIndex.compareTo(a.trackIndex));
+                 sorted.sort((a, b) => a.trackIndex.compareTo(b.trackIndex));
                     return sorted;
                   }()).map((clip) => Positioned(
                         left:   (clip.x - clip.width  / 2) * sx,
@@ -4759,6 +4791,8 @@ class _AddMediaDialogState extends ConsumerState<_AddMediaDialog>
     }
   }
 
+  double _uploadProgress = 0;
+
   String get _libTypeFilter {
     switch (widget.type) {
       case EditorLayerType.image: return 'image';
@@ -4769,54 +4803,102 @@ class _AddMediaDialogState extends ConsumerState<_AddMediaDialog>
   }
 
   Future<void> _pickFile() async {
-    setState(() => _loading = true);
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: _allowedExtensions,
-        withData: true,
-      );
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        if (file.bytes != null) {
-          final blob = html.Blob([file.bytes!], _mimePrefix);
-          final url  = html.Url.createObjectUrl(blob);
+  setState(() => _loading = true);
+  try {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _allowedExtensions,
+      withData: true,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
+      if (file.bytes != null) {
+        setState(() {
+          _fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+        });
+        final storageUrl = await _uploadToStorage(file.bytes!, _fileName!);
+        if (storageUrl != null) {
           setState(() {
-            _fileName = file.name;
-            _blobUrl  = url;
-            _urlCtrl.text = url;
+            _blobUrl  = null;
+            _urlCtrl.text = storageUrl;
             if (_labelCtrl.text.isEmpty) {
               _labelCtrl.text = file.name.split('.').first;
             }
           });
-          // Guardar en biblioteca de medios
-          await _saveToLibrary(file.name, url);
-        } else if (file.path != null) {
-          setState(() {
-            _fileName = file.name;
-            _urlCtrl.text = file.path!;
-            if (_labelCtrl.text.isEmpty) {
-              _labelCtrl.text = file.name.split('.').first;
-            }
-          });
-          await _saveToLibrary(file.name, file.path!);
+          await _saveToLibrary(file.name, storageUrl);
         }
       }
-    } catch (e) { debugPrint('Error picking file: $e'); }
-    setState(() => _loading = false);
-  }
+    }
+  } catch (e) { debugPrint('Error picking file: $e'); }
+  setState(() => _loading = false);
+}
 
-  Future<void> _saveToLibrary(String name, String url) async {
-    try {
-      await FirebaseFirestore.instance.collection('media_library').add({
-        'name':      name,
-        'url':       url,
-        'type':      _libTypeFilter,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) { debugPrint('Error saving to library: $e'); }
+Future<String?> _uploadToStorage(List<int> bytes, String fileName) async {
+  try {
+    // Importa firebase_storage en el archivo
+    final ref = html.window.fetch(
+      'https://firebasestorage.googleapis.com',
+    );
+    // Usamos el SDK de Firebase Storage via REST
+    // Primero obtenemos el token de autenticación
+    final storageRef = _getStorageRef(fileName);
+    final uploadTask = storageRef.putData(
+      Uint8List.fromList(bytes),
+      firebase_storage.SettableMetadata(
+        contentType: _getMimeType(fileName),
+      ),
+    );
+    
+    // Progreso opcional
+    uploadTask.snapshotEvents.listen((snapshot) {
+      final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+      if (mounted) setState(() => _uploadProgress = progress);
+    });
+    
+    final snapshot = await uploadTask;
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+    return downloadUrl;
+  } catch (e) {
+    debugPrint('Error uploading to Storage: $e');
+    return null;
   }
+}
 
+firebase_storage.Reference _getStorageRef(String fileName) {
+  final folder = widget.type == EditorLayerType.image ? 'images'
+               : widget.type == EditorLayerType.video ? 'videos'
+               : widget.type == EditorLayerType.audio ? 'audio'
+               : 'files';
+  return firebase_storage.FirebaseStorage.instance
+      .ref()
+      .child('media_library/$folder/$fileName');
+}
+
+String _getMimeType(String fileName) {
+  final ext = fileName.split('.').last.toLowerCase();
+  const map = {
+    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+    'gif': 'image/gif', 'webp': 'image/webp', 'svg': 'image/svg+xml',
+    'mp4': 'video/mp4', 'mov': 'video/quicktime', 'webm': 'video/webm',
+    'avi': 'video/x-msvideo', 'mkv': 'video/x-matroska',
+    'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
+    'aac': 'audio/aac', 'flac': 'audio/flac', 'm4a': 'audio/mp4',
+  };
+  return map[ext] ?? 'application/octet-stream';
+}
+
+Future<void> _saveToLibrary(String name, String url) async {
+  try {
+    await FirebaseFirestore.instance.collection('media_library').add({
+      'name':      name,
+      'url':       url,   // URL permanente de Firebase Storage
+      'type':      _libTypeFilter,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  } catch (e) { debugPrint('Error saving to library: $e'); }
+}
+
+ 
   void _useFromLibrary(Map<String, dynamic> item) {
     setState(() {
       _urlCtrl.text = item['url'] ?? '';
@@ -4950,57 +5032,75 @@ class _AddMediaDialogState extends ConsumerState<_AddMediaDialog>
                           const SizedBox(height: 10),
 
                           // Selector de archivo
-                          GestureDetector(
-                            onTap: _loading ? null : _pickFile,
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: _EC.card,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: _fileName != null
-                                    ? _color.withOpacity(0.5) : _EC.border,
-                                  width: _fileName != null ? 1.5 : 1)),
-                              child: _loading
-                                ? const Center(child: SizedBox(
-                                    width: 20, height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2)))
-                                : Column(children: [
-                                    Icon(
-                                      _fileName != null
-                                        ? Icons.check_circle_rounded
-                                        : Icons.upload_file_rounded,
-                                      color: _fileName != null
-                                        ? _color : _EC.textMid,
-                                      size: 26),
-                                    const SizedBox(height: 5),
-                                    Text(
-                                      _fileName ?? 'Seleccionar archivo',
-                                      style: TextStyle(
-                                        color: _fileName != null
-                                          ? _color : _EC.textMid,
-                                        fontSize: 11,
-                                        fontWeight: _fileName != null
-                                          ? FontWeight.w600 : FontWeight.w400)),
-                                    if (_fileName == null) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _allowedExtensions
-                                          .map((e) => e.toUpperCase()).join(', '),
-                                        style: const TextStyle(
-                                          color: _EC.textLo, fontSize: 9)),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '✅ Se guarda automáticamente en Biblioteca',
-                                        style: TextStyle(
-                                          color: _color.withOpacity(0.7),
-                                          fontSize: 9)),
-                                    ],
-                                  ]),
-                            ),
-                          ),
+                  GestureDetector(
+  onTap: _loading ? null : _pickFile,
+  child: Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: _EC.card,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: _fileName != null
+          ? _color.withOpacity(0.5) : _EC.border,
+        width: _fileName != null ? 1.5 : 1)),
+    child: _loading
+      ? Column(children: [
+          SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2, color: _color)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _uploadProgress > 0 ? _uploadProgress : null,
+              backgroundColor: _EC.border,
+              valueColor: AlwaysStoppedAnimation(_color),
+              minHeight: 4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _uploadProgress > 0
+              ? 'Subiendo ${(_uploadProgress * 100).toInt()}%...'
+              : 'Procesando...',
+            style: TextStyle(color: _color, fontSize: 10)),
+        ])
+      : Column(children: [
+          Icon(
+            _fileName != null
+              ? Icons.check_circle_rounded
+              : Icons.upload_file_rounded,
+            color: _fileName != null
+              ? _color : _EC.textMid,
+            size: 26),
+          const SizedBox(height: 5),
+          Text(
+            _fileName ?? 'Seleccionar archivo',
+            style: TextStyle(
+              color: _fileName != null
+                ? _color : _EC.textMid,
+              fontSize: 11,
+              fontWeight: _fileName != null
+                ? FontWeight.w600 : FontWeight.w400)),
+          if (_fileName == null) ...[
+            const SizedBox(height: 2),
+            Text(
+              _allowedExtensions
+                .map((e) => e.toUpperCase()).join(', '),
+              style: const TextStyle(
+                color: _EC.textLo, fontSize: 9)),
+            const SizedBox(height: 2),
+            Text(
+              '✅ Se sube a Firebase Storage automáticamente',
+              style: TextStyle(
+                color: _color.withOpacity(0.7),
+                fontSize: 9)),
+          ],
+        ]),
+  ),
+),
                           const SizedBox(height: 8),
 
                           // O URL
@@ -5521,33 +5621,34 @@ class _AnimationLibraryDialogState extends State<_AnimationLibraryDialog> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: _selected == null ? null : () {
-                        final anim = _selected!;
-                        widget.onAdd(EditorClip(
-                          id: _uuid.v4(),
-                          type: EditorLayerType.text,
-                          label: '${anim.label}: ${_textCtrl.text}',
-                          text: _textCtrl.text,
-                          startSec: _start,
-                          durationSec: _duration,
-                          trackIndex: 3,
-                          textColor: Colors.white,
-                          fontSize: 48,
-                          bold: false,
-                          x: 640, y: 360,
-                          width: 1000, height: 120,
-                          backgroundColor: anim == ClipAnimation.marquee ? '#000000' : null,
-                        ));
-                        Navigator.pop(context);
-                        // Mostrar snackbar con la animación aplicada
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Animación "${anim.label}" agregada al timeline'),
-                          backgroundColor: anim.color.withOpacity(0.9),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          duration: const Duration(seconds: 2),
-                        ));
-                      },
+          onPressed: _selected == null
+    ? null
+    : () {
+        final anim = _selected!;
+        widget.onAdd(EditorClip(
+          id: _uuid.v4(),
+          type: EditorLayerType.text,
+          label: '${anim.label}: ${_textCtrl.text}',
+          text: _textCtrl.text,
+          startSec: _start,
+          durationSec: _duration,
+          trackIndex: 3,
+          textColor: Colors.white,
+          fontSize: 48,
+          bold: false,
+          x: 640, y: 360,
+          width: 1000, height: 120,
+          backgroundColor: anim == ClipAnimation.marquee ? '#000000' : null,
+        ));
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Animación "${anim.label}" agregada al timeline'),
+          backgroundColor: anim.color.withOpacity(0.9),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          duration: const Duration(seconds: 2),
+        ));
+      },
                       icon: const Icon(Icons.add_rounded, size: 14),
                       label: const Text('Agregar al timeline',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
@@ -6492,10 +6593,10 @@ final _imageCache = <String, html.ImageElement>{};
 
 class _TVChannel {
   final String name;
-  final String logo;        // emoji o texto corto
+  final String logo;
   final Color color;
-  final String embedUrl;
-  final String youtubeChannelId;  // ID del canal de YouTube (live_stream)
+  final String embedUrl;      // URL directa para iframe
+  final String youtubeChannelId;
   final String description;
 
   const _TVChannel({
@@ -6506,8 +6607,6 @@ class _TVChannel {
     required this.youtubeChannelId,
     required this.description,
   });
-
- 
 }
 
 class _TVColombiaDialog extends StatefulWidget {
@@ -6519,57 +6618,113 @@ class _TVColombiaDialog extends StatefulWidget {
 }
 
 class _TVColombiaDialogState extends State<_TVColombiaDialog> {
- static const _channels = [
-  _TVChannel(
-    name: 'Noticias Caracol',
-    logo: '📡',
-    color: Color(0xFFD4001A),
-    embedUrl: 'https://www.youtube.com/embed/zBOHpar2Vi4?autoplay=1&controls=1',
-    description: '24/7 noticias · Colombia y mundo', youtubeChannelId: '',
-  ),
-  _TVChannel(
-    name: 'Canal RCN Noticias',
-    logo: '🔵',
-    color: Color(0xFF0057A8),
-    embedUrl: 'https://www.youtube.com/embed/OBLqkxmSRlI?autoplay=1&controls=1',
-    description: 'Noticias en vivo · Canal RCN', youtubeChannelId: '',
-  ),
+
+  double _previewScale = 1.0; // nuevo campo de estado
+static const _channels = [
   _TVChannel(
     name: 'Señal Colombia',
     logo: '🇨🇴',
     color: Color(0xFF007A33),
-    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCY3WPKPVHM0xYsGqhGKkHcQ&autoplay=1&controls=1',
-    description: 'Canal público cultural · RTVC', youtubeChannelId: '',
+    embedUrl: 'https://streaming.rtvc.gov.co/TV_Senal_Colombia_live/smil:live.smil/playlist.m3u8',
+    youtubeChannelId: 'UCY3WPKPVHM0xYsGqhGKkHcQ',
+    description: 'Canal público cultural · RTVC',
   ),
   _TVChannel(
-    name: 'NTN24',
-    logo: '🌐',
-    color: Color(0xFF1D3557),
-    embedUrl: 'https://www.youtube.com/embed/JUYFBGpR7W0?autoplay=1&controls=1',
-    description: 'Noticias internacionales 24h', youtubeChannelId: '',
+    name: 'Canal Institucional',
+    logo: '🏛',
+    color: Color(0xFF064E8C),
+    embedUrl: 'https://streaming.rtvc.gov.co/TV_Senal_Institucional_live/smil:live.smil/playlist.m3u8',
+    youtubeChannelId: 'UCLpRFLGJNzFMzrp0A2KHDOQ',
+    description: 'Canal público del Estado · RTVC',
   ),
   _TVChannel(
-    name: 'Blu Radio',
-    logo: '🎙',
+    name: 'Teleantioquia',
+    logo: '🏙',
+    color: Color(0xFF6B21A8),
+    embedUrl: 'https://hdvideo2.cdn.net.co/live01/ta.m3u8',
+    youtubeChannelId: 'UCO2yELJy1kMImYJhbwZzJqQ',
+    description: 'Canal regional · Medellín · HLS',
+  ),
+  _TVChannel(
+    name: 'Telecaribe',
+    logo: '🌊',
     color: Color(0xFF0EA5E9),
-    embedUrl: 'https://www.youtube.com/embed/cGNJkIJKRBs?autoplay=1&controls=1',
-    description: 'Radio y noticias en vivo', youtubeChannelId: '',
+    embedUrl: 'https://telecaribe-ott.flumotion.com/telecaribe/live/tracks-v1a1/index.fmp4.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal regional · Costa Caribe',
+  ),
+  _TVChannel(
+    name: 'Telepacífico',
+    logo: '🌅',
+    color: Color(0xFFD97706),
+    embedUrl: 'https://cdn.logicideas.media/telepacifico-live/smil:live.smil/chunklist_b4500000.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal regional · Pacífico · HLS',
+  ),
+  _TVChannel(
+    name: 'Canal Trece',
+    logo: '1️⃣3️⃣',
+    color: Color(0xFFEF4444),
+    embedUrl: 'https://play.cdn.enetres.net/091DB7AFBD77442B9BA2F141DCC182F5021/live.smil/playlist.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal cultural público · HLS',
+  ),
+  _TVChannel(
+    name: 'Canal TRO',
+    logo: '📺',
+    color: Color(0xFF22C55E),
+    embedUrl: 'https://live10.cdnmedia.tv/canaltro2live/smil:live.smil/playlist_p750000.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal regional · Oriente',
+  ),
+  _TVChannel(
+    name: 'Canal Capital',
+    logo: '🏙',
+    color: Color(0xFFA855F7),
+    embedUrl: 'https://mdstrm.com/live-stream-playlist/57d01d6c28b263eb73b59a5a.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal distrital · Bogotá · HLS',
+  ),
+  _TVChannel(
+    name: 'Telecafé',
+    logo: '☕',
+    color: Color(0xFF92400E),
+    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/TCAF/tu1_1.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal regional · Eje Cafetero',
   ),
   _TVChannel(
     name: 'Telemedellín',
-    logo: '🏙',
-    color: Color(0xFF6B21A8),
-    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCO2yELJy1kMImYJhbwZzJqQ&autoplay=1&controls=1',
-    description: 'Canal regional · Medellín', youtubeChannelId: '',
+    logo: '🌆',
+    color: Color(0xFF0369A1),
+    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/TMED/tu1_1.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal municipal · Medellín',
+  ),
+  _TVChannel(
+    name: 'Citytv',
+    logo: '🌃',
+    color: Color(0xFFEC4899),
+    embedUrl: 'https://citytvlive.flumotion.com/citytv/live/tracks-v1a1/index.fmp4.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal local · Bogotá',
+  ),
+  _TVChannel(
+    name: 'Canal U',
+    logo: '🎓',
+    color: Color(0xFF059669),
+    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/CANU/tu1_1.m3u8',
+    youtubeChannelId: '',
+    description: 'Canal universitario · HLS',
   ),
 ];
-
   _TVChannel? _selected;
   double _start = 0;
   double _duration = 30;
-
-String _getViewId(_TVChannel ch) => 'tv-live-${ch.name.replaceAll(' ', '-').toLowerCase()}';
-
+String _getViewId(_TVChannel ch) {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  return 'tv-yt-${ch.youtubeChannelId}-$ts';
+}
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -6578,215 +6733,246 @@ String _getViewId(_TVChannel ch) => 'tv-live-${ch.name.replaceAll(' ', '-').toLo
         borderRadius: BorderRadius.circular(14),
         side: const BorderSide(color: _EC.border),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SizedBox(
-          width: 600,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ──────────────────────────────────────────
-              Row(children: [
-                const Icon(Icons.tv_rounded, size: 16, color: Color(0xFFEC4899)),
-                const SizedBox(width: 8),
-                const Text('TV Colombia en Vivo',
-                  style: TextStyle(color: _EC.textHi,
-                    fontWeight: FontWeight.w700, fontSize: 14)),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.close_rounded,
-                    size: 16, color: _EC.textMid),
-                ),
-              ]),
-              const SizedBox(height: 6),
-              const Text(
-                'Selecciona un canal para previsualizarlo y agregarlo al timeline como clip de video.',
-                style: TextStyle(color: _EC.textMid, fontSize: 11)),
-              const SizedBox(height: 14),
-
-              // ── Grid de canales ──────────────────────────────────
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: _channels.map((ch) {
-                  final sel = _selected?.name == ch.name;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selected = ch),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 130),
-                      width: 170,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: sel
-                          ? ch.color.withOpacity(0.15) : _EC.card,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: sel ? ch.color : _EC.border,
-                          width: sel ? 2 : 1),
-                        boxShadow: sel
-                          ? [BoxShadow(
-                              color: ch.color.withOpacity(0.25),
-                              blurRadius: 10)]
-                          : [],
-                      ),
-                      child: Row(children: [
-                        Text(ch.logo, style: const TextStyle(fontSize: 22)),
-                        const SizedBox(width: 8),
-                        Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(ch.name, style: TextStyle(
-                              color: sel ? ch.color : _EC.textHi,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700),
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 2),
-                            Text(ch.description, style: const TextStyle(
-                              color: _EC.textMid, fontSize: 8),
-                              maxLines: 2),
-                          ],
-                        )),
-                        if (sel)
-                          Container(
-                            width: 8, height: 8,
-                            decoration: BoxDecoration(
-                              color: ch.color, shape: BoxShape.circle),
-                          ),
-                      ]),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              // ── Preview embebido ──────────────────────────────────
-              if (_selected != null) ...[
-                const SizedBox(height: 14),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _selected!.color.withOpacity(0.4), width: 1.5)),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(7),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: _YoutubeEmbedView(
-                      key: ValueKey(_selected!.name),
-viewId: _getViewId(_selected!),
-                        embedUrl: _selected!.embedUrl,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Tiempos
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+          maxWidth: 620,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ──────────────────────────────────────────
                 Row(children: [
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Inicio en timeline: ${_start.toStringAsFixed(1)}s',
-                        style: const TextStyle(
-                          color: _EC.textMid, fontSize: 10)),
-                      Slider(
-                        value: _start, min: 0, max: 120,
-                        activeColor: _selected!.color,
-                        inactiveColor: _EC.border,
-                        onChanged: (v) => setState(() => _start = v),
-                      ),
-                    ],
-                  )),
+                  const Icon(Icons.tv_rounded,
+                      size: 16, color: Color(0xFFEC4899)),
                   const SizedBox(width: 8),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Duración: ${_duration.toStringAsFixed(0)}s',
-                        style: const TextStyle(
-                          color: _EC.textMid, fontSize: 10)),
-                      Slider(
-                        value: _duration, min: 5, max: 3600,
-                        activeColor: _selected!.color,
-                        inactiveColor: _EC.border,
-                        onChanged: (v) => setState(() => _duration = v),
+                  const Text('TV Colombia en Vivo',
+                      style: TextStyle(
+                          color: _EC.textHi,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.close_rounded,
+                        size: 16, color: _EC.textMid),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                const Text(
+                  'Selecciona un canal para previsualizar y agregarlo al timeline.',
+                  style: TextStyle(color: _EC.textMid, fontSize: 11)),
+                const SizedBox(height: 14),
+
+                // ── Grid de canales ──────────────────────────────────
+                Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: _channels.map((ch) {
+                    final sel = _selected?.name == ch.name;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selected = ch),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 130),
+                        width: 170,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? ch.color.withOpacity(0.15)
+                              : _EC.card,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: sel ? ch.color : _EC.border,
+                            width: sel ? 2 : 1),
+                          boxShadow: sel
+                              ? [BoxShadow(
+                                  color: ch.color.withOpacity(0.25),
+                                  blurRadius: 10)]
+                              : [],
+                        ),
+                        child: Row(children: [
+                          Text(ch.logo,
+                              style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 8),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(ch.name,
+                                  style: TextStyle(
+                                    color: sel ? ch.color : _EC.textHi,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 2),
+                              Text(ch.description,
+                                  style: const TextStyle(
+                                      color: _EC.textMid, fontSize: 8),
+                                  maxLines: 2),
+                            ],
+                          )),
+                          if (sel)
+                            Container(
+                              width: 8, height: 8,
+                              decoration: BoxDecoration(
+                                color: ch.color,
+                                shape: BoxShape.circle),
+                            ),
+                        ]),
                       ),
-                    ],
+                    );
+                  }).toList(),
+                ),
+
+                // ── Preview ──────────────────────────────────────────
+                if (_selected != null) ...[
+                  const SizedBox(height: 14),
+                  // Preview: thumbnail + botón abrir YouTube
+            Container(
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(
+        color: _selected!.color.withOpacity(0.4), width: 1.5)),
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(7),
+    child: AspectRatio(
+      aspectRatio: 16 / 9,
+      child:_YoutubeEmbedView(
+  key: ValueKey(_selected!.name),
+  viewId: _getViewId(_selected!),
+  channelId: _selected!.youtubeChannelId,
+  channelName: _selected!.name,
+  embedUrl: _selected!.embedUrl,   // ← agrega esto
+),
+    ),
+  ),
+),
+                  const SizedBox(height: 12),
+
+                  // Tiempos
+                  Row(children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'Inicio en timeline: ${_start.toStringAsFixed(1)}s',
+                            style: const TextStyle(
+                                color: _EC.textMid, fontSize: 10)),
+                        Slider(
+                          value: _start, min: 0, max: 120,
+                          activeColor: _selected!.color,
+                          inactiveColor: _EC.border,
+                          onChanged: (v) =>
+                              setState(() => _start = v),
+                        ),
+                      ],
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            'Duración: ${_duration.toStringAsFixed(0)}s',
+                            style: const TextStyle(
+                                color: _EC.textMid, fontSize: 10)),
+                        Slider(
+                          value: _duration, min: 5, max: 3600,
+                          activeColor: _selected!.color,
+                          inactiveColor: _EC.border,
+                          onChanged: (v) =>
+                              setState(() => _duration = v),
+                        ),
+                      ],
+                    )),
+                  ]),
+
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _EC.amber.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(7),
+                      border:
+                          Border.all(color: _EC.amber.withOpacity(0.3)),
+                    ),
+                    child: const Row(children: [
+                      Icon(Icons.info_outline_rounded,
+                          size: 13, color: _EC.amber),
+                      SizedBox(width: 6),
+                      Expanded(
+                          child: Text(
+                        'La señal en vivo requiere conexión a internet. '
+                        'El clip abrirá YouTube al reproducirse.',
+                        style: TextStyle(
+                            color: _EC.amber,
+                            fontSize: 10,
+                            height: 1.4),
+                      )),
+                    ]),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // ── Botones ──────────────────────────────────────────
+                Row(children: [
+                  Expanded(child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _EC.textMid,
+                      side: const BorderSide(color: _EC.border),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
+                    child: const Text('Cancelar'),
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: ElevatedButton.icon(
+                    // ← AQUÍ ESTÁ EL FIX PRINCIPAL
+                   onPressed: _selected == null
+    ? null
+    : () {
+        final ch = _selected!;
+        widget.onAdd(EditorClip(
+          id:          _uuid.v4(),
+          type:        EditorLayerType.video,
+          label:       ch.name,
+          url:         ch.embedUrl, // ← URL HLS directa
+          startSec:    _start,
+          durationSec: _duration,
+          trackIndex:  0,
+          x: 640, y: 360,
+          width: 1280, height: 720,
+        ));
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📺 ${ch.name} agregado al timeline'),
+            backgroundColor: ch.color.withOpacity(0.9),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+                    icon: const Icon(Icons.add_rounded, size: 14),
+                    label: const Text('Agregar al timeline',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          _selected?.color ?? const Color(0xFFEC4899),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8))),
                   )),
                 ]),
-
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: _EC.amber.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: _EC.amber.withOpacity(0.3)),
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.info_outline_rounded,
-                      size: 13, color: _EC.amber),
-                    SizedBox(width: 6),
-                    Expanded(child: Text(
-                      'La señal en vivo se reproduce vía YouTube. '
-                      'Requiere conexión a internet en el dispositivo de pantalla.',
-                      style: TextStyle(color: _EC.amber, fontSize: 10, height: 1.4))),
-                  ]),
-                ),
               ],
-
-              const SizedBox(height: 14),
-
-              // ── Botones ──────────────────────────────────────────
-              Row(children: [
-                Expanded(child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _EC.textMid,
-                    side: const BorderSide(color: _EC.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8))),
-                  child: const Text('Cancelar'),
-                )),
-                const SizedBox(width: 10),
-                Expanded(child: ElevatedButton.icon(
-                  onPressed: _selected == null ? null : () {
-                    final ch = _selected!;
-                    widget.onAdd(EditorClip(
-                      id:          _uuid.v4(),
-                      type:        EditorLayerType.video,
-                      label:       ch.name,
-                      // Guardamos el embedUrl en url para renderizado
-                      url:         ch.embedUrl,
-                      startSec:    _start,
-                      durationSec: _duration,
-                      trackIndex:  0,
-                      x: 640, y: 360,
-                      width: 1280, height: 720,
-                    ));
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                        '📺 ${ch.name} agregado al timeline'),
-                      backgroundColor: ch.color.withOpacity(0.9),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                      duration: const Duration(seconds: 2),
-                    ));
-                  },
-                  icon: const Icon(Icons.add_rounded, size: 14),
-                  label: const Text('Agregar al timeline',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _selected?.color ??
-                      const Color(0xFFEC4899),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8))),
-                )),
-              ]),
-            ],
+            ),
           ),
         ),
       ),
@@ -6794,52 +6980,223 @@ viewId: _getViewId(_selected!),
   }
 }
 
-// Widget que embebe el iframe de YouTube Live usando ui_web (mismo patrón que el resto del código)
+// ── Reemplaza también _YoutubeEmbedView y _YoutubeEmbedViewState
+// por esta versión simplificada (ya no se usa iframe, no se necesita) ──
+
+// Reemplaza _YoutubeEmbedView y _getViewId completamente por esto:
+
+// viewId único por canal + timestamp para forzar recreación
+String _getViewId(_TVChannel ch) {
+  final ts = DateTime.now().millisecondsSinceEpoch;
+  return 'tv-yt-${ch.youtubeChannelId}-$ts';
+}
 class _YoutubeEmbedView extends StatefulWidget {
   final String viewId;
-  final String embedUrl;
-  const _YoutubeEmbedView({super.key, required this.viewId, required this.embedUrl});
+  final String channelId;
+  final String channelName;
+  final String embedUrl;   // ← nuevo campo
+
+  const _YoutubeEmbedView({
+    super.key,
+    required this.viewId,
+    required this.channelId,
+    required this.channelName,
+    required this.embedUrl,
+  });
 
   @override
   State<_YoutubeEmbedView> createState() => _YoutubeEmbedViewState();
 }
 
 class _YoutubeEmbedViewState extends State<_YoutubeEmbedView> {
-  bool _registered = false;
+@override
+void initState() {
+  super.initState();
 
-  @override
-  void initState() {
-    super.initState();
-    _registerView();
-  }
+  final hlsUrl = widget.embedUrl; // ya es la URL M3U8 directa
+  final channelName = widget.channelName;
 
-  void _registerView() {
-    if (_registered) return;
-    try {
-      ui_web.platformViewRegistry.registerViewFactory(
-        widget.viewId,
-        (int id) {
-          final iframe = html.IFrameElement()
-            ..src = widget.embedUrl
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..allowFullscreen = true
-            ..setAttribute('allow',
-              'accelerometer; autoplay; clipboard-write; '
-              'encrypted-media; gyroscope; picture-in-picture');
-          return iframe;
-        },
-      );
-      _registered = true;
-    } catch (_) {
-      // Ya registrado — no hay problema
-      _registered = true;
-    }
+  final htmlContent = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; width:100vw; height:100vh; overflow:hidden;
+         font-family:sans-serif; display:flex; align-items:center; justify-content:center; }
+  video { width:100%; height:100%; object-fit:contain; background:#000; }
+  #msg { color:#fff; text-align:center; padding:24px; }
+  .title { font-size:18px; font-weight:700; margin-bottom:8px; }
+  .sub { font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:16px; }
+  .badge { display:inline-block; padding:4px 12px; background:#22C55E;
+           border-radius:20px; font-size:11px; font-weight:700; margin-bottom:14px; }
+  .err { background:#EF4444; }
+  a.btn { display:inline-block; padding:8px 18px; margin:4px;
+          background:rgba(255,255,255,0.15); border-radius:6px;
+          color:#fff; text-decoration:none; font-size:12px;
+          border:1px solid rgba(255,255,255,0.3); cursor:pointer; }
+  a.btn:hover { background:rgba(255,255,255,0.28); }
+</style>
+</head>
+<body>
+<div id="root" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+  <div id="msg">
+    <div class="title">⏳ Cargando $channelName...</div>
+    <div class="sub">Iniciando stream HLS</div>
+  </div>
+</div>
+
+<script>
+const HLS_URL = "$hlsUrl";
+const CH_NAME = "$channelName";
+const root    = document.getElementById('root');
+const msg     = document.getElementById('msg');
+
+function showError(detail) {
+  msg.innerHTML = \`
+    <span class="badge err">❌ Sin señal</span>
+    <div class="title">\${CH_NAME}</div>
+    <div class="sub">\${detail}</div>
+    <a href="\${HLS_URL}" target="_blank" class="btn">🔗 Abrir stream directo</a>
+  \`;
+}
+
+function startHLS() {
+  const video = document.createElement('video');
+  video.controls = true;
+  video.autoplay = true;
+  video.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;';
+
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: false,
+      lowLatencyMode: true,
+      backBufferLength: 30,
+    });
+    hls.loadSource(HLS_URL);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(() => {});
+      msg.style.display = 'none';
+      root.innerHTML = '';
+      root.appendChild(video);
+    });
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      if (data.fatal) {
+        hls.destroy();
+        showError('Error HLS: ' + data.type);
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari nativo
+    video.src = HLS_URL;
+    video.addEventListener('loadedmetadata', () => {
+      video.play().catch(() => {});
+      msg.style.display = 'none';
+      root.innerHTML = '';
+      root.appendChild(video);
+    });
+    video.addEventListener('error', () => showError('Error nativo HLS'));
+  } else {
+    showError('Tu navegador no soporta HLS. Usa Chrome o Firefox.');
   }
+}
+
+// Carga HLS.js desde CDN y arranca
+const s = document.createElement('script');
+s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+s.onload = startHLS;
+s.onerror = () => showError('No se pudo cargar el reproductor HLS.');
+document.head.appendChild(s);
+</script>
+</body>
+</html>
+''';
+
+  try {
+    ui_web.platformViewRegistry.registerViewFactory(
+      widget.viewId,
+      (int id) {
+        final iframe = html_lib.IFrameElement()
+          ..srcdoc = htmlContent
+          ..style.border = 'none'
+          ..style.width = '100%'
+          ..style.height = '100%'
+          ..setAttribute('allow',
+              'autoplay; encrypted-media; fullscreen')
+          ..setAttribute('allowfullscreen', 'true')
+          ..setAttribute('sandbox',
+              'allow-scripts allow-same-origin allow-popups allow-forms');
+        return iframe;
+      },
+    );
+  } catch (_) {}
+}
 
   @override
   Widget build(BuildContext context) {
     return HtmlElementView(viewType: widget.viewId);
+  }
+}
+// Widget que muestra un fondo con color del canal y el logo emoji
+class _ThumbnailView extends StatefulWidget {
+  final String viewId;
+  final String channelId;
+  final Color color;
+  final String logo;
+  final String name;
+  const _ThumbnailView({
+    required this.viewId,
+    required this.channelId,
+    required this.color,
+    required this.logo,
+    required this.name,
+  });
+  @override
+  State<_ThumbnailView> createState() => _ThumbnailViewState();
+}
+
+class _ThumbnailViewState extends State<_ThumbnailView> {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(widget.viewId, (int id) {
+        final img = html.ImageElement()
+          ..src =
+              'https://img.youtube.com/vi/${widget.channelId}/maxresdefault.jpg'
+          ..style.width = '100%'
+          ..style.height = '100%'
+          ..style.objectFit = 'cover';
+        // Fallback si la imagen no carga
+        img.onError.listen((_) {
+          img.style.display = 'none';
+        });
+        return img;
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.color.withOpacity(0.8),
+                Colors.black,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        HtmlElementView(viewType: widget.viewId),
+      ],
+    );
   }
 }

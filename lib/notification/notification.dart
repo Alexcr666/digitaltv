@@ -724,8 +724,8 @@ class _ProgressBarState extends State<_ProgressBar>
 
 // ── NOTIFICATIONS PAGE ───────────────────────────────────────────────────────
 
-class NotificationsPage extends ConsumerWidget {
-  const NotificationsPage({super.key});
+class NotificationsPage22 extends ConsumerWidget {
+  const NotificationsPage22({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

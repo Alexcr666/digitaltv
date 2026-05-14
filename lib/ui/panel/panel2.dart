@@ -702,6 +702,7 @@ class _SaveButton extends StatelessWidget {
     );
   }
 }
+
 class SchedulesScreen extends ConsumerStatefulWidget {
   const SchedulesScreen({super.key});
 
@@ -1662,7 +1663,6 @@ class _MediaCard extends StatefulWidget {
 
 class _MediaCardState extends State<_MediaCard> {
   bool _hovered = false;
-  bool _previewing = false;
 
   String _fmtDate(dynamic raw) {
     if (raw == null) return '—';
@@ -1677,6 +1677,86 @@ class _MediaCardState extends State<_MediaCard> {
         '${dt.minute.toString().padLeft(2,'0')}';
   }
 
+  void _openVideo(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+          width: 700,
+          height: 420,
+          child: Stack(
+            children: [
+              Center(
+                child: HtmlElementView.fromTagName(
+                  tagName: 'video',
+                  onElementCreated: (element) {
+                    // Solo funciona en web; en mobile usar video_player
+                  },
+                ),
+              ),
+              // Fallback con iframe-style player via url
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.play_circle_outline_rounded,
+                      color: _C.purple, size: 64),
+                    const SizedBox(height: 12),
+                    SelectableText(url,
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: url));
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 14),
+                      label: const Text('Copiar URL del video'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _C.purple,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 8, right: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 28, height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                      size: 14, color: Colors.white70),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+// Agrega este helper dentro de _MediaCardState:
+bool _isBlobOrLocal(String url) {
+  return url.startsWith('blob:') || url.startsWith('data:');
+}
+
+String _proxyUrl(String url) {
+  if (_isBlobOrLocal(url)) return url; // no proxiar blobs
+  return 'https://wsrv.nl/?url=${Uri.encodeComponent(url)}&w=200&h=120&fit=cover';
+}
   @override
   Widget build(BuildContext context) {
     final name      = widget.data['name']      ?? 'Sin nombre';
@@ -1709,55 +1789,77 @@ class _MediaCardState extends State<_MediaCard> {
             // ── Preview ──────────────────────────────────────────────
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _previewing = !_previewing),
+                onTap: type == 'video' && url.isNotEmpty
+                    ? () => _openVideo(context, url)
+                    : null,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(11)),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // Contenido según tipo
-                      if (type == 'image' && url.isNotEmpty)
-                        Image.network(
-                          'https://wsrv.nl/?url=${Uri.encodeComponent(url)}&w=200&h=120&fit=cover',
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (_, __, ___) => _iconPlaceholder(typeIcon, typeColor),
-                        )
-                      else if (type == 'video' && url.isNotEmpty)
-                        Container(
-                          color: _C.surface,
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.play_circle_outline_rounded,
-                                  color: typeColor, size: 36),
-                                const SizedBox(height: 4),
-                                Text('Video', style: TextStyle(
-                                  color: typeColor, fontSize: 10)),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        _iconPlaceholder(typeIcon, typeColor),
+                      // Imagen: se muestra directo sin click
+                 // Imagen: se muestra directo
+if (type == 'image' && url.isNotEmpty)
+  _isBlobOrLocal(url)
+    ? _iconPlaceholder(typeIcon, typeColor) // blob local → solo ícono
+    : Image.network(
+        _proxyUrl(url),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (_, __, ___) =>
+          _iconPlaceholder(typeIcon, typeColor),
+      )
+// Video
+else if (type == 'video' && url.isNotEmpty)
+  Stack(
+    fit: StackFit.expand,
+    children: [
+      _isBlobOrLocal(url)
+        ? Container(
+            color: _C.surface,
+            child: Center(
+              child: Icon(Icons.movie_rounded,
+                color: typeColor.withOpacity(0.4), size: 40),
+            ),
+          )
+        : Image.network(
+            _proxyUrl(url),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: _C.surface,
+              child: Center(
+                child: Icon(Icons.movie_rounded,
+                  color: typeColor.withOpacity(0.4), size: 40),
+              ),
+            ),
+          ),
+      Container(
+        color: Colors.black45,
+        child: Center(
+          child: Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: _C.purple.withOpacity(0.85),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.play_arrow_rounded,
+              color: Colors.white, size: 26),
+          ),
+        ),
+      ),
+      const Positioned(
+        bottom: 6, left: 0, right: 0,
+        child: Text('Tap para reproducir',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white60, fontSize: 9)),
+      ),
+    ],
+  )
+else
+  _iconPlaceholder(typeIcon, typeColor),
 
-                      // Overlay de preview al hacer tap
-                      if (_previewing && url.isNotEmpty)
-                        Container(
-                          color: Colors.black87,
-                          child: Center(
-                            child: type == 'image'
-                              ? Image.network(url,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) =>
-                                    Icon(typeIcon, color: typeColor, size: 32))
-                              : Icon(typeIcon, color: typeColor, size: 40),
-                          ),
-                        ),
-
-                      // Badge de tipo
+                      // Badge de tipo (siempre visible)
                       Positioned(
                         top: 6, left: 6,
                         child: Container(
@@ -1772,16 +1874,6 @@ class _MediaCardState extends State<_MediaCard> {
                               fontWeight: FontWeight.w700)),
                         ),
                       ),
-
-                      // Ícono de preview
-                      Positioned(
-                        top: 6, right: 6,
-                        child: Icon(
-                          _previewing
-                            ? Icons.close_rounded
-                            : Icons.zoom_in_rounded,
-                          color: Colors.white70, size: 14),
-                      ),
                     ],
                   ),
                 ),
@@ -1794,15 +1886,12 @@ class _MediaCardState extends State<_MediaCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Nombre
                   Text(name,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _C.textHi, fontWeight: FontWeight.w600,
                       fontSize: 11)),
                   const SizedBox(height: 2),
-
-                  // Fecha de creación
                   Row(
                     children: [
                       const Icon(Icons.schedule_rounded,
@@ -1816,8 +1905,6 @@ class _MediaCardState extends State<_MediaCard> {
                       ),
                     ],
                   ),
-
-                  // Playlist origen
                   if (playlist.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Row(
@@ -1834,16 +1921,11 @@ class _MediaCardState extends State<_MediaCard> {
                       ],
                     ),
                   ],
-
-                  // Categoría
                   if (category.isNotEmpty) ...[
                     const SizedBox(height: 3),
                     _Badge(label: category, color: _C.primary),
                   ],
-
                   const SizedBox(height: 4),
-
-                  // Acciones
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -1978,7 +2060,6 @@ class _MediaCardState extends State<_MediaCard> {
     );
   }
 }
-
 class _AddMediaSheet extends ConsumerStatefulWidget {
   const _AddMediaSheet();
 
