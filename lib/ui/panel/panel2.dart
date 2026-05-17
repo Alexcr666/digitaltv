@@ -1,10 +1,12 @@
 // =============================================================================
 // SCHEDULES SCREEN — Programación horaria de playlists
 // =============================================================================
-
+import 'package:digitaltv/auth/auth.dart' as current2;
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:digitaltv/ui/panel/panel.dart';
+import 'package:digitaltv/ui/panel/programing.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -726,7 +728,20 @@ class _SchedulesScreenState extends ConsumerState<SchedulesScreen> {
             subtitle: 'Programa cuándo y dónde se reproduce cada playlist',
             action: _AddButton(
               label: '+ Nueva programación',
-              onTap: () => _showAddSchedule(context),
+              onTap: (){
+
+                Navigator.push(
+  context,
+  PageRouteBuilder(
+    pageBuilder: (_, __, ___) => const ProgrammingScreen(),
+    transitionsBuilder: (_, anim, __, child) => FadeTransition(
+      opacity: anim,
+      child: child,
+    ),
+  ),
+);
+              },
+            //  onTap: () => _showAddSchedule(context),
             ),
           ),
           Expanded(
@@ -768,38 +783,54 @@ class _ScheduleBody extends ConsumerWidget {
   const _ScheduleBody({required this.playlists, required this.devices});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-        .collection('schedules')
-        .orderBy('createdAt', descending: true)
-        .snapshots(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const _SkeletonList();
-        final docs = snap.data!.docs;
-        if (docs.isEmpty) {
-          return _EmptyState(
-            icon: Icons.schedule_rounded,
-            title: 'Sin programaciones',
-            subtitle: 'Crea una programación para automatizar tu contenido.',
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          itemCount: docs.length,
-          itemBuilder: (_, i) {
-            final d = docs[i].data() as Map<String, dynamic>;
-            return _ScheduleCard(
-              id:           docs[i].id,
-              data:         d,
-              playlists:    playlists,
-              devices:      devices,
-            ).animate().fadeIn(delay: Duration(milliseconds: i * 40));
-          },
+Widget build(BuildContext context, WidgetRef ref) {
+  // Obtiene el companyId del usuario actual
+  final userAsync = ref.watch(current2.currentUserProvider);
+  final user = userAsync.valueOrNull;
+  final companyId = user?.isSuperAdmin == true ? null : user?.companyId;
+
+  Query schedulesQuery = FirebaseFirestore.instance
+    .collection('schedules');
+
+if (companyId != null) {
+  schedulesQuery = schedulesQuery.where('companyId', isEqualTo: companyId);
+}
+
+return StreamBuilder<QuerySnapshot>(
+  stream: schedulesQuery.snapshots(),
+  builder: (context, snap) {
+    if (!snap.hasData) return const _SkeletonList();
+   var docs = snap.data!.docs
+  ..sort((a, b) {
+    final aDate = (a.data() as Map)['createdAt'];
+    final bDate = (b.data() as Map)['createdAt'];
+    if (aDate == null || bDate == null) return 0;
+    return (bDate as Timestamp).compareTo(aDate as Timestamp);
+  });
+    // ... resto igual
+      if (docs.isEmpty) {
+        return _EmptyState(
+          icon: Icons.schedule_rounded,
+          title: 'Sin programaciones',
+          subtitle: 'Crea una programación para automatizar tu contenido.',
         );
-      },
-    );
-  }
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        itemCount: docs.length,
+        itemBuilder: (_, i) {
+          final d = docs[i].data() as Map<String, dynamic>;
+          return _ScheduleCard(
+            id:        docs[i].id,
+            data:      d,
+            playlists: playlists,
+            devices:   devices,
+          ).animate().fadeIn(delay: Duration(milliseconds: i * 40));
+        },
+      );
+    },
+  );
+}
 }
 
 class _ScheduleCard extends StatelessWidget {
@@ -990,22 +1021,31 @@ class _AddScheduleSheetState extends ConsumerState<_AddScheduleSheet> {
   String _fmt(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
 
-  Future<void> _save() async {
-    if (_selectedPlaylistId == null) return;
-    setState(() => _loading = true);
-    await FirebaseFirestore.instance.collection('schedules').add({
-      'playlistId':   _selectedPlaylistId,
-      'playlistName': _selectedPlaylistName,
-      'deviceId':     _selectedDeviceId,
-      'deviceName':   _selectedDeviceName ?? 'Todos los dispositivos',
-      'startTime':    _fmt(_startTime),
-      'endTime':      _fmt(_endTime),
-      'days':         _days.toList(),
-      'isActive':     true,
-      'createdAt':    FieldValue.serverTimestamp(),
-    });
-    if (mounted) Navigator.pop(context);
-  }
+Future<void> _save() async {
+  if (_selectedPlaylistId == null) return;
+  setState(() => _loading = true);
+
+  // Obtiene companyId del usuario actual
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(FirebaseAuth.instance.currentUser?.uid)
+      .get();
+  final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+  await FirebaseFirestore.instance.collection('schedules').add({
+    'playlistId':   _selectedPlaylistId,
+    'playlistName': _selectedPlaylistName,
+    'deviceId':     _selectedDeviceId,
+    'deviceName':   _selectedDeviceName ?? 'Todos los dispositivos',
+    'startTime':    _fmt(_startTime),
+    'endTime':      _fmt(_endTime),
+    'days':         _days.toList(),
+    'isActive':     true,
+    'companyId':    companyId,   // <-- campo clave
+    'createdAt':    FieldValue.serverTimestamp(),
+  });
+  if (mounted) Navigator.pop(context);
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1480,6 +1520,18 @@ class _MediaLibraryScreenState extends ConsumerState<MediaLibraryScreen> {
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
 @override
 Widget build(BuildContext context) {
+  // Para filtrar por empresa, necesitamos el usuario
+  final user = ref.watch(current2.currentUserProvider).valueOrNull;
+  final companyId = user?.isSuperAdmin == true ? null : user?.companyId;
+
+  Query mediaQuery = FirebaseFirestore.instance
+      .collection('media_library')
+      .orderBy('createdAt', descending: true);
+
+  if (companyId != null) {
+    mediaQuery = mediaQuery.where('companyId', isEqualTo: companyId);
+  }
+  // ... resto del build usando mediaQuery en lugar del stream hardcodeado
   return Scaffold(
     backgroundColor: _C.bg,
     body: Column(
@@ -1553,10 +1605,16 @@ Widget build(BuildContext context) {
 
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-              .collection('media_library')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
+       stream: companyId != null
+    ? FirebaseFirestore.instance
+        .collection('media_library')
+        .where('companyId', isEqualTo: companyId)
+        .snapshots()
+    : FirebaseFirestore.instance
+        .collection('media_library')
+        .snapshots(),
+      
+
             builder: (context, snap) {
               if (!snap.hasData) return const _SkeletonList();
               var docs = snap.data!.docs;
@@ -2078,19 +2136,27 @@ class _AddMediaSheetState extends ConsumerState<_AddMediaSheet> {
   void dispose() { _nameCtrl.dispose(); _urlCtrl.dispose(); super.dispose(); }
 
   Future<void> _save() async {
-    if (_nameCtrl.text.trim().isEmpty || _urlCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Nombre y URL son obligatorios');
-      return;
-    }
-    setState(() { _loading = true; _error = null; });
-    await FirebaseFirestore.instance.collection('media_library').add({
-      'name':      _nameCtrl.text.trim(),
-      'url':       _urlCtrl.text.trim(),
-      'type':      _type,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    if (mounted) Navigator.pop(context);
+  if (_nameCtrl.text.trim().isEmpty || _urlCtrl.text.trim().isEmpty) {
+    setState(() => _error = 'Nombre y URL son obligatorios');
+    return;
   }
+  setState(() { _loading = true; _error = null; });
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(FirebaseAuth.instance.currentUser?.uid)
+      .get();
+  final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+  await FirebaseFirestore.instance.collection('media_library').add({
+    'name':      _nameCtrl.text.trim(),
+    'url':       _urlCtrl.text.trim(),
+    'type':      _type,
+    'companyId': companyId,   // <-- campo clave
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+  if (mounted) Navigator.pop(context);
+}
 
   @override
   Widget build(BuildContext context) {

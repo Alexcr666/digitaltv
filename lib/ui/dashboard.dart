@@ -15,7 +15,7 @@
 // =============================================================================
 
 // ignore_for_file: library_private_types_in_public_api
-
+import 'package:digitaltv/auth/auth.dart' as current2;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -283,26 +283,53 @@ final firestoreProvider = Provider<FirebaseFirestore>(
   (_) => FirebaseFirestore.instance,
 );
 
-/// Stream de todos los dispositivos, ordenados por lastSeen desc
 final devicesStreamProvider = StreamProvider<List<DeviceEntity>>((ref) {
-  return ref
-      .watch(firestoreProvider)
-      .collection('devices')
-      .orderBy('lastSeen', descending: true)
-      .snapshots()
-      .map((snap) => snap.docs.map(DeviceEntity.fromFirestore).toList());
+  final user = ref.watch(current2.currentUserProvider).valueOrNull;
+  final companyId = user?.isSuperAdmin == true ? null : user?.companyId;
+
+  Stream<QuerySnapshot> stream;
+
+  if (companyId != null) {
+    stream = FirebaseFirestore.instance
+        .collection('devices')
+        .where('companyId', isEqualTo: companyId)
+        .snapshots();
+  } else {
+    stream = FirebaseFirestore.instance
+        .collection('devices')
+        .snapshots();
+  }
+
+  return stream.map((snap) {
+    final list = snap.docs.map(DeviceEntity.fromFirestore).toList();
+    list.sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
+    return list;
+  });
 });
 
-/// Stream de todo el contenido, ordenado por createdAt desc
 final contentStreamProvider = StreamProvider<List<ContentEntity>>((ref) {
-  return ref
-      .watch(firestoreProvider)
-      .collection('content')
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((snap) => snap.docs.map(ContentEntity.fromFirestore).toList());
-});
+  final user = ref.watch(current2.currentUserProvider).valueOrNull;
+  final companyId = user?.isSuperAdmin == true ? null : user?.companyId;
 
+  Stream<QuerySnapshot> stream;
+
+  if (companyId != null) {
+    stream = FirebaseFirestore.instance
+        .collection('content')
+        .where('companyId', isEqualTo: companyId)
+        .snapshots();
+  } else {
+    stream = FirebaseFirestore.instance
+        .collection('content')
+        .snapshots();
+  }
+
+  return stream.map((snap) {
+    final list = snap.docs.map(ContentEntity.fromFirestore).toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  });
+});
 /// Stream de un dispositivo individual (para detail screens)
 final singleDeviceProvider =
     StreamProvider.family<DeviceEntity?, String>((ref, id) {

@@ -98,10 +98,9 @@ service cloud.firestore {
 // =============================================================================
 // 1. DOMAIN MODELS
 // =============================================================================
-
 enum AppRole {
   superAdmin('super_admin'),
-  admin('admin'),
+  companyAdmin('company_admin'),
   manager('manager'),
   editor('editor'),
   user('user');
@@ -113,23 +112,46 @@ enum AppRole {
       AppRole.values.firstWhere((r) => r.value == s, orElse: () => AppRole.user);
 
   String get displayName => switch (this) {
-        AppRole.superAdmin => 'Super Admin',
-        AppRole.admin      => 'Admin',
-        AppRole.manager    => 'Manager',
-        AppRole.editor     => 'Editor',
-        AppRole.user       => 'Usuario',
+        AppRole.superAdmin   => 'Super Admin',
+        AppRole.companyAdmin => 'Admin Empresa',
+        AppRole.manager      => 'Manager',
+        AppRole.editor       => 'Editor',
+        AppRole.user         => 'Usuario',
       };
 }
-
 enum AppPermission {
+  // Empresas (solo superAdmin)
+  companiesView('companies.view'),
+  companiesCreate('companies.create'),
+  companiesEdit('companies.edit'),
+  companiesDelete('companies.delete'),
+
+  // Usuarios
   usersView('users.view'),
   usersCreate('users.create'),
   usersEdit('users.edit'),
   usersDelete('users.delete'),
+
+  // Roles
   rolesView('roles.view'),
+  rolesCreate('roles.create'),
   rolesEdit('roles.edit'),
+  rolesDelete('roles.delete'),
+
+  // Notificaciones
+  notificationsSend('notifications.send'),
+
+  // Configuración
   settingsEdit('settings.edit'),
-  notificationsSend('notifications.send');
+
+  // Reportes / Analytics
+  reportsView('reports.view'),
+
+  // Dashboard global (solo superAdmin)
+  dashboardGlobal('dashboard.global'),
+
+  // Dashboard empresa
+  dashboardCompany('dashboard.company');
 
   final String value;
   const AppPermission(this.value);
@@ -142,28 +164,98 @@ enum AppPermission {
     }
   }
 }
+// =============================================================================
+// COMPANY MODEL
+// =============================================================================
+
+class Company {
+  final String id;
+  final String name;
+  final String legalName;
+  final String email;
+  final String phone;
+  final String address;
+  final String? logoUrl;
+  final String status; // active | inactive | suspended
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const Company({
+    required this.id,
+    required this.name,
+    required this.legalName,
+    required this.email,
+    this.phone = '',
+    this.address = '',
+    this.logoUrl,
+    this.status = 'active',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  bool get isActive => status == 'active';
+
+  factory Company.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return Company(
+      id:        doc.id,
+      name:      d['name'] as String? ?? '',
+      legalName: d['legalName'] as String? ?? '',
+      email:     d['email'] as String? ?? '',
+      phone:     d['phone'] as String? ?? '',
+      address:   d['address'] as String? ?? '',
+      logoUrl:   d['logoUrl'] as String?,
+      status:    d['status'] as String? ?? 'active',
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() => {
+        'name':      name,
+        'legalName': legalName,
+        'email':     email,
+        'phone':     phone,
+        'address':   address,
+        'logoUrl':   logoUrl,
+        'status':    status,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': Timestamp.fromDate(updatedAt),
+      };
+}
 
 // Default permissions per role
 const Map<AppRole, List<AppPermission>> kDefaultRolePermissions = {
   AppRole.superAdmin: AppPermission.values,
-  AppRole.admin: [
+  AppRole.companyAdmin: [
     AppPermission.usersView,
     AppPermission.usersCreate,
     AppPermission.usersEdit,
+    AppPermission.usersDelete,
     AppPermission.rolesView,
+    AppPermission.rolesCreate,
+    AppPermission.rolesEdit,
+    AppPermission.rolesDelete,
     AppPermission.notificationsSend,
+    AppPermission.reportsView,
+    AppPermission.dashboardCompany,
   ],
   AppRole.manager: [
     AppPermission.usersView,
     AppPermission.usersEdit,
     AppPermission.rolesView,
     AppPermission.notificationsSend,
+    AppPermission.reportsView,
+    AppPermission.dashboardCompany,
   ],
   AppRole.editor: [
     AppPermission.usersView,
     AppPermission.rolesView,
+    AppPermission.dashboardCompany,
   ],
-  AppRole.user: [],
+  AppRole.user: [
+    AppPermission.dashboardCompany,
+  ],
 };
 
 // =============================================================================
@@ -179,7 +271,8 @@ class AppUser {
   final String address;
   final List<AppRole> roles;
   final List<AppPermission> permissions;
-  final String status; // active | inactive | suspended
+  final String status;       // active | inactive | suspended
+  final String? companyId;   // null solo para superAdmin
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastLogin;
@@ -194,12 +287,15 @@ class AppUser {
     required this.roles,
     required this.permissions,
     this.status = 'active',
+    this.companyId,
     required this.createdAt,
     required this.updatedAt,
     this.lastLogin,
   });
 
   bool get isActive => status == 'active';
+  bool get isSuperAdmin => roles.contains(AppRole.superAdmin);
+  bool get isCompanyAdmin => roles.contains(AppRole.companyAdmin);
 
   bool hasRole(AppRole role) => roles.contains(role);
 
@@ -218,6 +314,7 @@ class AppUser {
     List<AppRole>? roles,
     List<AppPermission>? permissions,
     String? status,
+    String? companyId,
     DateTime? updatedAt,
     DateTime? lastLogin,
   }) =>
@@ -231,41 +328,43 @@ class AppUser {
         roles: roles ?? this.roles,
         permissions: permissions ?? this.permissions,
         status: status ?? this.status,
+        companyId: companyId ?? this.companyId,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         lastLogin: lastLogin ?? this.lastLogin,
       );
 
-factory AppUser.fromFirestore(DocumentSnapshot doc) {
-  final d = doc.data() as Map<String, dynamic>;
-  
-  List<String> toStringList(dynamic val) {
-    if (val == null) return [];
-    if (val is List) return val.map((e) => e.toString()).toList();
-    if (val is Map) return val.values.map((e) => e.toString()).toList();
-    return [];
-  }
+  factory AppUser.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
 
-  return AppUser(
-    uid:      d['uid'] as String? ?? doc.id,
-    name:     d['name'] as String? ?? '',
-    email:    d['email'] as String? ?? '',
-    phone:    d['phone'] as String? ?? '',
-    photoUrl: d['photoUrl'] as String?,
-    address:  d['address'] as String? ?? '',
-    roles: toStringList(d['roles'])
-        .map(AppRole.fromString)
-        .toList(),
-    permissions: toStringList(d['permissions'])
-        .map(AppPermission.fromString)
-        .whereType<AppPermission>()
-        .toList(),
-    status:    d['status'] as String? ?? 'active',
-    createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    lastLogin: (d['lastLogin'] as Timestamp?)?.toDate(),
-  );
-}
+    List<String> toStringList(dynamic val) {
+      if (val == null) return [];
+      if (val is List) return val.map((e) => e.toString()).toList();
+      if (val is Map) return val.values.map((e) => e.toString()).toList();
+      return [];
+    }
+
+    return AppUser(
+      uid:       d['uid'] as String? ?? doc.id,
+      name:      d['name'] as String? ?? '',
+      email:     d['email'] as String? ?? '',
+      phone:     d['phone'] as String? ?? '',
+      photoUrl:  d['photoUrl'] as String?,
+      address:   d['address'] as String? ?? '',
+      roles: toStringList(d['roles'])
+          .map(AppRole.fromString)
+          .toList(),
+      permissions: toStringList(d['permissions'])
+          .map(AppPermission.fromString)
+          .whereType<AppPermission>()
+          .toList(),
+      status:    d['status'] as String? ?? 'active',
+      companyId: d['companyId'] as String?,
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      lastLogin: (d['lastLogin'] as Timestamp?)?.toDate(),
+    );
+  }
 
   Map<String, dynamic> toFirestore() => {
         'uid':         uid,
@@ -277,6 +376,7 @@ factory AppUser.fromFirestore(DocumentSnapshot doc) {
         'roles':       roles.map((r) => r.value).toList(),
         'permissions': permissions.map((p) => p.value).toList(),
         'status':      status,
+        'companyId':   companyId,
         'createdAt':   Timestamp.fromDate(createdAt),
         'updatedAt':   Timestamp.fromDate(updatedAt),
         'lastLogin':   lastLogin != null ? Timestamp.fromDate(lastLogin!) : null,
@@ -366,6 +466,7 @@ class RoleDefinition {
   final String displayName;
   final String description;
   final List<AppPermission> permissions;
+  final String? companyId;
   final DateTime createdAt;
 
   const RoleDefinition({
@@ -374,6 +475,7 @@ class RoleDefinition {
     required this.displayName,
     required this.description,
     required this.permissions,
+    this.companyId,
     required this.createdAt,
   });
 
@@ -388,6 +490,7 @@ class RoleDefinition {
           .map((p) => AppPermission.fromString(p as String))
           .whereType<AppPermission>()
           .toList(),
+      companyId:   d['companyId'] as String?,
       createdAt:   (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -397,6 +500,7 @@ class RoleDefinition {
         'displayName': displayName,
         'description': description,
         'permissions': permissions.map((p) => p.value).toList(),
+        'companyId':   companyId,
         'createdAt':   Timestamp.fromDate(createdAt),
       };
 }
@@ -425,99 +529,93 @@ class Failure<T> extends Result<T> {
 // =============================================================================
 
 
-  class FirebaseService {
-  // ← NUEVO: flag para pausar el redirect de auth
+class FirebaseService {
   static bool suppressAuthRedirect = false;
 
   final FirebaseAuth      _auth      = FirebaseAuth.instance;
-  // ... resto igual
-
   final FirebaseFirestore _db        = FirebaseFirestore.instance;
   final FirebaseStorage   _storage   = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
-  // ── Shortcuts ─────────────────────────────────────────────────────────────
   CollectionReference get _users         => _db.collection('users');
   CollectionReference get _roles         => _db.collection('roles');
   CollectionReference get _notifications => _db.collection('notifications');
+  CollectionReference get _companies     => _db.collection('companies');
 
   User? get currentFirebaseUser => _auth.currentUser;
   Stream<User?> get authStateStream => _auth.authStateChanges();
 
   // =========================================================================
-  // AUTH
+  // SEED: Superadmin por defecto
   // =========================================================================
-Future<Result<AppUser>> createUserAsAdmin({
-  required String name,
-  required String email,
-  required String password,
-  AppRole role = AppRole.user,
-}) async {
-  final adminUser = _auth.currentUser;
-  if (adminUser == null) return const Failure('No hay sesión activa.');
 
-  FirebaseApp? secondaryApp;
+  /// Llama esto en main() después de Firebase.initializeApp()
+  Future<void> seedSuperAdmin() async {
+    const email    = 'sly@gmail.com';
+    const password = 'Mercurio123*';
+    const name     = 'Super Administrador';
 
-  try {
-    // ← Pausar redirect mientras creamos el usuario
-    FirebaseService.suppressAuthRedirect = true;
+    try {
+      // Verifica si ya existe en Firestore
+      final snap = await _users
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) return;
 
-    final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
-    secondaryApp = await Firebase.initializeApp(
-      name:    appName,
-      options: Firebase.app().options,
-    );
+      // Crea el usuario en Auth
+      UserCredential cred;
+      try {
+        cred = await _auth.createUserWithEmailAndPassword(
+          email: email, password: password);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          // Ya existe en Auth pero no en Firestore → obtener uid via sign-in
+          final signIn = await _auth.signInWithEmailAndPassword(
+            email: email, password: password);
+          final uid = signIn.user!.uid;
+          await _auth.signOut();
+          await _writeSuperAdminDoc(uid, name, email);
+          return;
+        }
+        rethrow;
+      }
 
-    final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      await cred.user!.updateDisplayName(name);
+      await _writeSuperAdminDoc(cred.user!.uid, name, email);
+      await _auth.signOut();
+    } catch (e) {
+      print('[FirebaseService] seedSuperAdmin error: $e');
+    }
+  }
 
-    final cred = await secondaryAuth.createUserWithEmailAndPassword(
-      email:    email.trim(),
-      password: password,
-    );
-    await cred.user!.updateDisplayName(name.trim());
-
-    final uid   = cred.user!.uid;
-    final now   = DateTime.now();
-    final perms = kDefaultRolePermissions[role] ?? [];
-
+  Future<void> _writeSuperAdminDoc(
+      String uid, String name, String email) async {
+    final now = DateTime.now();
     final appUser = AppUser(
       uid:         uid,
-      name:        name.trim(),
-      email:       email.trim(),
-      roles:       [role],
-      permissions: perms,
+      name:        name,
+      email:       email,
+      roles:       [AppRole.superAdmin],
+      permissions: AppPermission.values.toList(),
+      companyId:   null, // superAdmin no pertenece a empresa
       createdAt:   now,
       updatedAt:   now,
     );
-
-    await _db.collection('users').doc(uid).set(appUser.toFirestore());
-    await secondaryAuth.signOut();
-    await secondaryApp.delete();
-    secondaryApp = null;
-
-    return Success(appUser);
-
-  } on FirebaseAuthException catch (e) {
-    await secondaryApp?.delete();
-    return Failure(_authErrorMessage(e.code));
-  } catch (e) {
-    await secondaryApp?.delete();
-    return Failure('Error al crear usuario: $e');
-  } finally {
-    // ← Siempre reactivar el redirect
-    FirebaseService.suppressAuthRedirect = false;
+    await _users.doc(uid).set(appUser.toFirestore());
   }
-}
-  
+
+  // =========================================================================
+  // AUTH
+  // =========================================================================
+
   Future<Result<AppUser>> signIn({
     required String email,
     required String password,
   }) async {
     try {
       final cred = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+        email: email.trim(), password: password);
 
       final doc = await _users.doc(cred.user!.uid).get();
       if (!doc.exists) {
@@ -531,7 +629,20 @@ Future<Result<AppUser>> createUserAsAdmin({
         return const Failure('Esta cuenta ha sido desactivada.');
       }
 
-      // Update lastLogin
+      // Valida que usuarios no-superAdmin tengan empresa activa
+      if (!appUser.isSuperAdmin && appUser.companyId != null) {
+        final compDoc = await _companies.doc(appUser.companyId).get();
+        if (!compDoc.exists) {
+          await _auth.signOut();
+          return const Failure('La empresa asociada no existe.');
+        }
+        final company = Company.fromFirestore(compDoc);
+        if (!company.isActive) {
+          await _auth.signOut();
+          return const Failure('La empresa está desactivada. Contacta al soporte.');
+        }
+      }
+
       await _users.doc(cred.user!.uid).update({
         'lastLogin': FieldValue.serverTimestamp(),
       });
@@ -544,19 +655,16 @@ Future<Result<AppUser>> createUserAsAdmin({
     }
   }
 
-  /// Register new account + create Firestore profile.
   Future<Result<AppUser>> register({
     required String name,
     required String email,
     required String password,
     AppRole role = AppRole.user,
+    String? companyId,
   }) async {
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-
+        email: email.trim(), password: password);
       await cred.user!.updateDisplayName(name.trim());
 
       final permissions = kDefaultRolePermissions[role] ?? [];
@@ -568,15 +676,13 @@ Future<Result<AppUser>> createUserAsAdmin({
         email:       email.trim(),
         roles:       [role],
         permissions: permissions,
+        companyId:   companyId,
         createdAt:   now,
         updatedAt:   now,
       );
 
       await _users.doc(cred.user!.uid).set(appUser.toFirestore());
-
-      // Send welcome email via Cloud Function
       await _sendWelcomeEmail(name: name.trim(), email: email.trim());
-
       return Success(appUser);
     } on FirebaseAuthException catch (e) {
       return Failure(_authErrorMessage(e.code));
@@ -585,12 +691,8 @@ Future<Result<AppUser>> createUserAsAdmin({
     }
   }
 
-  /// Sign out and clear session.
-  Future<void> signOut() async {
-    await _auth.signOut();
-  }
+  Future<void> signOut() async => await _auth.signOut();
 
-  /// Send password reset email.
   Future<Result<void>> sendPasswordReset(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
@@ -602,16 +704,13 @@ Future<Result<AppUser>> createUserAsAdmin({
     }
   }
 
-  /// Re-authenticate before sensitive operations.
   Future<Result<void>> reauthenticate({
     required String email,
     required String password,
   }) async {
     try {
       final credential = EmailAuthProvider.credential(
-        email: email,
-        password: password,
-      );
+        email: email, password: password);
       await _auth.currentUser!.reauthenticateWithCredential(credential);
       return const Success(null);
     } on FirebaseAuthException catch (e) {
@@ -621,18 +720,12 @@ Future<Result<AppUser>> createUserAsAdmin({
     }
   }
 
-  /// Change password (requires re-auth first).
   Future<Result<void>> changePassword(String newPassword) async {
     try {
       await _auth.currentUser!.updatePassword(newPassword);
-
-      // Notify via Cloud Function
       final user = _auth.currentUser!;
       await _sendPasswordChangedEmail(
-        email: user.email ?? '',
-        name: user.displayName ?? '',
-      );
-
+        email: user.email ?? '', name: user.displayName ?? '');
       return const Success(null);
     } on FirebaseAuthException catch (e) {
       return Failure(_authErrorMessage(e.code));
@@ -645,14 +738,12 @@ Future<Result<AppUser>> createUserAsAdmin({
   // USER PROFILE
   // =========================================================================
 
-  /// Fetch current user profile from Firestore.
   Future<Result<AppUser>> fetchCurrentUser() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return const Failure('No hay sesión activa.');
     return fetchUser(uid);
   }
 
-  /// Fetch any user profile.
   Future<Result<AppUser>> fetchUser(String uid) async {
     try {
       final doc = await _users.doc(uid).get();
@@ -663,7 +754,6 @@ Future<Result<AppUser>> createUserAsAdmin({
     }
   }
 
-  /// Stream of current user (real-time).
   Stream<AppUser?> currentUserStream() {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return const Stream.empty();
@@ -673,7 +763,6 @@ Future<Result<AppUser>> createUserAsAdmin({
     });
   }
 
-  /// Update user profile fields.
   Future<Result<AppUser>> updateProfile({
     required String uid,
     String? name,
@@ -691,19 +780,15 @@ Future<Result<AppUser>> createUserAsAdmin({
       if (photoUrl != null) updates['photoUrl'] = photoUrl;
 
       await _users.doc(uid).update(updates);
-
-      // Also update Firebase Auth display name
       if (name != null) {
         await _auth.currentUser?.updateDisplayName(name.trim());
       }
-
       return fetchUser(uid);
     } catch (e) {
       return Failure('Error al actualizar perfil.', error: e);
     }
   }
 
-  /// Upload profile photo to Firebase Storage, return download URL.
   Future<Result<String>> uploadProfilePhoto({
     required String uid,
     required Uint8List bytes,
@@ -713,7 +798,6 @@ Future<Result<AppUser>> createUserAsAdmin({
       final ext  = filename.split('.').last.toLowerCase();
       final ref  = _storage.ref('profile_photos/$uid/avatar.$ext');
       final meta = SettableMetadata(contentType: 'image/$ext');
-
       await ref.putData(bytes, meta);
       final url = await ref.getDownloadURL();
       return Success(url);
@@ -723,24 +807,255 @@ Future<Result<AppUser>> createUserAsAdmin({
   }
 
   // =========================================================================
+  // COMPANIES (solo superAdmin)
+  // =========================================================================
+
+  Stream<List<Company>> companiesStream() {
+    return _companies.snapshots().map((snap) {
+      final list = snap.docs.map(Company.fromFirestore).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  Future<Result<Company>> createCompany({
+    required String name,
+    required String legalName,
+    required String email,
+    String phone = '',
+    String address = '',
+    // Datos del admin principal
+    required String adminName,
+    required String adminEmail,
+    required String adminPassword,
+  }) async {
+    final adminUser = _auth.currentUser;
+    if (adminUser == null) return const Failure('No hay sesión activa.');
+
+    FirebaseApp? secondaryApp;
+    try {
+      FirebaseService.suppressAuthRedirect = true;
+
+      final now     = DateTime.now();
+      final compRef = _companies.doc();
+
+      final company = Company(
+        id:        compRef.id,
+        name:      name.trim(),
+        legalName: legalName.trim(),
+        email:     email.trim(),
+        phone:     phone.trim(),
+        address:   address.trim(),
+        createdAt: now,
+        updatedAt: now,
+      );
+      await compRef.set(company.toFirestore());
+
+      // Crea admin principal en Auth secundario
+      final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
+      secondaryApp = await Firebase.initializeApp(
+        name: appName, options: Firebase.app().options);
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: adminEmail.trim(), password: adminPassword);
+      await cred.user!.updateDisplayName(adminName.trim());
+
+      final adminPerms = kDefaultRolePermissions[AppRole.companyAdmin] ?? [];
+      final appUser = AppUser(
+        uid:         cred.user!.uid,
+        name:        adminName.trim(),
+        email:       adminEmail.trim(),
+        roles:       [AppRole.companyAdmin],
+        permissions: adminPerms,
+        companyId:   compRef.id,
+        createdAt:   now,
+        updatedAt:   now,
+      );
+      await _users.doc(cred.user!.uid).set(appUser.toFirestore());
+
+      await secondaryAuth.signOut();
+      await secondaryApp.delete();
+      secondaryApp = null;
+
+      return Success(company);
+    } on FirebaseAuthException catch (e) {
+      await secondaryApp?.delete();
+      return Failure(_authErrorMessage(e.code));
+    } catch (e) {
+      await secondaryApp?.delete();
+      return Failure('Error al crear empresa: $e');
+    } finally {
+      FirebaseService.suppressAuthRedirect = false;
+    }
+  }
+
+  Future<Result<void>> updateCompany(Company company) async {
+    try {
+      final data = company.toFirestore();
+      data['updatedAt'] = FieldValue.serverTimestamp();
+      await _companies.doc(company.id).update(data);
+      return const Success(null);
+    } catch (e) {
+      return Failure('Error al actualizar empresa.', error: e);
+    }
+  }
+
+  Future<Result<void>> deleteCompany(String companyId) async {
+    try {
+      // Soft delete: marca como inactive
+      await _companies.doc(companyId).update({
+        'status':    'inactive',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return const Success(null);
+    } catch (e) {
+      return Failure('Error al eliminar empresa.', error: e);
+    }
+  }
+
+  Future<Result<void>> updateCompanyStatus({
+    required String companyId,
+    required String status,
+  }) async {
+    try {
+      await _companies.doc(companyId).update({
+        'status':    status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return const Success(null);
+    } catch (e) {
+      return Failure('Error al actualizar estado de empresa.', error: e);
+    }
+  }
+
+  // =========================================================================
   // USERS (admin)
   // =========================================================================
 
-  /// Stream all users (paginated via query snapshot).
-Stream<List<AppUser>> allUsersStream() {
-  return _users.snapshots().map((snap) {
+  /// SuperAdmin: todos los usuarios. CompanyAdmin: solo los de su empresa.
+Stream<List<AppUser>> allUsersStream({String? companyId}) {
+  Query query = _users;
+  // Si se pasa companyId, filtra. Si no (superAdmin), trae todos.
+  if (companyId != null) {
+    query = query.where('companyId', isEqualTo: companyId);
+  }
+  return query.snapshots().map((snap) {
     final list = snap.docs.map(AppUser.fromFirestore).toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   });
 }
-  /// Update user roles.
+/// Stream de la empresa actual del usuario logueado
+final currentCompanyProvider = StreamProvider<Company?>((ref) {
+  final user = ref.watch(currentUserProvider).valueOrNull;
+  if (user == null || user.isSuperAdmin || user.companyId == null) {
+    return Stream.value(null);
+  }
+  return ref.read(firebaseServiceProvider)
+      ._db
+      .collection('companies')
+      .doc(user.companyId)
+      .snapshots()
+      .map((doc) => doc.exists ? Company.fromFirestore(doc) : null);
+});
+
+/// Notificaciones filtradas por empresa
+final companyNotificationsProvider =
+    StreamProvider.family<List<AppNotification>, String>((ref, userId) {
+  final user = ref.watch(currentUserProvider).valueOrNull;
+  final svc = ref.read(firebaseServiceProvider);
+
+  if (user == null) return Stream.value([]);
+
+  // superAdmin ve todas, los demás solo las suyas
+  return svc.notificationsStream(userId);
+});
+
+Future<Result<void>> createNotificationForCompany({
+  required String userId,
+  required String companyId,
+  required String title,
+  required String body,
+  NotificationType type = NotificationType.info,
+}) async {
+  try {
+    await _notifications.add({
+      'userId':    userId,
+      'companyId': companyId,
+      'title':     title,
+      'body':      body,
+      'type':      type.name,
+      'read':      false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'metadata':  {},
+    });
+    return const Success(null);
+  } catch (e) {
+    return Failure('Error al crear notificación.', error: e);
+  }
+}
+
+  Future<Result<AppUser>> createUserAsAdmin({
+    required String name,
+    required String email,
+    required String password,
+    AppRole role = AppRole.user,
+    String? companyId,
+  }) async {
+    final adminUser = _auth.currentUser;
+    if (adminUser == null) return const Failure('No hay sesión activa.');
+
+    FirebaseApp? secondaryApp;
+    try {
+      FirebaseService.suppressAuthRedirect = true;
+
+      final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
+      secondaryApp = await Firebase.initializeApp(
+        name: appName, options: Firebase.app().options);
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+      final cred = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email.trim(), password: password);
+      await cred.user!.updateDisplayName(name.trim());
+
+      final uid   = cred.user!.uid;
+      final now   = DateTime.now();
+      final perms = kDefaultRolePermissions[role] ?? [];
+
+      final appUser = AppUser(
+        uid:         uid,
+        name:        name.trim(),
+        email:       email.trim(),
+        roles:       [role],
+        permissions: perms,
+        companyId:   companyId,
+        createdAt:   now,
+        updatedAt:   now,
+      );
+
+      await _users.doc(uid).set(appUser.toFirestore());
+      await secondaryAuth.signOut();
+      await secondaryApp.delete();
+      secondaryApp = null;
+
+      return Success(appUser);
+    } on FirebaseAuthException catch (e) {
+      await secondaryApp?.delete();
+      return Failure(_authErrorMessage(e.code));
+    } catch (e) {
+      await secondaryApp?.delete();
+      return Failure('Error al crear usuario: $e');
+    } finally {
+      FirebaseService.suppressAuthRedirect = false;
+    }
+  }
+
   Future<Result<void>> updateUserRoles({
     required String uid,
     required List<AppRole> roles,
   }) async {
     try {
-      // Rebuild permissions from roles union
       final perms = roles
           .expand((r) => kDefaultRolePermissions[r] ?? <AppPermission>[])
           .toSet()
@@ -751,14 +1066,12 @@ Stream<List<AppUser>> allUsersStream() {
         'permissions': perms.map((p) => p.value).toList(),
         'updatedAt':   FieldValue.serverTimestamp(),
       });
-
       return const Success(null);
     } catch (e) {
       return Failure('Error al actualizar roles.', error: e);
     }
   }
 
-  /// Update user status.
   Future<Result<void>> updateUserStatus({
     required String uid,
     required String status,
@@ -775,27 +1088,35 @@ Stream<List<AppUser>> allUsersStream() {
   }
 
   // =========================================================================
-  // ROLES
+  // ROLES (scoped by company)
   // =========================================================================
 
- Stream<List<RoleDefinition>> rolesStream() {
-  return _roles.snapshots().map((s) {
-    if (s.docs.isEmpty) {
-      // Devuelve roles por defecto en memoria si Firestore está vacío
-      return AppRole.values.map((role) => RoleDefinition(
-        id: role.value,
-        name: role.value,
-        displayName: role.displayName,
-        description: 'Rol predeterminado: ${role.displayName}',
-        permissions: kDefaultRolePermissions[role] ?? [],
-        createdAt: DateTime.now(),
-      )).toList();
+  Stream<List<RoleDefinition>> rolesStream({String? companyId}) {
+    Query query = _roles;
+    if (companyId != null) {
+      query = query.where('companyId', isEqualTo: companyId);
     }
-    final list = s.docs.map(RoleDefinition.fromFirestore).toList();
-    list.sort((a, b) => a.name.compareTo(b.name));
-    return list;
-  });
-}
+    return query.snapshots().map((s) {
+      if (s.docs.isEmpty) {
+        return AppRole.values
+            .where((r) => r != AppRole.superAdmin)
+            .map((role) => RoleDefinition(
+                  id:          role.value,
+                  name:        role.value,
+                  displayName: role.displayName,
+                  description: 'Rol predeterminado',
+                  permissions: kDefaultRolePermissions[role] ?? [],
+                  companyId:   companyId,
+                  createdAt:   DateTime.now(),
+                ))
+            .toList();
+      }
+      final list = s.docs.map(RoleDefinition.fromFirestore).toList();
+      list.sort((a, b) => a.name.compareTo(b.name));
+      return list;
+    });
+  }
+
   Future<Result<void>> createRole(RoleDefinition role) async {
     try {
       await _roles.add(role.toFirestore());
@@ -827,29 +1148,28 @@ Stream<List<AppUser>> allUsersStream() {
   // NOTIFICATIONS
   // =========================================================================
 
-  /// Stream of notifications for a specific user.
-Stream<List<AppNotification>> notificationsStream(String userId) {
-  return _notifications
-      .where('userId', isEqualTo: userId)
-      .limit(50)
-      .snapshots()
-      .map((s) {
-        final list = s.docs.map(AppNotification.fromFirestore).toList();
-        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return list;
-      });
-}
+  Stream<List<AppNotification>> notificationsStream(String userId) {
+    return _notifications
+        .where('userId', isEqualTo: userId)
+        .limit(50)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map(AppNotification.fromFirestore).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
 
-  /// Unread count stream.
- Stream<int> unreadCountStream(String userId) {
-  return _notifications
-      .where('userId', isEqualTo: userId)
-      .snapshots()
-      .map((s) => s.docs
-          .where((d) => (d.data() as Map<String, dynamic>)['read'] == false)
-          .length);
-}
-  /// Create a notification.
+  Stream<int> unreadCountStream(String userId) {
+    return _notifications
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((s) => s.docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['read'] == false)
+            .length);
+  }
+
   Future<Result<void>> createNotification(AppNotification notification) async {
     try {
       await _notifications.add(notification.toFirestore());
@@ -859,7 +1179,6 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
     }
   }
 
-  /// Mark single notification as read.
   Future<Result<void>> markNotificationRead(String notifId) async {
     try {
       await _notifications.doc(notifId).update({'read': true});
@@ -869,14 +1188,12 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
     }
   }
 
-  /// Mark all notifications as read.
   Future<Result<void>> markAllNotificationsRead(String userId) async {
     try {
       final snap = await _notifications
           .where('userId', isEqualTo: userId)
           .where('read', isEqualTo: false)
           .get();
-
       final batch = _db.batch();
       for (final doc in snap.docs) {
         batch.update(doc.reference, {'read': true});
@@ -888,7 +1205,6 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
     }
   }
 
-  /// Delete notification.
   Future<Result<void>> deleteNotification(String notifId) async {
     try {
       await _notifications.doc(notifId).delete();
@@ -899,16 +1215,13 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
   }
 
   // =========================================================================
-  // CLOUD FUNCTIONS — Email Notifications
+  // CLOUD FUNCTIONS
   // =========================================================================
 
   Future<void> _sendWelcomeEmail({
-    required String name,
-    required String email,
-  }) async {
+    required String name, required String email}) async {
     try {
-      await _functions
-          .httpsCallable('sendWelcomeEmail')
+      await _functions.httpsCallable('sendWelcomeEmail')
           .call({'name': name, 'email': email});
     } catch (e) {
       print('[FirebaseService] sendWelcomeEmail error: $e');
@@ -916,12 +1229,9 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
   }
 
   Future<void> _sendPasswordChangedEmail({
-    required String name,
-    required String email,
-  }) async {
+    required String name, required String email}) async {
     try {
-      await _functions
-          .httpsCallable('sendPasswordChangedEmail')
+      await _functions.httpsCallable('sendPasswordChangedEmail')
           .call({'name': name, 'email': email});
     } catch (e) {
       print('[FirebaseService] sendPasswordChangedEmail error: $e');
@@ -934,8 +1244,7 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
     required String body,
   }) async {
     try {
-      await _functions
-          .httpsCallable('sendSystemEmail')
+      await _functions.httpsCallable('sendSystemEmail')
           .call({'to': to, 'subject': subject, 'body': body});
       return const Success(null);
     } catch (e) {
@@ -944,85 +1253,42 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
   }
 
   // =========================================================================
-  // CLOUD FUNCTION SOURCE (deploy separately)
-  // =========================================================================
-  /*
-  // functions/index.js — Firebase Functions v2
-  const {onCall} = require('firebase-functions/v2/https');
-  const nodemailer = require('nodemailer');
-  const admin = require('firebase-admin');
-  admin.initializeApp();
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-
-  exports.sendWelcomeEmail = onCall(async (request) => {
-    const {name, email} = request.data;
-    await transporter.sendMail({
-      from: `"SignageOS" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Bienvenido a SignageOS Enterprise',
-      html: `<h1>¡Hola ${name}!</h1><p>Tu cuenta ha sido creada exitosamente.</p>`,
-    });
-  });
-
-  exports.sendPasswordChangedEmail = onCall(async (request) => {
-    const {name, email} = request.data;
-    await transporter.sendMail({
-      from: `"SignageOS" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Contraseña actualizada',
-      html: `<h1>Hola ${name}</h1><p>Tu contraseña fue cambiada exitosamente.</p>`,
-    });
-  });
-
-  exports.sendSystemEmail = onCall(async (request) => {
-    const {to, subject, body} = request.data;
-    await transporter.sendMail({
-      from: `"SignageOS" <${process.env.EMAIL_USER}>`,
-      to, subject,
-      html: body,
-    });
-  });
-  */
-
-  // =========================================================================
   // HELPERS
   // =========================================================================
 
   String _authErrorMessage(String code) => switch (code) {
-        'user-not-found'        => 'No existe una cuenta con ese email.',
-        'wrong-password'        => 'Contraseña incorrecta.',
-        'email-already-in-use'  => 'Este email ya está registrado.',
-        'weak-password'         => 'La contraseña debe tener al menos 6 caracteres.',
-        'invalid-email'         => 'El formato del email no es válido.',
-        'too-many-requests'     => 'Demasiados intentos. Intenta más tarde.',
-        'user-disabled'         => 'Esta cuenta ha sido desactivada.',
-        'invalid-credential'    => 'Credenciales inválidas.',
-        'network-request-failed'=> 'Error de conexión. Verifica tu internet.',
-        'requires-recent-login' => 'Debes iniciar sesión nuevamente para esta acción.',
-        _                       => 'Error de autenticación ($code).',
+        'user-not-found'         => 'No existe una cuenta con ese email.',
+        'wrong-password'         => 'Contraseña incorrecta.',
+        'email-already-in-use'   => 'Este email ya está registrado.',
+        'weak-password'          => 'La contraseña debe tener al menos 6 caracteres.',
+        'invalid-email'          => 'El formato del email no es válido.',
+        'too-many-requests'      => 'Demasiados intentos. Intenta más tarde.',
+        'user-disabled'          => 'Esta cuenta ha sido desactivada.',
+        'invalid-credential'     => 'Credenciales inválidas.',
+        'network-request-failed' => 'Error de conexión. Verifica tu internet.',
+        'requires-recent-login'  => 'Debes iniciar sesión nuevamente.',
+        _                        => 'Error de autenticación ($code).',
       };
 
-  /// Initialize default roles in Firestore (run once).
-  Future<void> seedDefaultRoles() async {
-    final snap = await _roles.limit(1).get();
+  Future<void> seedDefaultRoles({String? companyId}) async {
+    Query query = _roles;
+    if (companyId != null) {
+      query = query.where('companyId', isEqualTo: companyId);
+    }
+    final snap = await query.limit(1).get();
     if (snap.docs.isNotEmpty) return;
 
     final batch = _db.batch();
     for (final role in AppRole.values) {
-      final ref = _roles.doc(role.value);
+      if (role == AppRole.superAdmin) continue;
+      final ref = _roles.doc();
       batch.set(ref, RoleDefinition(
-        id:          role.value,
+        id:          ref.id,
         name:        role.value,
         displayName: role.displayName,
         description: 'Rol predeterminado: ${role.displayName}',
         permissions: kDefaultRolePermissions[role] ?? [],
+        companyId:   companyId,
         createdAt:   DateTime.now(),
       ).toFirestore());
     }
@@ -1033,17 +1299,18 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
 // =============================================================================
 // 4. PROVIDERS (Riverpod)
 // =============================================================================
+// =============================================================================
+// 4. PROVIDERS (Riverpod)
+// =============================================================================
 
 final firebaseServiceProvider = Provider<FirebaseService>(
   (_) => FirebaseService(),
 );
 
-// Auth state stream — fires whenever auth changes
 final authStateProvider = StreamProvider<User?>((ref) {
   return ref.read(firebaseServiceProvider).authStateStream;
 });
 
-// Current AppUser stream (real-time Firestore)
 final currentUserProvider = StreamProvider<AppUser?>((ref) {
   final authState = ref.watch(authStateProvider);
   return authState.when(
@@ -1052,41 +1319,70 @@ final currentUserProvider = StreamProvider<AppUser?>((ref) {
       return ref.read(firebaseServiceProvider).currentUserStream();
     },
     loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
+    error:   (_, __) => Stream.value(null),
   );
 });
 
-// Convenience getter — throws if not logged in
 final requireUserProvider = Provider<AppUser>((ref) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   if (user == null) throw Exception('Not authenticated');
   return user;
 });
 
-// Notifications stream
-final notificationsProvider = StreamProvider.family<List<AppNotification>, String>(
+final notificationsProvider =
+    StreamProvider.family<List<AppNotification>, String>(
   (ref, userId) =>
       ref.read(firebaseServiceProvider).notificationsStream(userId),
 );
 
-// Unread count
 final unreadCountProvider = StreamProvider.family<int, String>(
   (ref, userId) =>
       ref.read(firebaseServiceProvider).unreadCountStream(userId),
 );
 
-// All users stream (admin)
-final allUsersProvider = StreamProvider<List<AppUser>>(
-  (ref) => ref.read(firebaseServiceProvider).allUsersStream(),
+/// Usuarios filtrados por empresa si el usuario actual es companyAdmin
+/// Usuarios filtrados por empresa si el usuario actual es companyAdmin
+final allUsersProvider = StreamProvider<List<AppUser>>((ref) {
+  final currentUser = ref.watch(currentUserProvider).valueOrNull;
+  final svc = ref.read(firebaseServiceProvider);
+
+  if (currentUser == null) return Stream.value([]);
+
+  if (currentUser.isSuperAdmin) {
+    return svc.allUsersStream(); // todos
+  }
+  // companyAdmin y demás: solo su empresa
+  return svc.allUsersStream(companyId: currentUser.companyId);
+});
+
+/// Roles filtrados por empresa
+final rolesProvider = StreamProvider<List<RoleDefinition>>((ref) {
+  final currentUser = ref.watch(currentUserProvider).valueOrNull;
+  final svc = ref.read(firebaseServiceProvider);
+
+  if (currentUser == null) return Stream.value([]);
+  if (currentUser.isSuperAdmin) return svc.rolesStream();
+  return svc.rolesStream(companyId: currentUser.companyId);
+});
+
+/// Empresas (solo superAdmin)
+final companiesProvider = StreamProvider<List<Company>>(
+  (ref) => ref.read(firebaseServiceProvider).companiesStream(),
 );
 
-// Roles stream
-final rolesProvider = StreamProvider<List<RoleDefinition>>(
-  (ref) => ref.read(firebaseServiceProvider).rolesStream(),
-);
-
-// Permission check helper
-final permissionCheckerProvider = Provider.family<bool, AppPermission>((ref, permission) {
+final permissionCheckerProvider =
+    Provider.family<bool, AppPermission>((ref, permission) {
   final user = ref.watch(currentUserProvider).valueOrNull;
   return user?.hasPermission(permission) ?? false;
+});
+
+/// Proveedor del tipo de dashboard a mostrar
+enum DashboardType { superAdmin, companyAdmin, user, none }
+
+final dashboardTypeProvider = Provider<DashboardType>((ref) {
+  final user = ref.watch(currentUserProvider).valueOrNull;
+  if (user == null) return DashboardType.none;
+  if (user.isSuperAdmin)   return DashboardType.superAdmin;
+  if (user.isCompanyAdmin) return DashboardType.companyAdmin;
+  return DashboardType.user;
 });

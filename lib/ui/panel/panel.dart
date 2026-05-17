@@ -1,6 +1,10 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+// ignore_for_file: use_build_context_synchronously
+import 'package:digitaltv/auth/auth.dart' as current2;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -221,7 +225,6 @@ class PlaylistModel {
     required this.displayToken,
     this.isActive = true,
   });
-
 factory PlaylistModel.fromFirestore(DocumentSnapshot doc) {
   DateTime parseDate(dynamic val, DateTime fallback) {
     try {
@@ -238,15 +241,42 @@ factory PlaylistModel.fromFirestore(DocumentSnapshot doc) {
   final d = doc.data() as Map<String, dynamic>;
 
   try {
-    final rawItems = (d['items'] as List<dynamic>?) ?? [];
+    // Lee 'items' (PlaylistModel) o 'clips' (SavedPlaylist del editor) como fallback
+    final rawItems = (d['items'] as List<dynamic>?) 
+        ?? (d['clips'] as List<dynamic>?) 
+        ?? [];
+
+    List<PlaylistItemModel> parsedItems = [];
+    for (final i in rawItems) {
+      try {
+        final map = i as Map<String, dynamic>;
+        // SavedPlaylist.clips tienen campos distintos: type, label, url, text, durationSec
+        // PlaylistItemModel.items tienen: type, title, url, textContent, durationSeconds
+        parsedItems.add(PlaylistItemModel(
+          id:              map['id'] ?? const Uuid().v4(),
+          type:            ContentType.values.firstWhere(
+                             (e) => e.name == (map['type'] ?? 'image'),
+                             orElse: () => ContentType.image),
+          title:           map['title'] ?? map['label'] ?? '',
+          url:             map['url'],
+          textContent:     map['textContent'] ?? map['text'],
+          durationSeconds: (map['durationSeconds'] ?? map['durationSec'] ?? 10) is int
+                             ? (map['durationSeconds'] ?? map['durationSec'] ?? 10)
+                             : (map['durationSeconds'] ?? map['durationSec'] ?? 10.0).round(),
+          order:           map['order'] ?? 0,
+        ));
+      } catch (e) {
+        debugPrint('[PlaylistModel] error parsing item: $e');
+      }
+    }
+
+    parsedItems.sort((a, b) => a.order.compareTo(b.order));
+
     return PlaylistModel(
       id:           doc.id,
       name:         d['name'] ?? 'Playlist',
       description:  d['description'],
-      items:        rawItems
-                      .map((i) => PlaylistItemModel.fromMap(i as Map<String, dynamic>))
-                      .toList()
-                        ..sort((a, b) => a.order.compareTo(b.order)),
+      items:        parsedItems,
       createdAt:    parseDate(d['createdAt'], DateTime.now()),
       displayToken: d['displayToken'] ?? '',
       isActive:     d['isActive'] ?? true,
@@ -282,52 +312,85 @@ factory PlaylistModel.fromFirestore(DocumentSnapshot doc) {
 final _db = FirebaseFirestore.instance;
 const _uuid = Uuid();
 
-// Devices stream
+// Devices stream — filtrado por empresa
 final devicesStreamProvider = StreamProvider<List<DeviceModel>>((ref) {
-  return _db.collection('devices')
-    .orderBy('createdAt', descending: true)
-    .snapshots()
-    .map((s) => s.docs.map(DeviceModel.fromFirestore).toList());
+  final userAsync = ref.watch(current2.currentUserProvider);
+  final user = userAsync.valueOrNull;
+
+  Query query = _db.collection('devices');
+
+  if (user != null && !user.isSuperAdmin && user.companyId != null) {
+    query = query.where('companyId', isEqualTo: user.companyId);
+  }
+
+  return query.snapshots().map((s) {
+    final list = s.docs.map(DeviceModel.fromFirestore).toList();
+    list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    return list;
+  });
 });
 
-// Playlists stream
 final playlistsStreamProvider = StreamProvider<List<PlaylistModel>>((ref) {
-  return _db.collection('playlists')
-    .orderBy('createdAt', descending: true)
-    .snapshots()
-    .map((s) => s.docs.map(PlaylistModel.fromFirestore).toList());
-});
+  final user = ref.watch(current2.currentUserProvider).valueOrNull;
+  final companyId = user?.isSuperAdmin == true ? null : user?.companyId;
 
+  Stream<QuerySnapshot> stream;
+
+  if (companyId != null) {
+    stream = FirebaseFirestore.instance
+        .collection('playlists')
+        .where('companyId', isEqualTo: companyId)
+        .snapshots();
+  } else {
+    stream = FirebaseFirestore.instance
+        .collection('playlists')
+        .snapshots();
+  }
+
+  return stream.map((snap) {
+    final list = snap.docs.map((doc) => PlaylistModel.fromFirestore(doc)).toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  });
+});
 // Playlist por token (para el display viewer)
 // Playlist por displayToken de playlist
 final playlistByTokenProvider =
     StreamProvider.family<PlaylistModel?, String>((ref, token) {
   return _db.collection('playlists')
     .where('displayToken', isEqualTo: token)
-    .where('isActive', isEqualTo: true)
+  //  .where('isActive', isEqualTo: true)
     .limit(1)
     .snapshots()
     .map((s) => s.docs.isEmpty ? null : PlaylistModel.fromFirestore(s.docs.first));
 });
-
-// Playlist por token de dispositivo (busca el dispositivo y luego su playlist asignada)
 final playlistByDeviceTokenProvider =
     StreamProvider.family<PlaylistModel?, String>((ref, token) {
-  return _db.collection('devices')
-    .where('displayToken', isEqualTo: token)
-    .limit(1)
-    .snapshots()
-    .asyncMap((deviceSnap) async {
-      if (deviceSnap.docs.isEmpty) return null;
-      final device = deviceSnap.docs.first.data() as Map<String, dynamic>;
-      final playlistId = device['currentPlaylistId'] as String?;
-      if (playlistId == null || playlistId.isEmpty) return null;
-      final playlistDoc = await _db.collection('playlists').doc(playlistId).get();
-      if (!playlistDoc.exists) return null;
-      return PlaylistModel.fromFirestore(playlistDoc);
-    });
+  return _db
+      .collection('devices')
+      .where('displayToken', isEqualTo: token)
+      .limit(1)
+      .snapshots()
+      .asyncMap((deviceSnap) async {
+        if (deviceSnap.docs.isEmpty) {
+          debugPrint('[playlistByDeviceToken] No device found for token=$token');
+          return null;
+        }
+        final device = deviceSnap.docs.first.data() as Map<String, dynamic>;
+        final playlistId = device['currentPlaylistId'] as String?;
+        debugPrint('[playlistByDeviceToken] device found, playlistId=$playlistId');
+        if (playlistId == null || playlistId.isEmpty) return null;
+        final playlistDoc =
+            await _db.collection('playlists').doc(playlistId).get();
+        if (!playlistDoc.exists) {
+          debugPrint('[playlistByDeviceToken] playlist doc not found id=$playlistId');
+          return null;
+        }
+        final pl = PlaylistModel.fromFirestore(playlistDoc);
+        debugPrint('[playlistByDeviceToken] playlist loaded: ${pl.name}, items=${pl.items.length}');
+        return pl;
+      });
 });
-
 // =============================================================================
 // DEVICE SERVICE
 // =============================================================================
@@ -408,26 +471,40 @@ Future<void> updateDevice(DeviceModel device) async {
 // =============================================================================
 
 class PlaylistService {
-  Future<PlaylistModel> createPlaylist({
-    required String name,
-    String? description,
-    List<PlaylistItemModel> items = const [],
-  }) async {
-    final token  = _uuid.v4().replaceAll('-', '');
-    final docRef = _db.collection('playlists').doc();
+Future<PlaylistModel> createPlaylist({
+  required String name,
+  String? description,
+  List<PlaylistItemModel> items = const [],
+  String? companyId,
+}) async {
+  final token  = _uuid.v4().replaceAll('-', '');
+  final docRef = _db.collection('playlists').doc();
 
-    final playlist = PlaylistModel(
-      id:           docRef.id,
-      name:         name,
-      description:  description,
-      items:        items,
-      createdAt:    DateTime.now(),
-      displayToken: token,
-    );
-
-    await docRef.set(playlist.toMap());
-    return playlist;
+  // Si no se pasa companyId, lo obtiene del usuario actual
+  String? resolvedCompanyId = companyId;
+  if (resolvedCompanyId == null) {
+    final userDoc = await _db
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .get();
+    resolvedCompanyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
   }
+
+  final playlist = PlaylistModel(
+    id:           docRef.id,
+    name:         name,
+    description:  description,
+    items:        items,
+    createdAt:    DateTime.now(),
+    displayToken: token,
+  );
+
+  await docRef.set({
+    ...playlist.toMap(),
+    'companyId': resolvedCompanyId,  // <-- campo clave
+  });
+  return playlist;
+}
 
   Future<void> updatePlaylist(PlaylistModel playlist) async {
     await _db.collection('playlists').doc(playlist.id).update({
@@ -468,7 +545,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
         children: [
           // ── Header ────────────────────────────────────────────────────────
           _ScreenHeader(
-            title: 'Dispositivos',
+            title: 'Dispositivos1',
             subtitle: 'Gestiona tus pantallas y asigna playlists',
             action: _AddButton(
               label: '+ Agregar dispositivo',
@@ -834,6 +911,13 @@ class _DeviceCard extends ConsumerStatefulWidget {
   ConsumerState<_DeviceCard> createState() => _DeviceCardState();
 }
 
+void _showDeviceSchedules(BuildContext ctx, DeviceModel device) {
+  showDialog(
+    context: ctx,
+    builder: (_) => _DeviceSchedulesManagerDialog(device: device),
+  );
+}
+
 class _DeviceCardState extends ConsumerState<_DeviceCard> {
   bool _hovered = false;
 void _showEditDevice(BuildContext ctx, DeviceModel device) {
@@ -931,7 +1015,8 @@ void _showEditDevice(BuildContext ctx, DeviceModel device) {
               const SizedBox(width: 12),
 
               // Actions
-         Row(
+   // Actions
+Row(
   children: [
     _IconBtn(
       icon: Icons.edit_outlined,
@@ -942,17 +1027,24 @@ void _showEditDevice(BuildContext ctx, DeviceModel device) {
     const SizedBox(width: 8),
     _IconBtn(
       icon: Icons.playlist_add_rounded,
-      tooltip: 'Asignar playlist',
+      tooltip: 'Asignar playlists',
       color: _C.accent,
       onTap: () => _showAssignPlaylist(context, d),
     ),
     const SizedBox(width: 8),
     _IconBtn(
+      icon: Icons.calendar_view_week_rounded,
+      tooltip: 'Programaciones',
+      color: _C.purple,
+      onTap: () => _showDeviceSchedules(context, d),
+    ),
+    const SizedBox(width: 8),
+   /* _IconBtn(
       icon: Icons.open_in_new_rounded,
       tooltip: 'Ver display',
       color: _C.green,
       onTap: () => _openDisplay(context, d),
-    ),
+    ),*/
     const SizedBox(width: 8),
     _IconBtn(
       icon: Icons.delete_outline_rounded,
@@ -992,19 +1084,31 @@ void _openDisplay(BuildContext ctx, DeviceModel device) {
   // Navega usando go_router para respetar las rutas
   ctx.go('/display/$token');
 }
-  void _confirmDelete(BuildContext ctx, DeviceModel device) {
-    showDialog(
-      context: ctx,
-      builder: (_) => _ConfirmDialog(
-        title: 'Eliminar dispositivo',
-        message: '¿Eliminar "${device.name}"? Esta acción no se puede deshacer.',
-        onConfirm: () async {
-          await DeviceService().deleteDevice(device.id);
-          if (ctx.mounted) Navigator.pop(ctx);
-        },
-      ),
-    );
-  }
+void _confirmDelete(BuildContext ctx, DeviceModel device) {
+  showCupertinoDialog(
+    context: ctx,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    builder: (dialogCtx) => CupertinoAlertDialog(
+      title: const Text('Eliminar dispositivo'),
+      content: Text('¿Eliminar "${device.name}"? Esta acción no se puede deshacer.'),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(dialogCtx, rootNavigator: true).pop(),
+          child: const Text('Cancelar'),
+        ),
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: () async {
+            Navigator.of(dialogCtx, rootNavigator: true).pop();
+            await DeviceService().deleteDevice(device.id);
+          },
+          child: const Text('Eliminar'),
+        ),
+      ],
+    ),
+  );
+}
 }
 
 // =============================================================================
@@ -1051,7 +1155,13 @@ Future<void> _save() async {
     final token    = _uuid.v4().replaceAll('-', '');
     final docRef   = _db.collection('devices').doc();
 
-    // Genera usuario y contraseña automáticos
+    // Obtiene el companyId del usuario actual
+    final userDoc = await _db
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .get();
+    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
     final username = _nameCtrl.text.trim()
         .toLowerCase()
         .replaceAll(' ', '_')
@@ -1074,6 +1184,7 @@ Future<void> _save() async {
       'tags':           _tags,
       'portalUsername': username,
       'portalPassword': password,
+      'companyId':      companyId,   // <-- campo clave
       'createdAt':      FieldValue.serverTimestamp(),
       'lastSeen':       FieldValue.serverTimestamp(),
       'metadata':       {},
@@ -1081,7 +1192,6 @@ Future<void> _save() async {
 
     if (mounted) {
       Navigator.pop(context);
-      // Muestra las credenciales generadas
       showDialog(
         context: context,
         builder: (_) => _CredentialsDialog(
@@ -1384,10 +1494,9 @@ class _AssignPlaylistSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistsStreamProvider);
-
     return _Sheet(
-      title: 'Asignar playlist',
-      subtitle: 'Selecciona el contenido para "${device.name}"',
+      title: 'Gestionar playlists',
+      subtitle: 'Asigna una o varias playlists a "${device.name}"',
       icon: Icons.playlist_play_rounded,
       iconColor: _C.accent,
       child: playlistsAsync.when(
@@ -1400,47 +1509,88 @@ class _AssignPlaylistSheet extends ConsumerWidget {
             return _EmptyState(
               icon: Icons.playlist_add_rounded,
               title: 'Sin playlists',
-              subtitle: 'Crea una playlist primero desde la sección Playlists.',
+              subtitle: 'Crea una playlist primero.',
               compact: true,
             );
           }
           return Column(
-            children: playlists.asMap().entries.map((e) {
-              final pl = e.value;
-              final isCurrentAssigned = pl.id == device.currentPlaylistId;
-              return _PlaylistSelectTile(
-                playlist: pl,
-                isSelected: isCurrentAssigned,
-                onTap: () async {
-                  await DeviceService().assignPlaylist(device.id, pl);
-                  if (context.mounted) Navigator.pop(context);
-                },
-              ).animate().fadeIn(delay: Duration(milliseconds: e.key * 40));
-            }).toList(),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Playlist activa actual
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: _C.accentLo,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.accent.withOpacity(0.3))),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                      size: 14, color: _C.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        device.currentPlaylistName != null
+                          ? 'Activa ahora: ${device.currentPlaylistName}'
+                          : 'Sin playlist activa actualmente',
+                        style: const TextStyle(color: _C.accent, fontSize: 11)),
+                    ),
+                  ],
+                ),
+              ),
+              const Text('Toca una playlist para activarla en el dispositivo:',
+                style: TextStyle(color: _C.textMid, fontSize: 11,
+                  fontWeight: FontWeight.w500)),
+              const SizedBox(height: 10),
+              ...playlists.asMap().entries.map((e) {
+                final pl = e.value;
+                final isActive = pl.id == device.currentPlaylistId;
+                return _PlaylistSelectTile(
+                  playlist: pl,
+                  itemCount: pl.items.length,
+                  isSelected: isActive,
+                  onTap: () async {
+                    await DeviceService().assignPlaylist(device.id, pl);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✅ "${pl.name}" activada en ${device.name}'),
+                          backgroundColor: _C.green.withOpacity(0.9),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                ).animate().fadeIn(delay: Duration(milliseconds: e.key * 40));
+              }),
+            ],
           );
         },
       ),
     );
   }
 }
-
 class _PlaylistSelectTile extends StatefulWidget {
   final PlaylistModel playlist;
+  final int itemCount;
   final bool isSelected;
   final VoidCallback onTap;
   const _PlaylistSelectTile({
     required this.playlist,
+    required this.itemCount,
     required this.isSelected,
     required this.onTap,
   });
-
   @override
   State<_PlaylistSelectTile> createState() => _PlaylistSelectTileState();
 }
 
 class _PlaylistSelectTileState extends State<_PlaylistSelectTile> {
   bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
@@ -1487,7 +1637,8 @@ class _PlaylistSelectTileState extends State<_PlaylistSelectTile> {
                             ? FontWeight.w600 : FontWeight.w400,
                         fontSize: 13,
                       )),
-                    Text('${widget.playlist.items.length} elementos',
+                    Text(
+                      '${widget.itemCount} elemento${widget.itemCount != 1 ? 's' : ''}',
                       style: const TextStyle(color: _C.textLo, fontSize: 11)),
                   ],
                 ),
@@ -1668,12 +1819,12 @@ class _PlaylistCardState extends ConsumerState<_PlaylistCard> {
                     onTap: () => _openEditor(context, pl),
                   ),
                   const SizedBox(width: 6),
-                 _IconBtn(
+                /* _IconBtn(
   icon: Icons.open_in_new_rounded,
   tooltip: 'Ver display',
   color: _C.green,
   onTap: () => context.go('/display/${pl.displayToken}'),
-),
+),*/
                   const SizedBox(width: 6),
                   _IconBtn(
                     icon: Icons.copy_rounded,
@@ -2557,19 +2708,26 @@ class _DisplayViewerScreenState extends ConsumerState<DisplayViewerScreen>
  
 @override
 Widget build(BuildContext context) {
-  final playlistAsync    = ref.watch(playlistByTokenProvider(widget.token));
-  final playlistByDevice = ref.watch(playlistByDeviceTokenProvider(widget.token));
+  // La URL /display/TOKEN siempre corresponde al token del DISPOSITIVO,
+  // así que usamos directamente playlistByDeviceTokenProvider.
+  // playlistByTokenProvider queda como fallback por si el token es de playlist directa.
+  final byDevice   = ref.watch(playlistByDeviceTokenProvider(widget.token));
+  final byPlaylist = ref.watch(playlistByTokenProvider(widget.token));
 
-  // Combina ambos: usa el primero que tenga datos
-  final combined = playlistAsync.when(
-    data: (pl) => pl != null
-        ? AsyncValue.data(pl)
-        : playlistByDevice,
-    loading: () => playlistByDevice.isLoading
-        ? const AsyncValue.loading()
-        : playlistByDevice,
-    error: (e, s) => playlistByDevice,
-  );
+  // Resuelve: primero intenta por dispositivo, luego por playlist directa
+  AsyncValue<PlaylistModel?> combined;
+  if (byDevice.hasValue && byDevice.value != null) {
+    combined = byDevice;
+  } else if (byPlaylist.hasValue && byPlaylist.value != null) {
+    combined = byPlaylist;
+  } else if (byDevice.isLoading || byPlaylist.isLoading) {
+    combined = const AsyncValue.loading();
+  } else if (byDevice.hasError) {
+    combined = byDevice;
+  } else {
+    // ambos resolvieron pero son null
+    combined = const AsyncValue.data(null);
+  }
 
   return Scaffold(
     backgroundColor: Colors.black,
@@ -2599,7 +2757,7 @@ Widget build(BuildContext context) {
           }
         });
 
-      final safeIndex = _currentIndex.clamp(0, playlist.items.length - 1).toInt();
+        final safeIndex = _currentIndex.clamp(0, playlist.items.length - 1).toInt();
         final item = playlist.items[safeIndex];
 
         return Stack(
@@ -4085,5 +4243,656 @@ class _CredRowState extends State<_CredRow> {
         ),
       ),
     ]);
+  }
+}
+
+class _DeviceSchedulesManagerDialog extends StatefulWidget {
+  final DeviceModel device;
+  const _DeviceSchedulesManagerDialog({required this.device});
+  @override
+  State<_DeviceSchedulesManagerDialog> createState() =>
+      _DeviceSchedulesManagerDialogState();
+}
+
+class _DeviceSchedulesManagerDialogState
+    extends State<_DeviceSchedulesManagerDialog> {
+  String _selectedDay = _todayKey();
+  bool _playing = false;
+  _ScheduleBlockData? _activeBlock;
+
+  static String _todayKey() {
+    const days = ['mon','tue','wed','thu','fri','sat','sun'];
+    return days[DateTime.now().weekday - 1];
+  }
+
+  static const _dayLabels = {
+    'mon': 'Lunes', 'tue': 'Martes', 'wed': 'Miércoles',
+    'thu': 'Jueves', 'fri': 'Viernes', 'sat': 'Sábado', 'sun': 'Domingo',
+  };
+  static const _dayShort = {
+    'mon': 'L', 'tue': 'M', 'wed': 'X',
+    'thu': 'J', 'fri': 'V', 'sat': 'S', 'sun': 'D',
+  };
+  static const _orderedDays = ['mon','tue','wed','thu','fri','sat','sun'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _C.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: _C.border)),
+      child: SizedBox(
+        width: 580,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20,16,20,14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _C.divider))),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: _C.purpleLo,
+                      borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.calendar_view_week_rounded,
+                      color: _C.purple, size: 18)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.device.name,
+                          style: const TextStyle(color: _C.textHi,
+                            fontWeight: FontWeight.w800, fontSize: 14)),
+                        const Text('Programaciones del dispositivo',
+                          style: TextStyle(color: _C.textMid, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: _C.card, borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: _C.border)),
+                      child: const Icon(Icons.close_rounded,
+                        size: 13, color: _C.textMid),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Selector día
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20,14,20,10),
+              child: Row(
+                children: _orderedDays.map((d) {
+                  final sel = d == _selectedDay;
+                  final isToday = d == _todayKey();
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() {
+                        _selectedDay = d;
+                        _activeBlock = null;
+                        _playing = false;
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 130),
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: sel
+                            ? _C.purple.withOpacity(0.18)
+                            : isToday
+                              ? _C.green.withOpacity(0.07)
+                              : _C.card,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: sel
+                              ? _C.purple.withOpacity(0.6)
+                              : isToday
+                                ? _C.green.withOpacity(0.35)
+                                : _C.border,
+                            width: sel ? 1.5 : 1)),
+                        child: Column(
+                          children: [
+                            Text(_dayShort[d]!,
+                              style: TextStyle(
+                                color: sel ? _C.purple
+                                  : isToday ? _C.green : _C.textMid,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800),
+                              textAlign: TextAlign.center),
+                            if (isToday)
+                              Container(
+                                margin: const EdgeInsets.only(top: 2),
+                                width: 4, height: 4,
+                                decoration: BoxDecoration(
+                                  color: sel ? _C.purple : _C.green,
+                                  shape: BoxShape.circle)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+
+            // Bloques del día
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 420),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                  .collection('program_blocks')
+                  .snapshots(),
+                builder: (ctx, snap) {
+                  if (!snap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Center(child: CircularProgressIndicator(
+                        color: _C.purple, strokeWidth: 2)));
+                  }
+
+                  final allBlocks = snap.data!.docs.map((d) {
+                    final data = d.data() as Map<String, dynamic>;
+                    return _ScheduleBlockData(
+                      id: d.id,
+                      name: data['name'] ?? 'Sin nombre',
+                      playlistId: data['playlistId'] ?? '',
+                      playlistName: data['playlistName'] ?? '—',
+                      days: List<String>.from(data['days'] ?? []),
+                      startMinute: (data['startMinute'] as num?)?.toInt() ?? 0,
+                      durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 60,
+                      isActive: data['isActive'] ?? true,
+                      colorValue: (data['colorValue'] as num?)?.toInt() ?? 0xFF6366F1,
+                    );
+                  }).toList();
+
+                  final dayBlocks = allBlocks
+                    .where((b) => b.days.contains(_selectedDay) && b.isActive)
+                    .toList()
+                    ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+
+                  if (dayBlocks.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.event_busy_rounded,
+                            color: _C.textLo, size: 40),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Sin programación el ${_dayLabels[_selectedDay]}',
+                            style: const TextStyle(color: _C.textHi,
+                              fontWeight: FontWeight.w700, fontSize: 14)),
+                          const SizedBox(height: 6),
+                          const Text('Crea bloques en la sección Programaciones',
+                            style: TextStyle(color: _C.textMid, fontSize: 12)),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                    itemCount: dayBlocks.length,
+                    itemBuilder: (_, i) {
+                      final b = dayBlocks[i];
+                      final color = Color(b.colorValue);
+                      final isNow = _isNow(b);
+                      final isSelected = _activeBlock?.id == b.id;
+
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _activeBlock = b;
+                            _playing = false;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 130),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                              ? color.withOpacity(0.14)
+                              : isNow
+                                ? color.withOpacity(0.08)
+                                : _C.card,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                ? color.withOpacity(0.6)
+                                : isNow
+                                  ? color.withOpacity(0.4)
+                                  : _C.border,
+                              width: isSelected ? 1.5 : 1)),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4, height: 40,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(2))),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
+                                      Text(b.name,
+                                        style: TextStyle(
+                                          color: isSelected ? color : _C.textHi,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                      if (isNow) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: color.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(4)),
+                                          child: Text('EN VIVO',
+                                            style: TextStyle(color: color,
+                                              fontSize: 8, fontWeight: FontWeight.w800))),
+                                      ],
+                                    ]),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_fmtMin(b.startMinute)} — ${_fmtMin(b.startMinute + b.durationMinutes)}  ·  ${b.playlistName}',
+                                      style: const TextStyle(
+                                        color: _C.textMid, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                              // Botón reproducir
+                              GestureDetector(
+                                onTap: () => _openViewer(context, b),
+                                child: Container(
+                                  width: 32, height: 32,
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: color.withOpacity(0.4))),
+                                  child: Icon(Icons.play_arrow_rounded,
+                                    size: 16, color: color)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isNow(_ScheduleBlockData b) {
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    return nowMin >= b.startMinute &&
+           nowMin < b.startMinute + b.durationMinutes;
+  }
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2,'0')}:${min.toString().padLeft(2,'0')}';
+  }
+
+  void _openViewer(BuildContext ctx, _ScheduleBlockData block) {
+    showDialog(
+      context: ctx,
+      builder: (_) => _BlockPlaylistViewer(
+        block: block,
+        dayLabel: _dayLabels[_selectedDay]!,
+      ),
+    );
+  }
+}
+
+class _ScheduleBlockData {
+  final String id, name, playlistId, playlistName;
+  final List<String> days;
+  final int startMinute, durationMinutes, colorValue;
+  final bool isActive;
+  const _ScheduleBlockData({
+    required this.id, required this.name,
+    required this.playlistId, required this.playlistName,
+    required this.days, required this.startMinute,
+    required this.durationMinutes, required this.isActive,
+    required this.colorValue,
+  });
+}
+
+class _BlockPlaylistViewer extends StatefulWidget {
+  final _ScheduleBlockData block;
+  final String dayLabel;
+  const _BlockPlaylistViewer({required this.block, required this.dayLabel});
+  @override
+  State<_BlockPlaylistViewer> createState() => _BlockPlaylistViewerState();
+}
+
+class _BlockPlaylistViewerState extends State<_BlockPlaylistViewer>
+    with TickerProviderStateMixin {
+  List<PlaylistItemModel>? _items;
+  bool _loading = true;
+  String? _error;
+  int _currentIndex = 0;
+  Timer? _timer;
+  bool _playing = true;
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 500));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
+    _fadeCtrl.forward();
+    _loadPlaylist();
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); _fadeCtrl.dispose(); super.dispose(); }
+
+  Future<void> _loadPlaylist() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+        .collection('playlists')
+        .doc(widget.block.playlistId)
+        .get();
+      if (!doc.exists) {
+        setState(() { _error = 'Playlist no encontrada'; _loading = false; });
+        return;
+      }
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['items'] as List<dynamic>?)
+          ?? (data['clips'] as List<dynamic>?) ?? [];
+      final items = raw.map((i) {
+        final m = i as Map<String, dynamic>;
+        return PlaylistItemModel(
+          id: m['id'] ?? const Uuid().v4(),
+          type: ContentType.values.firstWhere(
+            (e) => e.name == (m['type'] ?? 'text'),
+            orElse: () => ContentType.text),
+          title: m['title'] ?? m['label'] ?? '',
+          url: m['url'],
+          textContent: m['textContent'] ?? m['text'],
+          durationSeconds: (() {
+            final v = m['durationSeconds'] ?? m['durationSec'] ?? 10;
+            return v is int ? v : (v as num).round();
+          })(),
+          order: m['order'] ?? 0,
+        );
+      }).toList()..sort((a, b) => a.order.compareTo(b.order));
+
+      setState(() { _items = items; _loading = false; });
+      if (_playing && items.isNotEmpty) _startTimer();
+    } catch (e) {
+      setState(() { _error = 'Error: $e'; _loading = false; });
+    }
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    final items = _items;
+    if (items == null || items.isEmpty) return;
+    final idx = _currentIndex.clamp(0, items.length - 1);
+    _timer = Timer(Duration(seconds: items[idx].durationSeconds), _nextSlide);
+  }
+
+  Future<void> _nextSlide() async {
+    final items = _items;
+    if (items == null || items.isEmpty) return;
+    await _fadeCtrl.reverse();
+    if (!mounted) return;
+    setState(() {
+      _currentIndex = (_currentIndex + 1) % items.length;
+    });
+    await _fadeCtrl.forward();
+    if (_playing) _startTimer();
+  }
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2,'0')}:${min.toString().padLeft(2,'0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(widget.block.colorValue);
+    return Dialog(
+      backgroundColor: _C.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: _C.border)),
+      child: SizedBox(
+        width: 720,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20,16,20,14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _C.divider))),
+              child: Row(
+                children: [
+                  Container(width: 4, height: 36,
+                    decoration: BoxDecoration(color: color,
+                      borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.block.name,
+                          style: const TextStyle(color: _C.textHi,
+                            fontWeight: FontWeight.w800, fontSize: 14)),
+                        Text(
+                          '${widget.dayLabel}  ·  ${_fmtMin(widget.block.startMinute)} — ${_fmtMin(widget.block.startMinute + widget.block.durationMinutes)}  ·  ${widget.block.playlistName}',
+                          style: const TextStyle(color: _C.textMid, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(color: _C.card,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: _C.border)),
+                      child: const Icon(Icons.close_rounded,
+                        size: 13, color: _C.textMid)),
+                  ),
+                ],
+              ),
+            ),
+
+            if (_loading)
+              const Padding(padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(
+                  color: _C.primary, strokeWidth: 2))
+            else if (_error != null)
+              Padding(padding: const EdgeInsets.all(32),
+                child: Text(_error!,
+                  style: const TextStyle(color: _C.red, fontSize: 13)))
+            else if (_items == null || _items!.isEmpty)
+              const Padding(padding: EdgeInsets.all(32),
+                child: Text('Playlist sin contenido',
+                  style: TextStyle(color: _C.textMid, fontSize: 13)))
+            else ...[
+              // Canvas
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16/9,
+                    child: Stack(
+                      children: [
+                        FadeTransition(
+                          opacity: _fadeAnim,
+                          child: _DisplayContent(
+                            item: _items![_currentIndex.clamp(0, _items!.length-1)]),
+                        ),
+                        Positioned(
+                          bottom: 0, left: 0, right: 0,
+                          child: _DisplayProgressBar(
+                            index: _currentIndex.clamp(0, _items!.length-1),
+                            total: _items!.length,
+                            durationSec: _items![_currentIndex.clamp(0, _items!.length-1)].durationSeconds,
+                            key: ValueKey('bpv_$_currentIndex'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Controls
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16,0,16,8),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        _timer?.cancel();
+                        await _fadeCtrl.reverse();
+                        if (!mounted) return;
+                        setState(() {
+                          _currentIndex = (_currentIndex - 1 + _items!.length) % _items!.length;
+                        });
+                        await _fadeCtrl.forward();
+                        if (_playing) _startTimer();
+                      },
+                      child: const Icon(Icons.skip_previous_rounded,
+                        color: _C.textMid, size: 20)),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _playing = !_playing);
+                        if (_playing) _startTimer(); else _timer?.cancel();
+                      },
+                      child: Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: color, borderRadius: BorderRadius.circular(8)),
+                        child: Icon(
+                          _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white, size: 20)),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () async {
+                        _timer?.cancel();
+                        await _fadeCtrl.reverse();
+                        if (!mounted) return;
+                        setState(() {
+                          _currentIndex = (_currentIndex + 1) % _items!.length;
+                        });
+                        await _fadeCtrl.forward();
+                        if (_playing) _startTimer();
+                      },
+                      child: const Icon(Icons.skip_next_rounded,
+                        color: _C.textMid, size: 20)),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        '${_currentIndex+1} / ${_items!.length}  ·  ${_items![_currentIndex.clamp(0,_items!.length-1)].title}',
+                        style: const TextStyle(color: _C.textMid, fontSize: 12),
+                        overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
+              ),
+
+              // Thumbnails strip
+              SizedBox(
+                height: 60,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _items!.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) {
+                    final isActive = i == _currentIndex;
+                    final item = _items![i];
+                    final typeColor = item.type == ContentType.image ? _C.accent
+                      : item.type == ContentType.video ? _C.purple
+                      : item.type == ContentType.text ? _C.green : _C.amber;
+                    return GestureDetector(
+                      onTap: () async {
+                        _timer?.cancel();
+                        await _fadeCtrl.reverse();
+                        if (!mounted) return;
+                        setState(() => _currentIndex = i);
+                        await _fadeCtrl.forward();
+                        if (_playing) _startTimer();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 80,
+                        decoration: BoxDecoration(
+                          color: isActive ? color.withOpacity(0.15) : _C.card,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isActive ? color : _C.border,
+                            width: isActive ? 2 : 1)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(_iconFor(item.type), size: 16,
+                              color: isActive ? color : typeColor),
+                            const SizedBox(height: 2),
+                            Text(item.title,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isActive ? color : _C.textLo,
+                                fontSize: 8, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _iconFor(ContentType t) {
+    switch (t) {
+      case ContentType.image: return Icons.image_rounded;
+      case ContentType.video: return Icons.videocam_rounded;
+      case ContentType.text:  return Icons.text_fields_rounded;
+      case ContentType.url:   return Icons.language_rounded;
+    }
   }
 }

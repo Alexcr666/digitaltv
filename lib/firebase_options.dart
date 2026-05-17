@@ -1,7 +1,6 @@
 // lib/firebase_options.dart
 // ==============================================================
-// Generado manualmente con las credenciales de index.html
-// NUNCA subas este archivo a un repositorio público
+// Configuración Firebase actualizada a estilista-7a538
 // ==============================================================
 
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
@@ -18,7 +17,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        return web; // reutiliza web para macOS desktop
+        return web;
       default:
         return web;
     }
@@ -26,39 +25,37 @@ class DefaultFirebaseOptions {
 
   // ── Web ───────────────────────────────────────────────────
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey:            'AIzaSyAtNMdib_L9yjXDql87crKBCwlC-zSK3ic',
-    authDomain:        'notes-4c618.firebaseapp.com',
-    databaseURL:       'https://notes-4c618.firebaseio.com',
-    projectId:         'notes-4c618',
-    storageBucket:     'notes-4c618.firebasestorage.app',
-    messagingSenderId: '659987129698',
-    appId:             '1:659987129698:web:5dacdc20c2ffd1760cf83b',
-    measurementId:     'G-MP4Z852SKS',
+    apiKey:            'AIzaSyDhzo0xL4ACH3tH7xWkXe9EqHQo9kcrMaM',
+    authDomain:        'estilista-7a538.firebaseapp.com',
+    databaseURL:       'https://estilista-7a538.firebaseio.com',
+    projectId:         'estilista-7a538',
+    storageBucket:     'estilista-7a538.appspot.com',
+    messagingSenderId: '236180940295',
+    appId:             '1:236180940295:web:14df2288a779fefcf2eca2',
+    measurementId:     'G-2JMH6EDQEN',
   );
 
   // ── Android ───────────────────────────────────────────────
-  // Si tienes google-services.json, reemplaza estos valores
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey:            'AIzaSyAtNMdib_L9yjXDql87crKBCwlC-zSK3ic',
-    authDomain:        'notes-4c618.firebaseapp.com',
-    databaseURL:       'https://notes-4c618.firebaseio.com',
-    projectId:         'notes-4c618',
-    storageBucket:     'notes-4c618.firebasestorage.app',
-    messagingSenderId: '659987129698',
-    appId:             '1:659987129698:web:5dacdc20c2ffd1760cf83b',
+    apiKey:            'AIzaSyDhzo0xL4ACH3tH7xWkXe9EqHQo9kcrMaM',
+    authDomain:        'estilista-7a538.firebaseapp.com',
+    databaseURL:       'https://estilista-7a538.firebaseio.com',
+    projectId:         'estilista-7a538',
+    storageBucket:     'estilista-7a538.appspot.com',
+    messagingSenderId: '236180940295',
+    appId:             '1:236180940295:web:14df2288a779fefcf2eca2',
   );
 
   // ── iOS ───────────────────────────────────────────────────
-  // Si tienes GoogleService-Info.plist, reemplaza estos valores
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey:            'AIzaSyAtNMdib_L9yjXDql87crKBCwlC-zSK3ic',
-    authDomain:        'notes-4c618.firebaseapp.com',
-    databaseURL:       'https://notes-4c618.firebaseio.com',
-    projectId:         'notes-4c618',
-    storageBucket:     'notes-4c618.firebasestorage.app',
-    messagingSenderId: '659987129698',
-    appId:             '1:659987129698:web:5dacdc20c2ffd1760cf83b',
-    iosClientId:       '', // agregar si usas Google Sign-In en iOS
+    apiKey:            'AIzaSyDhzo0xL4ACH3tH7xWkXe9EqHQo9kcrMaM',
+    authDomain:        'estilista-7a538.firebaseapp.com',
+    databaseURL:       'https://estilista-7a538.firebaseio.com',
+    projectId:         'estilista-7a538',
+    storageBucket:     'estilista-7a538.appspot.com',
+    messagingSenderId: '236180940295',
+    appId:             '1:236180940295:web:14df2288a779fefcf2eca2',
+    iosClientId:       '',
     iosBundleId:       'com.example.digitaltv',
   );
 }

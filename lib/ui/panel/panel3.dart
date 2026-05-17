@@ -1,4 +1,5 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 import 'dart:typed_data';
 import 'dart:async';
@@ -75,7 +76,7 @@ class EditorClip {
   final double trimStart;
   final double trimEnd;
 // Pega esto dentro de la clase EditorClip
-  factory EditorClip.fromMap(Map<String, dynamic> c) {
+ /* factory EditorClip.fromMap(Map<String, dynamic> c) {
     final typeStr = c['type'] as String? ?? 'text';
     final type = EditorLayerType.values.firstWhere(
       (e) => e.name == typeStr, orElse: () => EditorLayerType.text);
@@ -104,7 +105,50 @@ class EditorClip {
       trimStart:       (c['trimStart'] as num?)?.toDouble() ?? 0,
       trimEnd:         (c['trimEnd'] as num?)?.toDouble() ?? 0,
     );
-  }
+  }*/
+  factory EditorClip.fromMap(Map<String, dynamic> c) {
+  final typeStr = c['type'] as String? ?? 'text';
+  final type = EditorLayerType.values.firstWhere(
+    (e) => e.name == typeStr, orElse: () => EditorLayerType.text);
+  final colorVal = c['textColor'];
+
+  final startSec = (c['startSec'] as num?)?.toDouble()
+      ?? (c['start_sec'] as num?)?.toDouble()
+      ?? 0.0;
+
+  final durationSec = (c['durationSec'] as num?)?.toDouble()
+      ?? (c['duration_sec'] as num?)?.toDouble()
+      ?? (c['durationSeconds'] as num?)?.toDouble()
+      ?? 5.0;
+
+  final trackIndex = (c['trackIndex'] as num?)?.toInt()
+      ?? (c['track_index'] as num?)?.toInt()
+      ?? 0;
+
+  return EditorClip(
+    id:              c['id'] as String? ?? const Uuid().v4(),
+    type:            type,
+    label:           c['label'] as String? ?? c['name'] as String? ?? '',
+    url:             c['url'] as String?,
+    text:            c['text'] as String?,
+    startSec:        startSec,
+    durationSec:     durationSec,
+    trackIndex:      trackIndex,
+    x:               (c['x'] as num?)?.toDouble() ?? 640,
+    y:               (c['y'] as num?)?.toDouble() ?? 360,
+    width:           (c['width'] as num?)?.toDouble() ?? 1280,
+    height:          (c['height'] as num?)?.toDouble() ?? 720,
+    opacity:         (c['opacity'] as num?)?.toDouble() ?? 1.0,
+    rotation:        (c['rotation'] as num?)?.toDouble() ?? 0,
+    textColor:       colorVal != null ? Color(colorVal as int) : null,
+    fontSize:        (c['fontSize'] as num?)?.toDouble() ?? 48,
+    bold:            c['bold'] as bool? ?? false,
+    backgroundColor: c['backgroundColor'] as String?,
+    volume:          (c['volume'] as num?)?.toDouble() ?? 1.0,
+    trimStart:       (c['trimStart'] as num?)?.toDouble() ?? 0,
+    trimEnd:         (c['trimEnd'] as num?)?.toDouble() ?? 0,
+  );
+}
   const EditorClip({
     required this.id,
     required this.type,
@@ -261,28 +305,44 @@ class SavedPlaylistsNotifier extends StateNotifier<List<SavedPlaylist>> {
   static const _collection = 'playlists';
   final _db = FirebaseFirestore.instance;
 
-  Future<void> _load() async {
-    try {
-      final snap = await _db
-          .collection(_collection)
-          .orderBy('createdAt', descending: true)
-          .get();
-      state = snap.docs
-          .map((d) => SavedPlaylist.fromFirestore(d.data()))
-          .toList();
-    } catch (e) {
-      debugPrint('Error cargando playlists: $e');
-    }
-  }
+Future<void> _load() async {
+  try {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) { state = []; return; }
 
-  Future<void> add(SavedPlaylist p) async {
-    try {
-      await _db.collection(_collection).doc(p.id).set(p.toFirestore());
-      state = [p, ...state];
-    } catch (e) {
-      debugPrint('Error guardando playlist: $e');
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+    Query query = _db.collection(_collection);
+    if (companyId != null) {
+      query = query.where('companyId', isEqualTo: companyId);
     }
+
+    final snap = await query.get();
+    final list = snap.docs
+        .map((d) => SavedPlaylist.fromFirestore(d.data() as Map<String, dynamic>))
+        .toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    state = list;
+  } catch (e) {
   }
+}
+
+ Future<void> add(SavedPlaylist p) async {
+  try {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+    final data = p.toFirestore();
+    if (companyId != null) data['companyId'] = companyId;
+
+    await _db.collection(_collection).doc(p.id).set(data);
+    state = [p, ...state];
+  } catch (e) {
+    debugPrint('Error guardando playlist: $e');
+  }
+}
 
   Future<void> remove(String id) async {
     try {
@@ -308,14 +368,39 @@ class SavedPlaylistsNotifier extends StateNotifier<List<SavedPlaylist>> {
 
 class EditorClipsNotifier extends StateNotifier<List<EditorClip>> {
   EditorClipsNotifier() : super([]);
+void setAll(List<EditorClip> clips) {
+  _pendingUpdate = null;
+  state = clips;
+}
+  final _sw = Stopwatch()..start();
+  EditorClip? _pendingUpdate;
 
   void add(EditorClip clip) => state = [...state, clip];
 
-  void update(EditorClip updated) {
+ void update(EditorClip updated) {
+  // Si cambia el trackIndex, aplica inmediatamente sin throttle
+  final current = state.firstWhere((c) => c.id == updated.id, orElse: () => updated);
+  if (current.trackIndex != updated.trackIndex) {
     state = state.map((c) => c.id == updated.id ? updated : c).toList();
+    return;
+  }
+  _pendingUpdate = updated;
+  if (_sw.elapsedMilliseconds > 16) {
+    _flush();
+  }
+}
+
+  void _flush() {
+    if (_pendingUpdate == null) return;
+    state = state.map((c) => c.id == _pendingUpdate!.id ? _pendingUpdate! : c).toList();
+    _pendingUpdate = null;
+    _sw.reset();
   }
 
-  void remove(String id) => state = state.where((c) => c.id != id).toList();
+  void remove(String id) {
+    _flush();
+    state = state.where((c) => c.id != id).toList();
+  }
 
   void reorder(String id, double newStart, int newTrack) {
     state = state.map((c) {
@@ -1815,37 +1900,49 @@ Widget build(BuildContext context) {
                       ),
 
                       // ── MODIFICACIÓN: orden de capas ──
-                      ...(() {
-                        final sorted = [...activeClips];
-                   sorted.sort((a, b) => a.trackIndex.compareTo(b.trackIndex));
-                        return sorted;
-                      }()).map((clip) {
-                        final isSelected = clip.id == selectedId;
-                        return _DraggableClip(
-                          key: ValueKey(clip.id),
-                          clip: clip,
-                          scaleX: scaleX,
-                          scaleY: scaleY,
-                          isSelected: isSelected,
-                          onSelect: () => ref
-                            .read(selectedClipIdProvider.notifier)
-                            .state = clip.id,
-                          onMove: (dx, dy) {
-                            final updated = clip.copyWith(
-                              x: (clip.x + dx / scaleX).clamp(0.0, 1280.0),
-                              y: (clip.y + dy / scaleY).clamp(0.0, 720.0),
-                            );
-                            ref.read(editorClipsProvider.notifier).update(updated);
-                          },
-                          onResize: (dw, dh) {
-                            final updated = clip.copyWith(
-                              width:  (clip.width  + dw / scaleX).clamp(40.0, 1280.0),
-                              height: (clip.height + dh / scaleY).clamp(20.0, 720.0),
-                            );
-                            ref.read(editorClipsProvider.notifier).update(updated);
-                          },
-                        );
-                      }),
+                     // ── MODIFICACIÓN: orden de capas ──
+...(() {
+  final tracks = ref.read(tracksProvider);
+  final sorted = [...activeClips];
+  sorted.sort((a, b) {
+    final idxA = a.trackIndex.clamp(0, tracks.length - 1);
+    final idxB = b.trackIndex.clamp(0, tracks.length - 1);
+    return idxB.compareTo(idxA);
+  });
+  return sorted;
+}()).map((clip) {
+  final isSelected = clip.id == selectedId;
+  final left   = (clip.x - clip.width  / 2) * scaleX;
+  final top    = (clip.y - clip.height / 2) * scaleY;
+  final width  = clip.width  * scaleX;
+  final height = clip.height * scaleY;
+
+  return Positioned(
+    key: ValueKey(clip.id),
+    left: left, top: top, width: width, height: height,
+    child: _DraggableClip(
+      clip: clip,
+      scaleX: scaleX,
+      scaleY: scaleY,
+      isSelected: isSelected,
+      onSelect: () => ref.read(selectedClipIdProvider.notifier).state = clip.id,
+      onMove: (dx, dy) {
+        final updated = clip.copyWith(
+          x: (clip.x + dx / scaleX).clamp(0.0, 1280.0),
+          y: (clip.y + dy / scaleY).clamp(0.0, 720.0),
+        );
+        ref.read(editorClipsProvider.notifier).update(updated);
+      },
+      onResize: (dw, dh) {
+        final updated = clip.copyWith(
+          width:  (clip.width  + dw / scaleX).clamp(40.0, 1280.0),
+          height: (clip.height + dh / scaleY).clamp(20.0, 720.0),
+        );
+        ref.read(editorClipsProvider.notifier).update(updated);
+      },
+    ),
+  );
+}),
 
                       if (clips.isEmpty)
                         Center(
@@ -1879,7 +1976,7 @@ Widget build(BuildContext context) {
 }
 
 // Widget para clip draggable + resizable
-class _DraggableClip extends ConsumerWidget {
+class _DraggableClip extends ConsumerStatefulWidget {
   final EditorClip clip;
   final double scaleX, scaleY;
   final bool isSelected;
@@ -1897,368 +1994,223 @@ class _DraggableClip extends ConsumerWidget {
     required this.onMove,
     required this.onResize,
   });
+   @override
+  ConsumerState<_DraggableClip> createState() => _DraggableClipState();
 
-@override
-Widget build(BuildContext context, WidgetRef ref) {
-  final left   = (clip.x - clip.width  / 2) * scaleX;
-  final top    = (clip.y - clip.height / 2) * scaleY;
+}
+class _DraggableClipState extends ConsumerState<_DraggableClip> {
+  double _accDx = 0;
+  double _accDy = 0;
+  bool _isDragging = false;
+
+  @override
+Widget build(BuildContext context) {
+  final clip = widget.clip;
+  final scaleX = widget.scaleX;
+  final scaleY = widget.scaleY;
+  final isSelected = widget.isSelected;
   final width  = clip.width  * scaleX;
   final height = clip.height * scaleY;
-  const handleSize = 14.0;
+  const handleSize = 18.0;
 
-  return Positioned(
-    left: left, top: top, width: width, height: height,
+  // SIN Positioned aquí — va en el padre
+  return Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: (e) {
+      widget.onSelect();
+      _isDragging = true;
+    },
+    onPointerMove: (e) {
+      if (!_isDragging || !isSelected) return;
+      widget.onMove(e.delta.dx, e.delta.dy);
+    },
+    onPointerUp: (_) => _isDragging = false,
     child: MouseRegion(
-      cursor: SystemMouseCursors.move,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onSelect,
-        onPanStart: (_) => onSelect(),
-        onPanUpdate: (d) => onMove(d.delta.dx, d.delta.dy),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 80),
-                decoration: BoxDecoration(
-                  border: isSelected
-                    ? Border.all(color: _EC.primary, width: 2)
-                    : Border.all(color: Colors.white.withOpacity(0.06), width: 1),
-                  boxShadow: isSelected
-                    ? [BoxShadow(color: _EC.primary.withOpacity(0.3), blurRadius: 10, spreadRadius: 1)]
-                    : [],
-                ),
-                child: Opacity(
-                  opacity: clip.opacity,
-                  child: _renderClip(clip, scaleX, scaleY),
-                ),
+      cursor: isSelected ? SystemMouseCursors.move : SystemMouseCursors.click,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                border: isSelected
+                  ? Border.all(color: _EC.primary, width: 2)
+                  : Border.all(color: Colors.white.withOpacity(0.06), width: 1),
+                boxShadow: isSelected
+                  ? [BoxShadow(color: _EC.primary.withOpacity(0.3), blurRadius: 10, spreadRadius: 1)]
+                  : [],
+              ),
+              child: Opacity(
+                opacity: clip.opacity,
+                child: _renderClip(clip, scaleX, scaleY),
               ),
             ),
-            if (isSelected) ...[
-              Positioned(
-                left: -handleSize / 2, top: -handleSize / 2,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeUpLeft,
-                  onPan: (d) => onResize(-d.delta.dx, -d.delta.dy),
-                ),
-              ),
-              Positioned(
-                right: -handleSize / 2, top: -handleSize / 2,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeUpRight,
-                  onPan: (d) => onResize(d.delta.dx, -d.delta.dy),
-                ),
-              ),
-              Positioned(
-                left: -handleSize / 2, bottom: -handleSize / 2,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeDownLeft,
-                  onPan: (d) => onResize(-d.delta.dx, d.delta.dy),
-                ),
-              ),
-              Positioned(
-                right: -handleSize / 2, bottom: -handleSize / 2,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeDownRight,
-                  onPan: (d) => onResize(d.delta.dx, d.delta.dy),
-                ),
-              ),
-              Positioned(
-                top: -handleSize / 2, left: width * 0.25,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeUp,
-                  onPan: (d) => onResize(0, -d.delta.dy),
-                  width: width * 0.5,
-                ),
-              ),
-              Positioned(
-                bottom: -handleSize / 2, left: width * 0.25,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeDown,
-                  onPan: (d) => onResize(0, d.delta.dy),
-                  width: width * 0.5,
-                ),
-              ),
-              Positioned(
-                left: -handleSize / 2, top: height * 0.25,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeLeft,
-                  onPan: (d) => onResize(-d.delta.dx, 0),
-                  height: height * 0.5,
-                ),
-              ),
-              Positioned(
-                right: -handleSize / 2, top: height * 0.25,
-                child: _ResizeHandle(
-                  cursor: SystemMouseCursors.resizeRight,
-                  onPan: (d) => onResize(d.delta.dx, 0),
-                  height: height * 0.5,
-                ),
-              ),
-            ],
+          ),
+          if (isSelected) ...[
+            Positioned(left: -handleSize/2, top: -handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpLeft,
+                onPan: (d) => widget.onResize(-d.delta.dx, -d.delta.dy))),
+            Positioned(right: -handleSize/2, top: -handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpRight,
+                onPan: (d) => widget.onResize(d.delta.dx, -d.delta.dy))),
+            Positioned(left: -handleSize/2, bottom: -handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownLeft,
+                onPan: (d) => widget.onResize(-d.delta.dx, d.delta.dy))),
+            Positioned(right: -handleSize/2, bottom: -handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownRight,
+                onPan: (d) => widget.onResize(d.delta.dx, d.delta.dy))),
+            Positioned(top: -handleSize/2, left: width * 0.5 - handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUp,
+                onPan: (d) => widget.onResize(0, -d.delta.dy))),
+            Positioned(bottom: -handleSize/2, left: width * 0.5 - handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDown,
+                onPan: (d) => widget.onResize(0, d.delta.dy))),
+            Positioned(left: -handleSize/2, top: height * 0.5 - handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeLeft,
+                onPan: (d) => widget.onResize(-d.delta.dx, 0))),
+            Positioned(right: -handleSize/2, top: height * 0.5 - handleSize/2,
+              child: _ResizeHandle(cursor: SystemMouseCursors.resizeRight,
+                onPan: (d) => widget.onResize(d.delta.dx, 0))),
           ],
-        ),
+        ],
       ),
     ),
   );
 }
 
+ 
+
 Widget _renderClip(EditorClip clip, double sx, double sy) {
-  switch (clip.type) {
-    case EditorLayerType.image:
-      if (clip.url != null && clip.url!.isNotEmpty) {
-        // blob: URLs y https:// funcionan directo en <img>
-        final viewId = 'img-${clip.id}';
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final img = html.ImageElement()
-            ..src = clip.url!
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.objectFit = 'cover'
-            ..style.display = 'block';
-          return img;
-        });
-        return HtmlElementView(viewType: viewId);
-      }
-      return Container(
-        color: _EC.accent.withOpacity(0.1),
-        child: Center(child: Icon(Icons.image_rounded, color: _EC.accent, size: 22 * sx)),
-      );
+    switch (clip.type) {
+      case EditorLayerType.image:
+        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+          final viewId = 'img-${clip.id}';
+          try {
+            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+              final img = html.ImageElement()
+                ..src = clip.url!
+                ..style.width = '100%'
+                ..style.height = '100%'
+                ..style.objectFit = 'cover'
+                ..style.display = 'block';
+              return img;
+            });
+          } catch (_) {}
+          return HtmlElementView(viewType: viewId);
+        }
+        return Container(
+          color: const Color(0xFF38BDF8).withOpacity(0.1),
+          child: Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.image_rounded, color: const Color(0xFF38BDF8), size: 22 * sx),
+            ],
+          )),
+        );
 
- case EditorLayerType.video:
-  if (clip.url != null && clip.url!.isNotEmpty) {
-    // HLS stream (.m3u8) → iframe con HLS.js
-    if (clip.url!.contains('.m3u8') || clip.url!.contains('streaming.rtvc') 
-        || clip.url!.contains('cdnmedia') || clip.url!.contains('logicideas')
-        || clip.url!.contains('multistream') || clip.url!.contains('mediaserver')) {
-      final viewId = 'hls-${clip.id}';
-      final hlsUrl = clip.url!;
-      final label  = clip.label;
-      try {
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final iframe = html.IFrameElement()
-            ..srcdoc = '''
-<!DOCTYPE html><html><head><style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:#000;width:100vw;height:100vh;overflow:hidden;
-     display:flex;align-items:center;justify-content:center;}
-video{width:100%;height:100%;object-fit:cover;}
-#info{position:absolute;bottom:4px;left:0;right:0;text-align:center;}
-#info span{background:rgba(0,0,0,0.6);color:#fff;font-size:9px;
-           padding:2px 6px;border-radius:3px;font-family:sans-serif;}
-</style></head><body>
-<div id="root" style="width:100%;height:100%;position:relative;">
-  <div id="info"><span>$label</span></div>
-</div>
-<script>
-const url=\'$hlsUrl\';
-const root=document.getElementById(\'root\');
-function start(){
-  const v=document.createElement(\'video\');
-  v.autoplay=true;v.muted=true;v.controls=false;
-  v.style.cssText=\'width:100%;height:100%;object-fit:cover;\';
-  if(typeof Hls!==\'undefined\'&&Hls.isSupported()){
-    const h=new Hls({enableWorker:false});
-    h.loadSource(url);h.attachMedia(v);
-    h.on(Hls.Events.MANIFEST_PARSED,()=>{v.play();
-      root.innerHTML=\'\';root.appendChild(v);});
-  } else if(v.canPlayType(\'application/vnd.apple.mpegurl\')){
-    v.src=url;v.addEventListener(\'loadedmetadata\',()=>{
-      v.play();root.innerHTML=\'\';root.appendChild(v);});
-  }
-}
-const s=document.createElement(\'script\');
-s.src=\'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js\';
-s.onload=start;document.head.appendChild(s);
-</script></body></html>'''
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..setAttribute('sandbox',
-                'allow-scripts allow-same-origin');
-          return iframe;
-        });
-      } catch (_) {}
-      return HtmlElementView(viewType: viewId);
-    }
-
-    // YouTube embed
-    if (clip.url!.contains('youtube.com/embed')) {
-      final viewId = 'yt-embed-${clip.id}';
-      try {
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final iframe = html.IFrameElement()
-            ..src = clip.url!
-            ..style.border = 'none'
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..allowFullscreen = true
-            ..setAttribute('allow',
-              'accelerometer; autoplay; clipboard-write; '
-              'encrypted-media; gyroscope; picture-in-picture');
-          return iframe;
-        });
-      } catch (_) {}
-      return HtmlElementView(viewType: viewId);
-    }
-
-    // Video normal (blob: / https:)
-    final viewId = 'vid-${clip.id}';
-    ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-      final video = html.VideoElement()
-        ..src = clip.url!
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..autoplay = false
-        ..controls = false
-        ..muted = true;
-      return video;
-    });
-    return Stack(
-      children: [
-        Positioned.fill(child: HtmlElementView(viewType: viewId)),
-        Positioned(
-          bottom: 4 * sy, left: 0, right: 0,
-          child: Center(
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 6 * sx, vertical: 2 * sy),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(4)),
-              child: Text(clip.label,
-                style: TextStyle(
-                  color: Colors.white70, fontSize: 9 * sx,
+      case EditorLayerType.video:
+        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+          final viewId = 'vid-${clip.id}';
+          try {
+            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+              final video = html.VideoElement()
+                ..src = clip.url!
+                ..style.width = '100%'
+                ..style.height = '100%'
+                ..style.objectFit = 'cover'
+                ..autoplay = false
+                ..controls = false
+                ..muted = true;
+              return video;
+            });
+          } catch (_) {}
+          return Stack(
+            children: [
+              Positioned.fill(child: HtmlElementView(viewType: viewId)),
+              Positioned(
+                bottom: 4 * sy, left: 0, right: 0,
+                child: Center(
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(clip.label,
+                      style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+                        fontWeight: FontWeight.w600),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                       const Color(0xFFA855F7).withOpacity(0.1)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+          ),
+          child: Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36 * sx, height: 36 * sx,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA855F7).withOpacity(0.85),
+                  shape: BoxShape.circle),
+                child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
+              ),
+              SizedBox(height: 5 * sy),
+              Text(clip.label,
+                style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
                   fontWeight: FontWeight.w600),
                 maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [_EC.purple.withOpacity(0.3), _EC.purple.withOpacity(0.1)],
-        begin: Alignment.topLeft, end: Alignment.bottomRight)),
-    child: Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 36 * sx, height: 36 * sx,
-          decoration: BoxDecoration(
-            color: _EC.purple.withOpacity(0.85), shape: BoxShape.circle),
-          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx)),
-        SizedBox(height: 5 * sy),
-        Text(clip.label,
-          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-            fontWeight: FontWeight.w600),
-          maxLines: 1, overflow: TextOverflow.ellipsis),
-      ],
-    )),
-  );
-    
-    case EditorLayerType.audio:
-      // Reproduce el audio invisible; muestra barra visual
-      if (clip.url != null && clip.url!.isNotEmpty) {
-        final viewId = 'aud-${clip.id}';
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final audio = html.AudioElement()
-            ..src = clip.url!
-            ..autoplay = true
-            ..loop = true
-            ..style.display = 'none';
-          return audio;
-        });
-        return Stack(
-          children: [
-            Positioned.fill(child: HtmlElementView(viewType: viewId)),
-            Container(
-              decoration: BoxDecoration(
-                color: _EC.green.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(4)),
-              child: Center(child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.music_note_rounded, color: _EC.green, size: 14 * sx),
-                  SizedBox(width: 4 * sx),
-                  Text(clip.label,
-                    style: TextStyle(color: _EC.green, fontSize: 10 * sx,
-                      fontWeight: FontWeight.w600)),
-                ],
-              )),
-            ),
-          ],
+            ],
+          )),
         );
-      }
-      return Container(
-        color: _EC.green.withOpacity(0.1),
-        child: Center(child: Icon(Icons.music_note_rounded, color: _EC.green, size: 20 * sx)),
-      );
 
-   case EditorLayerType.text:
-  final bgColor = clip.backgroundColor != null
-    ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
-    : Colors.transparent;
-  final textWidget = Container(
-    color: bgColor,
-    alignment: Alignment.center,
-    child: clip.label.startsWith('Marquee')
-      ? _MarqueeText(text: clip.text ?? '', color: clip.textColor ?? Colors.white,
-          fontSize: (clip.fontSize ?? 48) * sx, bold: clip.bold ?? false)
-      : Text(
-          clip.text ?? '',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: clip.textColor ?? Colors.white,
-            fontSize: (clip.fontSize ?? 48) * sx,
-            fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
-            height: 1.2,
+      case EditorLayerType.text:
+        final bgColor = clip.backgroundColor != null
+          ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
+          : Colors.transparent;
+        return Container(
+          color: bgColor,
+          alignment: Alignment.center,
+          child: Text(
+            clip.text ?? '',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: clip.textColor ?? Colors.white,
+              fontSize: (clip.fontSize ?? 48) * sx,
+              fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
+              height: 1.2,
+            ),
           ),
-        ),
-  );
+        );
 
-  // Aplica animación según prefijo del label
-  if (clip.label.startsWith('Fade In'))
-    return textWidget.animate().fadeIn(duration: 800.ms);
-  if (clip.label.startsWith('Fade Out'))
-    return textWidget.animate().fadeOut(duration: 800.ms);
-  if (clip.label.startsWith('Slide ← '))
-    return textWidget.animate().slideX(begin: -1, duration: 600.ms, curve: Curves.easeOut);
-  if (clip.label.startsWith('Slide → '))
-    return textWidget.animate().slideX(begin: 1, duration: 600.ms, curve: Curves.easeOut);
-  if (clip.label.startsWith('Slide ↑'))
-    return textWidget.animate().slideY(begin: 1, duration: 600.ms, curve: Curves.easeOut);
-  if (clip.label.startsWith('Slide ↓'))
-    return textWidget.animate().slideY(begin: -1, duration: 600.ms, curve: Curves.easeOut);
-  if (clip.label.startsWith('Zoom In'))
-    return textWidget.animate().scale(begin: const Offset(0.2, 0.2), duration: 600.ms, curve: Curves.easeOut);
-  if (clip.label.startsWith('Zoom Out'))
-    return textWidget.animate().scale(begin: const Offset(2, 2), end: const Offset(1, 1), duration: 600.ms);
-  if (clip.label.startsWith('Bounce'))
-    return textWidget.animate().slideY(begin: -0.3, curve: Curves.bounceOut, duration: 800.ms);
-  if (clip.label.startsWith('Pulse'))
-    return textWidget.animate(onPlay: (c) => c.repeat(reverse: true))
-      .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 600.ms);
-  if (clip.label.startsWith('Máquina'))
-    return _TypewriterText(text: clip.text ?? '', color: clip.textColor ?? Colors.white,
-      fontSize: (clip.fontSize ?? 48) * sx, bold: clip.bold ?? false);
-  return textWidget;
+      case EditorLayerType.overlay:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF59E0B).withOpacity(0.15),
+            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4), width: 2 * sx),
+          ),
+          child: Center(child: Icon(Icons.layers_rounded,
+            color: const Color(0xFFF59E0B), size: 20 * sx)),
+        );
 
-    case EditorLayerType.overlay:
-      return Container(
-        decoration: BoxDecoration(
-          color: _EC.amber.withOpacity(0.15),
-          border: Border.all(color: _EC.amber.withOpacity(0.4), width: 2 * sx)),
-        child: Center(child: Icon(Icons.layers_rounded, color: _EC.amber, size: 20 * sx)),
-      );
+      case EditorLayerType.audio:
+        return Container(
+          color: const Color(0xFF22C55E).withOpacity(0.1),
+          child: Center(child: Icon(Icons.music_note_rounded,
+            color: const Color(0xFF22C55E), size: 20 * sx)),
+        );
+    }
   }
 }
-}
-
 class _ResizeHandle extends StatefulWidget {
   final MouseCursor cursor;
   final void Function(DragUpdateDetails) onPan;
@@ -2268,8 +2220,8 @@ class _ResizeHandle extends StatefulWidget {
   const _ResizeHandle({
     required this.cursor,
     required this.onPan,
-    this.width = 14,
-    this.height = 14,
+    this.width = 18,
+    this.height = 18,
   });
 
   @override
@@ -2278,6 +2230,7 @@ class _ResizeHandle extends StatefulWidget {
 
 class _ResizeHandleState extends State<_ResizeHandle> {
   bool _active = false;
+  Offset _last = Offset.zero;
 
   @override
   Widget build(BuildContext context) {
@@ -2285,20 +2238,34 @@ class _ResizeHandleState extends State<_ResizeHandle> {
       cursor: widget.cursor,
       onEnter: (_) => setState(() => _active = true),
       onExit:  (_) => setState(() => _active = false),
-      child: GestureDetector(
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPanUpdate: widget.onPan,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+        onPointerDown: (e) {
+          _last = e.position;
+          setState(() => _active = true);
+        },
+        onPointerMove: (e) {
+          final delta = e.position - _last;
+          _last = e.position;
+          // Simula DragUpdateDetails con el delta
+          widget.onPan(DragUpdateDetails(
+            globalPosition: e.position,
+            delta: delta,
+            primaryDelta: null,
+            sourceTimeStamp: e.timeStamp,
+          ));
+        },
+        onPointerUp: (_) => setState(() => _active = false),
+        child: Container(
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
             color: _active ? _EC.primary : Colors.white,
-            border: Border.all(color: _EC.primary, width: 1.5),
-            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: _EC.primary, width: 2),
+            borderRadius: BorderRadius.circular(4),
             boxShadow: _active
-              ? [BoxShadow(color: _EC.primary.withOpacity(0.5), blurRadius: 6)]
-              : [],
+              ? [BoxShadow(color: _EC.primary.withOpacity(0.6), blurRadius: 8)]
+              : [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 3)],
           ),
         ),
       ),
@@ -2885,11 +2852,32 @@ Widget build(BuildContext context) {
                     Expanded(
                       child: ReorderableListView(
                         buildDefaultDragHandles: true,
-                        onReorder: (oldIdx, newIdx) {
-                          if (newIdx > oldIdx) newIdx--;
-                          ref.read(tracksProvider.notifier)
-                              .reorder(oldIdx, newIdx);
-                        },
+                       // En _TimelinePanelState.build, donde está el onReorder del ReorderableListView:
+onReorder: (oldIdx, newIdx) {
+  if (newIdx > oldIdx) newIdx--;
+  
+  final allClips = ref.read(editorClipsProvider);
+  final notifier = ref.read(editorClipsProvider.notifier);
+  
+  // Construye el nuevo estado de clips de una sola vez sin throttle
+  final updatedClips = allClips.map((clip) {
+    int newTrackIdx = clip.trackIndex;
+    if (clip.trackIndex == oldIdx) {
+      newTrackIdx = newIdx;
+    } else if (oldIdx < newIdx && clip.trackIndex > oldIdx && clip.trackIndex <= newIdx) {
+      newTrackIdx = clip.trackIndex - 1;
+    } else if (oldIdx > newIdx && clip.trackIndex >= newIdx && clip.trackIndex < oldIdx) {
+      newTrackIdx = clip.trackIndex + 1;
+    }
+    return clip.copyWith(trackIndex: newTrackIdx);
+  }).toList();
+  
+  // Aplica todos los cambios de una sola vez al estado
+  notifier.setAll(updatedClips);
+  
+  // Reordena los tracks visualmente
+  ref.read(tracksProvider.notifier).reorder(oldIdx, newIdx);
+},
                         proxyDecorator: (child, idx, anim) =>
                           Material(
                             color: _EC.cardHi,
@@ -3188,91 +3176,94 @@ class _TrackRow extends ConsumerWidget {
   final Color trackColor;
 
   const _TrackRow({
-    required this.trackIndex, required this.height, required this.zoom,
-    required this.clips, required this.selectedId, required this.trackColor,
+    required this.trackIndex,
+    required this.height,
+    required this.zoom,
+    required this.clips,
+    required this.selectedId,
+    required this.trackColor,
   });
 
- @override
-Widget build(BuildContext context, WidgetRef ref) {
-  return GestureDetector(
-    onTapUp: (d) {
-      ref.read(selectedClipIdProvider.notifier).state = null;
-    },
-    child: Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: _EC.bg,
-        border: Border(bottom: BorderSide(color: _EC.divider)),
-      ),
-      child: Stack(
-        children: clips.map((clip) {
-          final left = clip.startSec * zoom;
-          final w    = clip.durationSec * zoom;
-          final isSelected = clip.id == selectedId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTapUp: (d) {
+        ref.read(selectedClipIdProvider.notifier).state = null;
+      },
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: _EC.bg,
+          border: Border(bottom: BorderSide(color: _EC.divider)),
+        ),
+        child: Stack(
+          children: clips.map((clip) {
+            final left = clip.startSec * zoom;
+            final w    = clip.durationSec * zoom;
+            final isSelected = clip.id == selectedId;
 
-          return Positioned(
-            left: left,
-            top: 3,
-            width: math.max(w, 20),
-            height: height - 6,
-            child: GestureDetector(
-              onTap: () =>
-                ref.read(selectedClipIdProvider.notifier).state = clip.id,
-              onHorizontalDragUpdate: (d) {
-                final newStart = (clip.startSec + d.delta.dx / zoom)
-                  .clamp(0.0, 9999.0);
-                // Solo mueve en X, mantiene el mismo trackIndex
-                ref.read(editorClipsProvider.notifier)
-                  .reorder(clip.id, newStart, clip.trackIndex);
-              },
-              child: AnimatedContainer(
-                duration: 100.ms,
-                decoration: BoxDecoration(
-                  color: isSelected
-                    ? trackColor.withOpacity(0.8)
-                    : trackColor.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: isSelected ? Colors.white : trackColor,
-                    width: isSelected ? 1.5 : 1,
+            return Positioned(
+              left: left,
+              top: 3,
+              width: math.max(w, 20),
+              height: height - 6,
+              child: GestureDetector(
+                onTap: () =>
+                  ref.read(selectedClipIdProvider.notifier).state = clip.id,
+                onHorizontalDragUpdate: (d) {
+                  final newStart = (clip.startSec + d.delta.dx / zoom)
+                    .clamp(0.0, 9999.0);
+                  ref.read(editorClipsProvider.notifier)
+                    .reorder(clip.id, newStart, clip.trackIndex);
+                },
+                child: AnimatedContainer(
+                  duration: 100.ms,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                      ? trackColor.withOpacity(0.8)
+                      : trackColor.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: isSelected ? Colors.white : trackColor,
+                      width: isSelected ? 1.5 : 1,
+                    ),
                   ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Row(
-                    children: [
-                      Icon(_clipIcon(clip.type), size: 10,
-                        color: Colors.white70),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(clip.label,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600)),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(
+                      children: [
+                        Icon(_clipIcon(clip.type), size: 10,
+                          color: Colors.white70),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(clip.label,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
-    ),
-  );
-}
-
-IconData _clipIcon(EditorLayerType t) {
-  switch (t) {
-    case EditorLayerType.video:   return Icons.videocam_rounded;
-    case EditorLayerType.image:   return Icons.image_rounded;
-    case EditorLayerType.text:    return Icons.text_fields_rounded;
-    case EditorLayerType.audio:   return Icons.music_note_rounded;
-    case EditorLayerType.overlay: return Icons.layers_rounded;
+    );
   }
-}
+
+  IconData _clipIcon(EditorLayerType t) {
+    switch (t) {
+      case EditorLayerType.video:   return Icons.videocam_rounded;
+      case EditorLayerType.image:   return Icons.image_rounded;
+      case EditorLayerType.text:    return Icons.text_fields_rounded;
+      case EditorLayerType.audio:   return Icons.music_note_rounded;
+      case EditorLayerType.overlay: return Icons.layers_rounded;
+    }
+  }
 }
 
 class _TLBtn extends StatelessWidget {
@@ -3485,15 +3476,15 @@ class _AddClipDialogState extends State<_AddClipDialog> {
   }
 }
 
-class _AddTextDialog extends StatefulWidget {
+class _AddTextDialog extends ConsumerStatefulWidget {
   final void Function(EditorClip) onAdd;
   const _AddTextDialog({required this.onAdd});
 
   @override
-  State<_AddTextDialog> createState() => _AddTextDialogState();
+  ConsumerState<_AddTextDialog> createState() => _AddTextDialogState();
 }
 
-class _AddTextDialogState extends State<_AddTextDialog> {
+class _AddTextDialogState extends ConsumerState<_AddTextDialog> {
   final _labelCtrl = TextEditingController();
   final _textCtrl  = TextEditingController();
   double _start    = 0;
@@ -3655,24 +3646,41 @@ class _AddTextDialogState extends State<_AddTextDialog> {
                       borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                  onPressed: () {
-                    widget.onAdd(EditorClip(
-                      id:          _uuid.v4(),
-                      type:        EditorLayerType.text,
-                      label:       _labelCtrl.text.trim().isEmpty
-                                     ? 'Texto' : _labelCtrl.text.trim(),
-                      text:        _textCtrl.text,
-                      startSec:    _start,
-                      durationSec: _duration,
-                      trackIndex:  3,
-                      textColor:   _color,
-                      fontSize:    _fontSize,
-                      bold:        _bold,
-                      x: 640, y: 360,
-                      width: 1000, height: 100,
-                    ));
-                    Navigator.pop(context);
-                  },
+                 onPressed: () {
+  final allClips = ref.read(editorClipsProvider);
+  final tracks = ref.read(tracksProvider);
+  const preferredIdx = 3;
+  
+  int trackIdx = preferredIdx;
+  for (int i = 0; i < tracks.length; i++) {
+    final candidateIdx = (preferredIdx + i) % tracks.length;
+    final occupied = allClips.any((c) =>
+      c.trackIndex == candidateIdx &&
+      c.startSec < (_start + _duration) &&
+      (c.startSec + c.durationSec) > _start
+    );
+    if (!occupied) {
+      trackIdx = candidateIdx;
+      break;
+    }
+  }
+  
+  widget.onAdd(EditorClip(
+    id: _uuid.v4(),
+    type: EditorLayerType.text,
+    label: _labelCtrl.text.trim().isEmpty ? 'Texto' : _labelCtrl.text.trim(),
+    text: _textCtrl.text,
+    startSec: _start,
+    durationSec: _duration,
+    trackIndex: trackIdx,
+    textColor: _color,
+    fontSize: _fontSize,
+    bold: _bold,
+    x: 640, y: 360,
+    width: 1000, height: 100,
+  ));
+  Navigator.pop(context);
+},
                   child: const Text('Agregar texto',
                     style: TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 12)),
@@ -4196,7 +4204,7 @@ class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
                                 onTap: () => _loadInEditor(context, pl),
                               ),
                               const SizedBox(width: 4),
-                              _IconAction(
+                             /* _IconAction(
                                 icon: Icons.link_rounded,
                                 color: _EC.green,
                                 tooltip: 'Copiar link',
@@ -4214,7 +4222,7 @@ class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
                                   ));
                                 },
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 4),*/
                               _IconAction(
                                 icon: Icons.delete_outline_rounded,
                                 color: _EC.red,
@@ -4449,9 +4457,11 @@ Widget build(BuildContext context) {
 
                   // ── MODIFICACIÓN: orden de capas ──
                   ...(() {
-                    final sorted = [...active];
-                 sorted.sort((a, b) => a.trackIndex.compareTo(b.trackIndex));
-                    return sorted;
+                 final sorted = [...active];
+  sorted.sort((a, b) {
+    return b.trackIndex.compareTo(a.trackIndex);
+  });
+  return sorted;
                   }()).map((clip) => Positioned(
                         left:   (clip.x - clip.width  / 2) * sx,
                         top:    (clip.y - clip.height / 2) * sy,
@@ -4728,14 +4738,38 @@ class _ActionBtnState extends State<_ActionBtn> {
 
 
 // Provider para biblioteca de medios desde Firestore
-final mediaLibraryProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return FirebaseFirestore.instance
-    .collection('media_library')
-    .orderBy('createdAt', descending: true)
-    .snapshots()
-    .map((snap) => snap.docs
-      .map((d) => {'id': d.id, ...d.data()})
-      .toList());
+final mediaLibraryProvider = StreamProvider<List<Map<String, dynamic>>>((ref) async* {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) { yield []; return; }
+
+  final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+  Stream<QuerySnapshot> stream;
+
+  if (companyId != null) {
+    stream = FirebaseFirestore.instance
+        .collection('media_library')
+        .where('companyId', isEqualTo: companyId)
+        .snapshots();
+  } else {
+    stream = FirebaseFirestore.instance
+        .collection('media_library')
+        .snapshots();
+  }
+
+  yield* stream.map((snap) {
+    final list = snap.docs
+        .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+        .toList();
+    list.sort((a, b) {
+      final aDate = a['createdAt'];
+      final bDate = b['createdAt'];
+      if (aDate == null || bDate == null) return 0;
+      return (bDate as Timestamp).compareTo(aDate as Timestamp);
+    });
+    return list;
+  });
 });
 
 class _AddMediaDialog extends ConsumerStatefulWidget {
@@ -4802,67 +4836,178 @@ class _AddMediaDialogState extends ConsumerState<_AddMediaDialog>
     }
   }
 
-  Future<void> _pickFile() async {
+Future<void> _pickFile() async {
   setState(() => _loading = true);
   try {
+    debugPrint('📁 [FilePicker] Abriendo selector...');
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: _allowedExtensions,
       withData: true,
     );
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      if (file.bytes != null) {
-        setState(() {
-          _fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        });
-        final storageUrl = await _uploadToStorage(file.bytes!, _fileName!);
-        if (storageUrl != null) {
-          setState(() {
-            _blobUrl  = null;
-            _urlCtrl.text = storageUrl;
-            if (_labelCtrl.text.isEmpty) {
-              _labelCtrl.text = file.name.split('.').first;
-            }
-          });
-          await _saveToLibrary(file.name, storageUrl);
-        }
-      }
+    if (result == null || result.files.isEmpty) {
+      debugPrint('📁 [FilePicker] Cancelado por el usuario');
+      setState(() => _loading = false);
+      return;
     }
-  } catch (e) { debugPrint('Error picking file: $e'); }
-  setState(() => _loading = false);
+    final file = result.files.first;
+    debugPrint('📁 [FilePicker] Archivo: ${file.name}, size: ${file.size} bytes, bytes null: ${file.bytes == null}');
+    if (file.bytes == null) {
+      debugPrint('❌ [FilePicker] bytes es null en Flutter Web');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudieron leer los bytes del archivo'),
+        backgroundColor: _EC.red, behavior: SnackBarBehavior.floating));
+      setState(() => _loading = false);
+      return;
+    }
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+    setState(() { _fileName = fileName; _uploadProgress = 0.01; });
+    final storageUrl = await _uploadToStorage(file.bytes!, fileName);
+    if (storageUrl != null) {
+      debugPrint('✅ [Storage] URL obtenida: $storageUrl');
+      await _saveToLibrary(file.name, storageUrl);
+      setState(() {
+        _blobUrl = null;
+        _urlCtrl.text = storageUrl;
+        _uploadProgress = 1.0;
+        if (_labelCtrl.text.isEmpty) _labelCtrl.text = file.name.split('.').first;
+      });
+    } else {
+      debugPrint('❌ [Storage] _uploadToStorage retornó null');
+      setState(() { _fileName = null; _uploadProgress = 0; });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error al subir a Firebase Storage. Ver consola.'),
+        backgroundColor: _EC.red, behavior: SnackBarBehavior.floating));
+    }
+  } catch (e, stack) {
+    debugPrint('❌ [_pickFile] Exception: $e');
+    debugPrint('$stack');
+    setState(() { _fileName = null; _uploadProgress = 0; });
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Error: $e'),
+      backgroundColor: _EC.red, behavior: SnackBarBehavior.floating));
+  }
+  if (mounted) setState(() => _loading = false);
 }
-
 Future<String?> _uploadToStorage(List<int> bytes, String fileName) async {
   try {
-    // Importa firebase_storage en el archivo
-    final ref = html.window.fetch(
-      'https://firebasestorage.googleapis.com',
+    debugPrint('☁️ [Storage] Iniciando upload REST: $fileName');
+
+    setState(() => _uploadProgress = 0.01);
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      debugPrint('❌ [Storage] Usuario no autenticado');
+      return null;
+    }
+
+    final token = await user.getIdToken(true);
+
+    // ⚠️ COLOCA TU BUCKET REAL
+    const bucket = 'estilista-7a538.appspot.com';
+
+    final path = 'media_library/images/$fileName';
+
+    final uploadUrl =
+        'https://firebasestorage.googleapis.com/v0/b/$bucket/o?uploadType=media&name=${Uri.encodeComponent(path)}';
+
+    debugPrint('☁️ [Storage] URL: $uploadUrl');
+
+    final mimeType = _getMimeType(fileName);
+
+    final response = await html.HttpRequest.request(
+      uploadUrl,
+      method: 'POST',
+      requestHeaders: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': mimeType,
+      },
+      sendData: Uint8List.fromList(bytes),
     );
-    // Usamos el SDK de Firebase Storage via REST
-    // Primero obtenemos el token de autenticación
-    final storageRef = _getStorageRef(fileName);
-    final uploadTask = storageRef.putData(
-      Uint8List.fromList(bytes),
-      firebase_storage.SettableMetadata(
-        contentType: _getMimeType(fileName),
-      ),
-    );
-    
-    // Progreso opcional
-    uploadTask.snapshotEvents.listen((snapshot) {
-      final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-      if (mounted) setState(() => _uploadProgress = progress);
-    });
-    
-    final snapshot = await uploadTask;
-    final downloadUrl = await snapshot.ref.getDownloadURL();
-    return downloadUrl;
-  } catch (e) {
-    debugPrint('Error uploading to Storage: $e');
+
+    debugPrint('☁️ [Storage] STATUS: ${response.status}');
+    debugPrint('☁️ [Storage] RESPONSE: ${response.responseText}');
+
+    if (response.status == 200) {
+      setState(() => _uploadProgress = 1.0);
+
+      final encodedName = Uri.encodeComponent(path);
+
+      final downloadUrl =
+          'https://firebasestorage.googleapis.com/v0/b/$bucket/o/$encodedName?alt=media';
+
+      debugPrint('✅ [Storage] downloadURL: $downloadUrl');
+
+      return downloadUrl;
+    }
+
+    debugPrint('❌ [Storage] Error HTTP');
+
+    return null;
+  } catch (e, stack) {
+    debugPrint('❌ [Storage] Exception: $e');
+    debugPrint('$stack');
+
+    if (mounted) {
+      setState(() => _uploadProgress = 0);
+    }
+
     return null;
   }
 }
+/*
+Future<String?> _uploadToStorage(List<int> bytes, String fileName) async {
+  try {
+    debugPrint('☁️ [Storage] Iniciando upload: $fileName (${bytes.length} bytes)');
+    setState(() => _uploadProgress = 0.01);
+    final storageRef = _getStorageRef(fileName);
+    final mimeType = _getMimeType(fileName);
+    debugPrint('☁️ [Storage] Ref path: ${storageRef.fullPath}, mime: $mimeType');
+
+    firebase_storage.UploadTask uploadTask;
+
+    // En Flutter Web, putBlob es más confiable que putData
+    try {
+      final blob = html.Blob([Uint8List.fromList(bytes)], mimeType);
+      debugPrint('☁️ [Storage] Usando putBlob (web)');
+      uploadTask = storageRef.putBlob(
+        blob,
+        firebase_storage.SettableMetadata(contentType: mimeType),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [Storage] putBlob falló ($e), usando putData');
+      uploadTask = storageRef.putData(
+        Uint8List.fromList(bytes),
+        firebase_storage.SettableMetadata(contentType: mimeType),
+      );
+    }
+
+    uploadTask.snapshotEvents.listen(
+      (snapshot) {
+        debugPrint('☁️ [Storage] Progress: ${snapshot.bytesTransferred}/${snapshot.totalBytes} state:${snapshot.state}');
+        if (snapshot.totalBytes > 0 && mounted) {
+          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+          setState(() => _uploadProgress = progress.clamp(0.01, 0.99));
+        }
+      },
+      onError: (e) => debugPrint('❌ [Storage] snapshotEvents error: $e'),
+    );
+
+    debugPrint('☁️ [Storage] Esperando await uploadTask...');
+    final snapshot = await uploadTask;
+    debugPrint('☁️ [Storage] Upload completo, state: ${snapshot.state}');
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+    debugPrint('✅ [Storage] downloadURL: $downloadUrl');
+    if (mounted) setState(() => _uploadProgress = 1.0);
+    return downloadUrl;
+  } catch (e, stack) {
+    debugPrint('❌ [Storage] Exception: $e');
+    debugPrint('$stack');
+    if (mounted) setState(() => _uploadProgress = 0);
+    return null;
+  }
+}*/
 
 firebase_storage.Reference _getStorageRef(String fileName) {
   final folder = widget.type == EditorLayerType.image ? 'images'
@@ -4889,13 +5034,24 @@ String _getMimeType(String fileName) {
 
 Future<void> _saveToLibrary(String name, String url) async {
   try {
+    debugPrint('🗄️ [Firestore] Guardando en media_library: $name');
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    debugPrint('🗄️ [Firestore] UID: $uid');
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+    debugPrint('🗄️ [Firestore] companyId: $companyId');
     await FirebaseFirestore.instance.collection('media_library').add({
       'name':      name,
-      'url':       url,   // URL permanente de Firebase Storage
+      'url':       url,
       'type':      _libTypeFilter,
+      'companyId': companyId,
       'createdAt': FieldValue.serverTimestamp(),
     });
-  } catch (e) { debugPrint('Error saving to library: $e'); }
+    debugPrint('✅ [Firestore] Guardado correctamente');
+  } catch (e, stack) {
+    debugPrint('❌ [Firestore] Exception: $e');
+    debugPrint('$stack');
+  }
 }
 
  
@@ -5289,31 +5445,51 @@ Future<void> _saveToLibrary(String name, String url) async {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                     elevation: 0),
-                  onPressed: () {
-                    final url = _blobUrl ?? _urlCtrl.text.trim();
-                    int trackIdx;
-                    switch (widget.type) {
-                      case EditorLayerType.image: trackIdx = 2; break;
-                      case EditorLayerType.video: trackIdx = 0; break;
-                      case EditorLayerType.audio: trackIdx = 4; break;
-                      default: trackIdx = 2;
-                    }
-                    widget.onAdd(EditorClip(
-                      id: _uuid.v4(),
-                      type: widget.type,
-                      label: _labelCtrl.text.trim().isEmpty
-                        ? _label : _labelCtrl.text.trim(),
-                      url: url.isEmpty ? null : url,
-                      startSec: _start,
-                      durationSec: _duration,
-                      trackIndex: trackIdx,
-                      width: widget.type == EditorLayerType.audio ? 1280 : 640,
-                      height: widget.type == EditorLayerType.audio ? 80 : 360,
-                      x: 640,
-                      y: widget.type == EditorLayerType.audio ? 680 : 360,
-                    ));
-                    Navigator.pop(context);
-                  },
+              onPressed: () {
+  final url = _blobUrl ?? _urlCtrl.text.trim();
+  
+  // Busca el primer track libre para este tipo
+  final allClips = ref.read(editorClipsProvider);
+  final tracks = ref.read(tracksProvider);
+  
+  int preferredIdx;
+  switch (widget.type) {
+    case EditorLayerType.image: preferredIdx = 2; break;
+    case EditorLayerType.video: preferredIdx = 0; break;
+    case EditorLayerType.audio: preferredIdx = 4; break;
+    default: preferredIdx = 2;
+  }
+  
+  // Encuentra un track que no tenga clips en el tiempo _start.._start+_duration
+  int trackIdx = preferredIdx;
+  for (int i = 0; i < tracks.length; i++) {
+    final candidateIdx = (preferredIdx + i) % tracks.length;
+    final occupied = allClips.any((c) =>
+      c.trackIndex == candidateIdx &&
+      c.startSec < (_start + _duration) &&
+      (c.startSec + c.durationSec) > _start
+    );
+    if (!occupied) {
+      trackIdx = candidateIdx;
+      break;
+    }
+  }
+  
+  widget.onAdd(EditorClip(
+    id: _uuid.v4(),
+    type: widget.type,
+    label: _labelCtrl.text.trim().isEmpty ? _label : _labelCtrl.text.trim(),
+    url: url.isEmpty ? null : url,
+    startSec: _start,
+    durationSec: _duration,
+    trackIndex: trackIdx,
+    width: widget.type == EditorLayerType.audio ? 1280 : 640,
+    height: widget.type == EditorLayerType.audio ? 80 : 360,
+    x: 640,
+    y: widget.type == EditorLayerType.audio ? 680 : 360,
+  ));
+  Navigator.pop(context);
+},
                   child: Text('Agregar $_label',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 12)),
@@ -5780,11 +5956,11 @@ class TracksNotifier extends StateNotifier<List<TrackDef>> {
   }
 
   void reorder(int oldIdx, int newIdx) {
-    final list = [...state];
-    final item = list.removeAt(oldIdx);
-    list.insert(newIdx, item);
-    state = list;
-  }
+  final list = [...state];
+  final item = list.removeAt(oldIdx);
+  list.insert(newIdx, item);
+  state = list;
+}
 
   void rename(String id, String newLabel) {
     state = state.map((t) => t.id == id ? t.copyWith(label: newLabel) : t).toList();

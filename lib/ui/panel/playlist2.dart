@@ -283,38 +283,21 @@ Widget build(BuildContext context) {
       }).toList(),
     );
   }
-
- void _visualize(BuildContext context, SavedPlaylist pl) {
-  // Navigator.pop(context);  ← ESTO ERA EL CRASH, eliminarlo
+void _visualize(BuildContext context, SavedPlaylist pl) {
   showDialog(
     context: context,
-    builder: (_) => AlertDialog(
-      backgroundColor: _EC.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: _EC.border)),
-      title: Text(pl.name,
-        style: const TextStyle(color: _EC.textHi, fontSize: 15)),
-      content: Text('Visualizador próximamente',
-        style: const TextStyle(color: _EC.textMid)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cerrar',
-            style: TextStyle(color: _EC.primary))),
-      ],
-    ),
+    builder: (_) => PlaylistViewerDialog(playlist: pl),
   );
 }
 
-  void _loadInEditor(BuildContext context, SavedPlaylist pl) {
-    final notifier = widget.ref.read(editorClipsProvider.notifier);
-    for (final c in notifier.state.toList()) notifier.remove(c.id);
-    for (final c in pl.clips) notifier.add(c);
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      _snackEC('"${pl.name}" cargada en el editor'));
-  }
+void _loadInEditor(BuildContext context, SavedPlaylist pl) {
+  final notifier = widget.ref.read(editorClipsProvider.notifier);
+  for (final c in notifier.state.toList()) notifier.remove(c.id);
+  for (final c in pl.clips) notifier.add(c);
+  Navigator.pop(context);
+  ScaffoldMessenger.of(context).showSnackBar(
+    _snackEC('"${pl.name}" cargada en el editor'));
+}
 
   SnackBar _snackEC(String msg) => SnackBar(
     content: Text(msg, style: const TextStyle(color: _EC.textHi)),
@@ -543,12 +526,12 @@ Widget _narrowLayout(SavedPlaylist pl, bool hasClips, int clipsCount) {
         tooltip: 'Cargar en editor',
         onTap: widget.onEdit),
       const SizedBox(width: 6),
-      _ActionIcon(
+     /* _ActionIcon(
         icon: Icons.link_rounded,
         color: _EC.green,
         tooltip: 'Copiar link',
         onTap: widget.onCopyLink),
-      const SizedBox(width: 6),
+      const SizedBox(width: 6),*/
       _ActionIcon(
         icon: Icons.delete_outline_rounded,
         color: _EC.red,

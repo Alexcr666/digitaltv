@@ -1,5 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui_web' as ui_web;
 import 'dart:html' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:digitaltv/ui/panel/panel3.dart';
+import 'dart:ui_web' as ui_web;
+import 'dart:html' as html;
+import 'dart:math' as math;
+import 'package:uuid/uuid.dart';
 // =============================================================================
 // DESIGN TOKENS
 // =============================================================================
@@ -110,21 +115,35 @@ class _PlaylistData {
     required this.displayToken,
   });
 
-  factory _PlaylistData.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
-    final raw = (d['items'] as List<dynamic>?) ?? [];
-    return _PlaylistData(
-      id:           doc.id,
-      name:         d['name'] ?? 'Playlist',
-      description:  d['description'],
-      items:        raw
-          .map((i) => _PlaylistItem.fromMap(i as Map<String, dynamic>))
-          .toList()
-            ..sort((a, b) => a.order.compareTo(b.order)),
-      isActive:     d['isActive'] ?? true,
-      displayToken: d['displayToken'] ?? '',
-    );
-  }
+factory _PlaylistData.fromFirestore(DocumentSnapshot doc) {
+  final d = doc.data() as Map<String, dynamic>;
+  final raw = (d['items'] as List<dynamic>?)
+      ?? (d['clips'] as List<dynamic>?)
+      ?? [];
+  return _PlaylistData(
+    id:           doc.id,
+    name:         d['name'] ?? 'Playlist',
+    description:  d['description'],
+    items:        raw.map((i) {
+      final map = i as Map<String, dynamic>;
+      return _PlaylistItem(
+        id:              map['id'] ?? '',
+        type:            map['type'] ?? 'text',
+        title:           map['title'] ?? map['label'] ?? '',
+        url:             map['url'],
+        textContent:     map['textContent'] ?? map['text'],
+        durationSeconds: (() {
+          final v = map['durationSeconds'] ?? map['durationSec'] ?? 10;
+          return v is int ? v : (v as num).round();
+        })(),
+        order:           map['order'] ?? 0,
+      );
+    }).toList()
+      ..sort((a, b) => a.order.compareTo(b.order)),
+    isActive:     d['isActive'] ?? true,
+    displayToken: d['displayToken'] ?? '',
+  );
+}
 }
 
 // =============================================================================
@@ -161,38 +180,48 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
     super.dispose();
   }
 
-  Future<void> _login() async {
-    if (_userCtrl.text.trim().isEmpty || _passCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Completa todos los campos');
+ Future<void> _login() async {
+  if (_userCtrl.text.trim().isEmpty || _passCtrl.text.trim().isEmpty) {
+    setState(() => _error = 'Completa todos los campos');
+    return;
+  }
+  setState(() { _loading = true; _error = null; });
+  try {
+    final snap = await FirebaseFirestore.instance
+        .collection('devices')
+        .where('portalUsername', isEqualTo: _userCtrl.text.trim())
+        .limit(1)
+        .get();
+
+    if (snap.docs.isEmpty) {
+      setState(() { _error = 'Usuario no encontrado'; _loading = false; });
       return;
     }
-    setState(() { _loading = true; _error = null; });
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('devices')
-          .where('portalUsername', isEqualTo: _userCtrl.text.trim())
-          .limit(1)
-          .get();
 
-      if (snap.docs.isEmpty) {
-        setState(() { _error = 'Usuario no encontrado'; _loading = false; });
-        return;
-      }
-
-      final device = DeviceUser.fromFirestore(snap.docs.first);
-      if (device.password != _passCtrl.text.trim()) {
-        setState(() { _error = 'Contraseña incorrecta'; _loading = false; });
-        return;
-      }
-
-      if (mounted) {
-        context.go('/portal/dashboard', extra: device);
-      }
-    } catch (e) {
-      setState(() { _error = 'Error: $e'; _loading = false; });
+    final device = DeviceUser.fromFirestore(snap.docs.first);
+    if (device.password != _passCtrl.text.trim()) {
+      setState(() { _error = 'Contraseña incorrecta'; _loading = false; });
+      return;
     }
-  }
 
+    // Guardar sesión en localStorage
+    html.window.localStorage['portal_session'] = jsonEncode({
+      'deviceId':            device.deviceId,
+      'deviceName':          device.deviceName,
+      'username':            device.username,
+      'password':            device.password,
+      'displayToken':        device.displayToken,
+      'currentPlaylistId':   device.currentPlaylistId,
+      'currentPlaylistName': device.currentPlaylistName,
+    });
+
+    if (mounted) {
+      context.go('/portal/dashboard', extra: device);
+    }
+  } catch (e) {
+    setState(() { _error = 'Error: $e'; _loading = false; });
+  }
+}
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -458,7 +487,7 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
 // DEVICE DASHBOARD — Lista de playlists + visor fullscreen
 // =============================================================================
 class DeviceDashboardScreen extends StatefulWidget {
-  final DeviceUser device;
+  final DeviceUser? device;
   const DeviceDashboardScreen({super.key, required this.device});
 
   @override
@@ -470,6 +499,7 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
   _PlaylistData? _selectedPlaylist;
   bool _fullscreen = false;
   late AnimationController _sidebarCtrl;
+  DeviceUser? _device;
 
   @override
   void initState() {
@@ -477,31 +507,94 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
     _sidebarCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 400));
     _sidebarCtrl.forward();
+
+    // Recuperar sesión: primero del extra, si no del localStorage
+    _device = widget.device ?? _sessionFromStorage();
+
+    if (_device == null) {
+      // No hay sesión, redirigir al login
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/portal');
+      });
+      return;
+    }
+
     _loadCurrentPlaylist();
+  }
+
+  DeviceUser? _sessionFromStorage() {
+    try {
+      final raw = html.window.localStorage['portal_session'];
+      if (raw == null || raw.isEmpty) return null;
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return DeviceUser(
+        deviceId:            map['deviceId'] ?? '',
+        deviceName:          map['deviceName'] ?? '',
+        username:            map['username'] ?? '',
+        password:            map['password'] ?? '',
+        displayToken:        map['displayToken'] ?? '',
+        currentPlaylistId:   map['currentPlaylistId'],
+        currentPlaylistName: map['currentPlaylistName'],
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   void dispose() { _sidebarCtrl.dispose(); super.dispose(); }
 
   Future<void> _loadCurrentPlaylist() async {
-    if (widget.device.currentPlaylistId == null) return;
+    if (_device?.currentPlaylistId == null) return;
     try {
       final doc = await FirebaseFirestore.instance
           .collection('playlists')
-          .doc(widget.device.currentPlaylistId)
+          .doc(_device!.currentPlaylistId)
           .get();
       if (doc.exists && mounted) {
-        setState(() => _selectedPlaylist = _PlaylistData.fromFirestore(doc));
+        final d = doc.data() as Map<String, dynamic>;
+        final rawItems = (d['items'] as List<dynamic>?) ?? [];
+        final items = rawItems
+            .map((i) => _PlaylistItem.fromMap(i as Map<String, dynamic>))
+            .toList()
+              ..sort((a, b) => a.order.compareTo(b.order));
+        setState(() => _selectedPlaylist = _PlaylistData(
+          id: doc.id,
+          name: d['name'] ?? 'Playlist',
+          description: d['description'],
+          items: items,
+          isActive: d['isActive'] ?? true,
+          displayToken: d['displayToken'] ?? '',
+        ));
+        return;
       }
-    } catch (_) {}
+      final snap = await FirebaseFirestore.instance
+          .collection('playlists')
+          .where('displayToken', isEqualTo: _device!.currentPlaylistId)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty && mounted) {
+        setState(() => _selectedPlaylist =
+            _PlaylistData.fromFirestore(snap.docs.first));
+      }
+    } catch (e) {
+      debugPrint('Error loading playlist: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_device == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF060A14),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_fullscreen && _selectedPlaylist != null) {
       return _FullscreenViewer(
         playlist: _selectedPlaylist!,
-        deviceId: widget.device.deviceId,
+        deviceId: _device!.deviceId,
         onExit: () => setState(() => _fullscreen = false),
       );
     }
@@ -510,56 +603,49 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
       backgroundColor: _P.bg,
       body: Row(
         children: [
-          // ── Sidebar ────────────────────────────────────────────────────
           SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(-1, 0),
               end: Offset.zero,
             ).animate(CurvedAnimation(
               parent: _sidebarCtrl, curve: Curves.easeOutCubic)),
-            child: _Sidebar(device: widget.device),
+            child: _Sidebar(device: _device!),
           ),
-
-          // ── Main content ───────────────────────────────────────────────
           Expanded(
             child: Column(
               children: [
-                // Top bar
                 _DashboardTopBar(
-                  device: widget.device,
+                  device: _device!,
                   selectedPlaylist: _selectedPlaylist,
                   onFullscreen: _selectedPlaylist != null
                     ? () => setState(() => _fullscreen = true)
                     : null,
-                  onLogout: () => context.go('/portal'),
+                  onLogout: () {
+                    html.window.localStorage.remove('portal_session');
+                    context.go('/portal');
+                  },
                 ),
-
-                // Content
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Playlists list
                       SizedBox(
                         width: 360,
                         child: _PlaylistsPanel(
-                          deviceId: widget.device.deviceId,
+                          deviceId: _device!.deviceId,
                           selectedId: _selectedPlaylist?.id,
                           onSelect: (pl) => setState(() =>
                             _selectedPlaylist = pl),
                         ),
                       ),
-
                       Container(width: 1,
                         color: _P.border.withOpacity(0.5)),
-
-                      // Preview panel
                       Expanded(
                         child: _selectedPlaylist == null
                           ? _EmptyPreview()
                           : _PreviewPanel(
                               playlist: _selectedPlaylist!,
-                              deviceId: widget.device.deviceId,
+                              deviceId: _device!.deviceId,
                               onFullscreen: () =>
                                 setState(() => _fullscreen = true),
                             ),
@@ -574,6 +660,13 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
       ),
     );
   }
+}
+
+void _showSchedules(BuildContext context, DeviceUser device) {
+  showDialog(
+    context: context,
+    builder: (_) => _DeviceSchedulesDialog(device: device),
+  );
 }
 
 // =============================================================================
@@ -594,7 +687,6 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 16),
-          // Logo
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
@@ -619,17 +711,26 @@ class _Sidebar extends StatelessWidget {
             label: 'Playlists',
             selected: true,
             color: _P.primary,
+            onTap: null,
           ),
           const SizedBox(height: 8),
-          _SidebarBtn(
-            icon: Icons.tv_rounded,
-            label: 'Display',
-            selected: false,
-            color: _P.accent,
-          ),
+_SidebarBtn(
+  icon: Icons.calendar_view_week_rounded,
+  label: 'Programación',
+  selected: false,
+  color: _P.purple,
+  onTap: () => _showSchedules(context, device),
+),
+          const SizedBox(height: 8),
+       /* _SidebarBtn(
+  icon: Icons.tv_rounded,
+  label: 'Ver display',
+  selected: false,
+  color: _P.accent,
+  onTap: () => _launchDisplay(context, device),
+),*/
           const Spacer(),
 
-          // Avatar
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
@@ -651,6 +752,23 @@ class _Sidebar extends StatelessWidget {
       ),
     );
   }
+
+  void _launchDisplay(BuildContext context, DeviceUser device) {
+    // Usa el displayToken guardado en el device doc de Firestore
+    // El token está en device.displayToken (campo 'displayToken' del doc)
+    final token = device.displayToken;
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este dispositivo no tiene display configurado'),
+          backgroundColor: Color(0xFF111827),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    context.go('/display/$token');
+  }
 }
 
 class _SidebarBtn extends StatefulWidget {
@@ -658,9 +776,11 @@ class _SidebarBtn extends StatefulWidget {
   final String label;
   final bool selected;
   final Color color;
+  final VoidCallback? onTap;
   const _SidebarBtn({
     required this.icon, required this.label,
-    required this.selected, required this.color});
+    required this.selected, required this.color,
+    this.onTap});
 
   @override
   State<_SidebarBtn> createState() => _SidebarBtnState();
@@ -674,24 +794,29 @@ class _SidebarBtnState extends State<_SidebarBtn> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit:  (_) => setState(() => _hovered = false),
-      child: Tooltip(
-        message: widget.label,
-        preferBelow: false,
-        child: AnimatedContainer(
-          duration: 150.ms,
-          width: 44, height: 44,
-          decoration: BoxDecoration(
-            color: widget.selected || _hovered
-              ? widget.color.withOpacity(0.15)
-              : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.selected
-                ? widget.color.withOpacity(0.4)
-                : Colors.transparent),
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Tooltip(
+          message: widget.label,
+          preferBelow: false,
+          child: AnimatedContainer(
+            duration: 150.ms,
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: widget.selected || _hovered
+                ? widget.color.withOpacity(0.15)
+                : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.selected
+                  ? widget.color.withOpacity(0.4)
+                  : Colors.transparent),
+            ),
+            child: Icon(widget.icon, size: 20,
+              color: widget.selected ? widget.color : _P.textMid),
           ),
-          child: Icon(widget.icon, size: 20,
-            color: widget.selected ? widget.color : _P.textMid),
         ),
       ),
     );
@@ -910,7 +1035,7 @@ class _PlaylistsPanelState extends State<_PlaylistsPanel> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('playlists')
-                  .where('isActive', isEqualTo: true)
+                  //.where('isActive', isEqualTo: true)
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snap) {
@@ -1102,7 +1227,6 @@ class _PlaylistTileState extends State<_PlaylistTile> {
     );
   }
 }
-
 // =============================================================================
 // PREVIEW PANEL
 // =============================================================================
@@ -1122,66 +1246,101 @@ class _PreviewPanel extends StatefulWidget {
 
 class _PreviewPanelState extends State<_PreviewPanel>
     with TickerProviderStateMixin {
-  int _currentIndex = 0;
-  Timer? _timer;
+  double _playhead = 0;
+  Timer? _playTimer;
   bool _playing = true;
+   SavedPlaylist? _saved;     
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 500));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
-    _fadeCtrl.forward();
-    if (_playing) _startTimer();
+  double get _total {
+    if (widget.playlist.items.isEmpty) return 10;
+    return widget.playlist.items
+        .fold(0.0, (s, i) => s + i.durationSeconds)
+        + 1;
   }
 
-  @override
-  void didUpdateWidget(_PreviewPanel old) {
-    super.didUpdateWidget(old);
-    if (old.playlist.id != widget.playlist.id) {
-      _timer?.cancel();
-      setState(() => _currentIndex = 0);
-      _fadeCtrl.forward(from: 0);
-      if (_playing) _startTimer();
-    }
+ @override
+void initState() {
+  super.initState();
+  _fadeCtrl = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 500));
+  _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
+  _fadeCtrl.forward();
+  _loadSaved();
+}
+
+@override
+void didUpdateWidget(_PreviewPanel old) {
+  super.didUpdateWidget(old);
+  if (old.playlist.id != widget.playlist.id) {
+    setState(() { _playhead = 0; _saved = null; });
+    _fadeCtrl.forward(from: 0);
+    _loadSaved();
   }
+}
+
+Future<void> _loadSaved() async {
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('playlists').doc(widget.playlist.id).get();
+    if (!doc.exists) { _fallbackSaved(); return; }
+    final data = doc.data() as Map<String, dynamic>;
+    final raw = (data['clips'] as List<dynamic>?)
+             ?? (data['items'] as List<dynamic>?) ?? [];
+    if (raw.isEmpty) { _fallbackSaved(); return; }
+    final clips = raw.map((i) =>
+      EditorClip.fromMap(i as Map<String, dynamic>)).toList();
+    if (mounted) setState(() => _saved = SavedPlaylist(
+      id: widget.playlist.id, name: widget.playlist.name,
+      clips: clips, createdAt: DateTime.now(), viewLink: ''));
+  } catch (_) { _fallbackSaved(); }
+}
+
+void _fallbackSaved() {
+  double acc = 0;
+  final clips = <EditorClip>[];
+  for (final item in widget.playlist.items) {
+    EditorLayerType type;
+    switch (item.type) {
+      case 'image': type = EditorLayerType.image; break;
+      case 'video': type = EditorLayerType.video; break;
+      case 'audio': type = EditorLayerType.audio; break;
+      default: type = EditorLayerType.text;
+    }
+    final start = acc;
+    acc += item.durationSeconds;
+    clips.add(EditorClip(
+      id: item.id.isEmpty ? const Uuid().v4() : item.id,
+      type: type, label: item.title, url: item.url,
+      text: item.textContent ?? item.title,
+      startSec: start, durationSec: item.durationSeconds.toDouble(),
+      trackIndex: 0, x: 640, y: 360, width: 1280, height: 720,
+      textColor: Colors.white, fontSize: 48, bold: false,
+    ));
+  }
+  if (mounted) setState(() => _saved = SavedPlaylist(
+    id: widget.playlist.id, name: widget.playlist.name,
+    clips: clips, createdAt: DateTime.now(), viewLink: ''));
+}
 
   @override
   void dispose() {
-    _timer?.cancel(); _fadeCtrl.dispose(); super.dispose();
+    _playTimer?.cancel();
+    _fadeCtrl.dispose();
+    super.dispose();
   }
 
   void _startTimer() {
-    _timer?.cancel();
-    if (widget.playlist.items.isEmpty) return;
-    final idx = _currentIndex.clamp(0, widget.playlist.items.length - 1);
-    final dur = widget.playlist.items[idx].durationSeconds;
-    _timer = Timer(Duration(seconds: dur), _nextSlide);
-  }
-
-  Future<void> _nextSlide() async {
-    await _fadeCtrl.reverse();
-    if (!mounted) return;
-    setState(() {
-      _currentIndex =
-        (_currentIndex + 1) % widget.playlist.items.length;
+    _playTimer?.cancel();
+    _playTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      if (_playhead >= _total) {
+        setState(() => _playhead = 0);
+      } else {
+        setState(() => _playhead += 0.05);
+      }
     });
-    await _fadeCtrl.forward();
-    if (_playing) _startTimer();
-  }
-
-  Future<void> _prevSlide() async {
-    await _fadeCtrl.reverse();
-    if (!mounted) return;
-    setState(() {
-      _currentIndex = (_currentIndex - 1 + widget.playlist.items.length)
-        % widget.playlist.items.length;
-    });
-    await _fadeCtrl.forward();
-    if (_playing) _startTimer();
   }
 
   void _togglePlay() {
@@ -1189,7 +1348,7 @@ class _PreviewPanelState extends State<_PreviewPanel>
     if (_playing) {
       _startTimer();
     } else {
-      _timer?.cancel();
+      _playTimer?.cancel();
     }
   }
 
@@ -1201,6 +1360,7 @@ class _PreviewPanelState extends State<_PreviewPanel>
           .update({
         'currentPlaylistId':   widget.playlist.id,
         'currentPlaylistName': widget.playlist.name,
+        'lastSeen': FieldValue.serverTimestamp(),
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1227,6 +1387,37 @@ class _PreviewPanelState extends State<_PreviewPanel>
     }
   }
 
+  List<Map<String, dynamic>> _itemsWithTime() {
+    double acc = 0;
+    return widget.playlist.items.map((item) {
+      final start = acc;
+      acc += item.durationSeconds;
+      return {'item': item, 'start': start, 'end': acc};
+    }).toList();
+  }
+
+  List<_PlaylistItem> _activeItems() {
+    final timed = _itemsWithTime();
+    final active = timed
+        .where((t) => _playhead >= t['start'] && _playhead < t['end'])
+        .map((t) => t['item'] as _PlaylistItem)
+        .toList();
+    if (active.isEmpty && widget.playlist.items.isNotEmpty) {
+      return [widget.playlist.items.first];
+    }
+    return active;
+  }
+
+  int get _currentIndex {
+    final timed = _itemsWithTime();
+    for (int i = 0; i < timed.length; i++) {
+      if (_playhead >= timed[i]['start'] && _playhead < timed[i]['end']) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final pl = widget.playlist;
@@ -1235,8 +1426,7 @@ class _PreviewPanelState extends State<_PreviewPanel>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.playlist_remove_rounded,
-              color: _P.textLo, size: 48),
+            Icon(Icons.playlist_remove_rounded, color: _P.textLo, size: 48),
             const SizedBox(height: 12),
             const Text('Playlist vacía',
               style: TextStyle(color: _P.textMid, fontSize: 16)),
@@ -1245,180 +1435,145 @@ class _PreviewPanelState extends State<_PreviewPanel>
       );
     }
 
-    final safeIdx = _currentIndex.clamp(0, pl.items.length - 1);
-    final item = pl.items[safeIdx];
     final totalDur = pl.items.fold(0, (s, i) => s + i.durationSeconds);
+    final safeIdx = _currentIndex.clamp(0, pl.items.length - 1);
+    final activeItems = _activeItems();
 
-    return Column(
-      children: [
-        // ── Preview header ────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-          child: Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(pl.name,
-                    style: const TextStyle(
-                      color: _P.textHi, fontWeight: FontWeight.w700,
-                      fontSize: 18, letterSpacing: -0.3)),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${pl.items.length} elementos · ${totalDur ~/ 60}m ${totalDur % 60}s',
-                    style: const TextStyle(color: _P.textMid, fontSize: 12)),
-                ],
-              ),
-              const Spacer(),
-
-              // Assign button
-              _ActionButton(
-                icon: Icons.tv_rounded,
-                label: 'Asignar a mi pantalla',
-                color: _P.green,
-                onTap: _assignToDevice,
-              ),
-              const SizedBox(width: 8),
-
-              // Fullscreen button
-              _ActionButton(
-                icon: Icons.fullscreen_rounded,
-                label: 'Pantalla completa',
-                color: _P.accent,
-                onTap: widget.onFullscreen,
-              ),
-            ],
-          ),
-        ),
-
-        // ── Preview canvas 16:9 ───────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _P.border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
-                  blurRadius: 30, offset: const Offset(0, 10)),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // ── Preview header
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FadeTransition(
-                      opacity: _fadeAnim,
-                      child: _ItemPreview(item: item),
-                    ),
-
-                    // Progress bar
-                    Positioned(
-                      bottom: 0, left: 0, right: 0,
-                      child: _MiniProgressBar(
-                        index: safeIdx,
-                        total: pl.items.length,
-                        durationSec: item.durationSeconds,
-                        playing: _playing,
-                        key: ValueKey('bar_$safeIdx'),
-                      ),
-                    ),
-
-                    // Overlay controls on hover
-                    Positioned.fill(
-                      child: MouseRegion(
-                        child: _CanvasOverlay(
-                          onPrev: safeIdx > 0 ? _prevSlide : null,
-                          onNext: safeIdx < pl.items.length - 1
-                            ? _nextSlide : null,
-                          onPlayPause: _togglePlay,
-                          isPlaying: _playing,
-                        ),
-                      ),
-                    ),
+                    Text(pl.name,
+                      style: const TextStyle(
+                        color: _P.textHi, fontWeight: FontWeight.w700,
+                        fontSize: 18, letterSpacing: -0.3)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${pl.items.length} elementos · ${totalDur ~/ 60}m ${totalDur % 60}s',
+                      style: const TextStyle(color: _P.textMid, fontSize: 12)),
                   ],
                 ),
+                const Spacer(),
+                _ActionButton(
+                  icon: Icons.tv_rounded,
+                  label: 'Asignar a mi pantalla1',
+                  color: _P.green,
+                  onTap: (){
+                    
+
+                  },
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
+                  icon: Icons.fullscreen_rounded,
+                  label: 'Pantalla completa',
+                  color: _P.accent,
+                  onTap: widget.onFullscreen,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Canvas 16:9
+         // ── Canvas 16:9
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 24),
+  child: Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _P.border),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.4),
+          blurRadius: 30, offset: const Offset(0, 10)),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(15),
+      child: Stack(
+        children: [
+          _PortalPlaylistCanvas(playlist: pl),
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.7),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: _togglePlay,
+                    child: Container(
+                      width: 30, height: 30,
+                      decoration: BoxDecoration(
+                        color: _P.primary,
+                        borderRadius: BorderRadius.circular(6)),
+                      child: Icon(
+                        _playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                        color: Colors.white, size: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderThemeData(
+                        trackHeight: 2,
+                        thumbColor: _P.primary,
+                        activeTrackColor: _P.primary,
+                        inactiveTrackColor: Colors.white24,
+                        overlayShape: SliderComponentShape.noOverlay,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 5),
+                      ),
+                      child: Slider(
+                        value: _playhead.clamp(0, _total),
+                        min: 0,
+                        max: _total,
+                        onChanged: (v) => setState(() => _playhead = v),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_playhead.toStringAsFixed(1)}s / ${_total.toStringAsFixed(1)}s',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 9,
+                      fontFamily: 'monospace'),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
+        ],
+      ),
+    ),
+  ),
+),
+const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-        const SizedBox(height: 20),
-
-        // ── Items strip ───────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Contenido',
-                style: TextStyle(
-                  color: _P.textMid, fontSize: 12,
-                  fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: pl.items.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final it = pl.items[i];
-                    final isActive = i == safeIdx;
-                    return GestureDetector(
-                      onTap: () async {
-                        _timer?.cancel();
-                        await _fadeCtrl.reverse();
-                        if (!mounted) return;
-                        setState(() => _currentIndex = i);
-                        await _fadeCtrl.forward();
-                        if (_playing) _startTimer();
-                      },
-                      child: AnimatedContainer(
-                        duration: 150.ms,
-                        width: 100,
-                        decoration: BoxDecoration(
-                          color: isActive
-                            ? _P.primary.withOpacity(0.12)
-                            : _P.card,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isActive
-                              ? _P.primary.withOpacity(0.5)
-                              : _P.border,
-                            width: isActive ? 2 : 1),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(_itemIcon(it.type),
-                              size: 20,
-                              color: isActive ? _P.primary : _itemColor(it.type)),
-                            const SizedBox(height: 4),
-                            Text(it.title,
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: isActive ? _P.primary : _P.textMid,
-                                fontSize: 9, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Text('${it.durationSeconds}s',
-                              style: const TextStyle(
-                                color: _P.textLo, fontSize: 9)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+         
+        ],
+      ),
     );
   }
 
@@ -1568,76 +1723,66 @@ class _FullscreenViewer extends StatefulWidget {
   State<_FullscreenViewer> createState() => _FullscreenViewerState();
 }
 
-class _FullscreenViewerState extends State<_FullscreenViewer>
-    with TickerProviderStateMixin {
-  int _currentIndex = 0;
-  Timer? _timer;
-  bool _playing = true;
-  bool _showUI  = true;
+class _FullscreenViewerState extends State<_FullscreenViewer> {
+  bool _showUI = true;
   Timer? _hideUITimer;
-  late AnimationController _fadeCtrl;
-  late Animation<double> _fadeAnim;
-
-  // Realtime listener for playlist changes
-  StreamSubscription? _playlistSub;
-  _PlaylistData? _currentPlaylist;
+  SavedPlaylist? _saved;
 
   @override
   void initState() {
     super.initState();
-    _currentPlaylist = widget.playlist;
-    _fadeCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 600));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
-    _fadeCtrl.forward();
-    _startTimer();
-    _listenPlaylistChanges();
+    _loadDirect();
     _scheduleHideUI();
   }
 
-  void _listenPlaylistChanges() {
-    _playlistSub = FirebaseFirestore.instance
-        .collection('playlists')
-        .doc(widget.playlist.id)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        setState(() {
-          _currentPlaylist = _PlaylistData.fromFirestore(doc);
-        });
+  Future<void> _loadDirect() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('playlists')
+          .doc(widget.playlist.id)
+          .get();
+      if (!doc.exists) { _fallback(); return; }
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['clips'] as List<dynamic>?)
+               ?? (data['items'] as List<dynamic>?) ?? [];
+      if (raw.isEmpty) { _fallback(); return; }
+      final clips = raw.map((i) =>
+        EditorClip.fromMap(i as Map<String, dynamic>)).toList();
+      if (mounted) setState(() => _saved = SavedPlaylist(
+        id: widget.playlist.id, name: widget.playlist.name,
+        clips: clips, createdAt: DateTime.now(), viewLink: ''));
+    } catch (_) { _fallback(); }
+  }
+
+  void _fallback() {
+    double acc = 0;
+    final clips = <EditorClip>[];
+    for (final item in widget.playlist.items) {
+      EditorLayerType type;
+      switch (item.type) {
+        case 'image': type = EditorLayerType.image; break;
+        case 'video': type = EditorLayerType.video; break;
+        case 'audio': type = EditorLayerType.audio; break;
+        default: type = EditorLayerType.text;
       }
-    });
+      final start = acc;
+      acc += item.durationSeconds;
+      clips.add(EditorClip(
+        id: item.id.isEmpty ? const Uuid().v4() : item.id,
+        type: type, label: item.title, url: item.url,
+        text: item.textContent ?? item.title,
+        startSec: start, durationSec: item.durationSeconds.toDouble(),
+        trackIndex: 0, x: 640, y: 360, width: 1280, height: 720,
+        textColor: Colors.white, fontSize: 48, bold: false,
+      ));
+    }
+    if (mounted) setState(() => _saved = SavedPlaylist(
+      id: widget.playlist.id, name: widget.playlist.name,
+      clips: clips, createdAt: DateTime.now(), viewLink: ''));
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    _hideUITimer?.cancel();
-    _playlistSub?.cancel();
-    _fadeCtrl.dispose();
-    super.dispose();
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    final pl = _currentPlaylist;
-    if (pl == null || pl.items.isEmpty) return;
-    final idx = _currentIndex.clamp(0, pl.items.length - 1);
-    final dur = pl.items[idx].durationSeconds;
-    _timer = Timer(Duration(seconds: dur), _nextSlide);
-  }
-
-  Future<void> _nextSlide() async {
-    final pl = _currentPlaylist;
-    if (pl == null || pl.items.isEmpty) return;
-    await _fadeCtrl.reverse();
-    if (!mounted) return;
-    setState(() {
-      _currentIndex = (_currentIndex + 1) % pl.items.length;
-    });
-    await _fadeCtrl.forward();
-    if (_playing) _startTimer();
-  }
+  void dispose() { _hideUITimer?.cancel(); super.dispose(); }
 
   void _scheduleHideUI() {
     _hideUITimer?.cancel();
@@ -1649,33 +1794,12 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
 
   @override
   Widget build(BuildContext context) {
-    final pl = _currentPlaylist;
-    if (pl == null || pl.items.isEmpty) {
-      return Scaffold(
+    if (_saved == null) {
+      return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.tv_off_rounded,
-                color: Colors.white30, size: 64),
-              const SizedBox(height: 16),
-              const Text('Sin contenido',
-                style: TextStyle(color: Colors.white54, fontSize: 18)),
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: widget.onExit,
-                child: const Text('Salir',
-                  style: TextStyle(color: Colors.white54)),
-              ),
-            ],
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))),
       );
     }
-
-    final safeIdx = _currentIndex.clamp(0, pl.items.length - 1);
-    final item = pl.items[safeIdx];
 
     return MouseRegion(
       onHover: (_) => _scheduleHideUI(),
@@ -1684,23 +1808,8 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Content
-            FadeTransition(
-              opacity: _fadeAnim,
-              child: _ItemPreview(item: item, fullscreen: true),
-            ),
-
-            // Progress bar
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: _MiniProgressBar(
-                index: safeIdx,
-                total: pl.items.length,
-                durationSec: item.durationSeconds,
-                playing: _playing,
-                key: ValueKey('fs_bar_$safeIdx'),
-              ),
-            ),
+            // USA EL MISMO VISUALIZADOR QUE FUNCIONA
+            _PlaylistViewerCanvasOnly(playlist: _saved!),
 
             // UI overlay
             AnimatedOpacity(
@@ -1710,21 +1819,17 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
                 children: [
                   // Top gradient
                   Positioned(
-                    top: 0, left: 0, right: 0,
-                    height: 100,
+                    top: 0, left: 0, right: 0, height: 100,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [
-                            Colors.black.withOpacity(0.7),
-                            Colors.transparent],
+                          colors: [Colors.black.withOpacity(0.7), Colors.transparent],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         ),
                       ),
                     ),
                   ),
-
                   // Top bar
                   Positioned(
                     top: 0, left: 0, right: 0,
@@ -1732,7 +1837,6 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          // Exit button
                           GestureDetector(
                             onTap: widget.onExit,
                             child: Container(
@@ -1741,171 +1845,22 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
                               decoration: BoxDecoration(
                                 color: Colors.black54,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.white24)),
+                                border: Border.all(color: Colors.white24)),
                               child: const Row(children: [
                                 Icon(Icons.fullscreen_exit_rounded,
                                   size: 16, color: Colors.white70),
                                 SizedBox(width: 6),
-                                Text('Salir',
-                                  style: TextStyle(
-                                    color: Colors.white70, fontSize: 12)),
+                                Text('Salir', style: TextStyle(
+                                  color: Colors.white70, fontSize: 12)),
                               ]),
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Text(pl.name,
+                          Text(widget.playlist.name,
                             style: const TextStyle(
                               color: Colors.white70, fontSize: 14,
                               fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          // Slide indicator
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${safeIdx + 1} / ${pl.items.length}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12, fontFamily: 'monospace')),
-                          ),
                         ],
-                      ),
-                    ),
-                  ),
-
-                  // Bottom gradient
-                  Positioned(
-                    bottom: 0, left: 0, right: 0,
-                    height: 120,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.7)],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Bottom controls
-                  Positioned(
-                    bottom: 20, left: 0, right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _FSControl(
-                          icon: Icons.skip_previous_rounded,
-                          onTap: safeIdx > 0
-                            ? () async {
-                                _timer?.cancel();
-                                await _fadeCtrl.reverse();
-                                if (!mounted) return;
-                                setState(() {
-                                  _currentIndex = safeIdx - 1;
-                                });
-                                await _fadeCtrl.forward();
-                                if (_playing) _startTimer();
-                              }
-                            : null,
-                        ),
-                        const SizedBox(width: 16),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() => _playing = !_playing);
-                            if (_playing) {
-                              _startTimer();
-                            } else {
-                              _timer?.cancel();
-                            }
-                          },
-                          child: Container(
-                            width: 52, height: 52,
-                            decoration: BoxDecoration(
-                              color: _P.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _P.primary.withOpacity(0.4),
-                                  blurRadius: 16, offset: const Offset(0, 4)),
-                              ],
-                            ),
-                            child: Icon(
-                              _playing
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                              color: Colors.white, size: 28),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        _FSControl(
-                          icon: Icons.skip_next_rounded,
-                          onTap: safeIdx < pl.items.length - 1
-                            ? () async {
-                                _timer?.cancel();
-                                await _fadeCtrl.reverse();
-                                if (!mounted) return;
-                                setState(() {
-                                  _currentIndex = safeIdx + 1;
-                                });
-                                await _fadeCtrl.forward();
-                                if (_playing) _startTimer();
-                              }
-                            : null,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Items thumbnail strip
-                  Positioned(
-                    bottom: 90, left: 0, right: 0,
-                    child: SizedBox(
-                      height: 50,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        itemCount: pl.items.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
-                        itemBuilder: (_, i) {
-                          final isActive = i == safeIdx;
-                          return GestureDetector(
-                            onTap: () async {
-                              _timer?.cancel();
-                              await _fadeCtrl.reverse();
-                              if (!mounted) return;
-                              setState(() => _currentIndex = i);
-                              await _fadeCtrl.forward();
-                              if (_playing) _startTimer();
-                            },
-                            child: AnimatedContainer(
-                              duration: 150.ms,
-                              width: 50,
-                              decoration: BoxDecoration(
-                                color: isActive
-                                  ? Colors.white.withOpacity(0.2)
-                                  : Colors.black45,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isActive
-                                    ? Colors.white
-                                    : Colors.white24,
-                                  width: isActive ? 2 : 1),
-                              ),
-                              child: Icon(
-                                _iconFor(pl.items[i].type),
-                                size: 18,
-                                color: isActive ? Colors.white : Colors.white54),
-                            ),
-                          );
-                        },
                       ),
                     ),
                   ),
@@ -1916,15 +1871,6 @@ class _FullscreenViewerState extends State<_FullscreenViewer>
         ),
       ),
     );
-  }
-
-  IconData _iconFor(String type) {
-    switch (type) {
-      case 'image': return Icons.image_rounded;
-      case 'video': return Icons.videocam_rounded;
-      case 'text':  return Icons.text_fields_rounded;
-      default:      return Icons.language_rounded;
-    }
   }
 }
 
@@ -1954,6 +1900,7 @@ class _FSControl extends StatelessWidget {
 // =============================================================================
 // ITEM PREVIEW
 // =============================================================================
+// BORRA la clase _ItemPreview que tienes y reemplázala por esta:
 class _ItemPreview extends StatelessWidget {
   final _PlaylistItem item;
   final bool fullscreen;
@@ -2382,5 +2329,1130 @@ class _ActionButtonState extends State<_ActionButton> {
         ),
       ),
     );
+  }
+}
+
+class _DeviceSchedulesDialog extends StatefulWidget {
+  final DeviceUser device;
+  const _DeviceSchedulesDialog({required this.device});
+  @override
+  State<_DeviceSchedulesDialog> createState() => _DeviceSchedulesDialogState();
+}
+
+class _DeviceSchedulesDialogState extends State<_DeviceSchedulesDialog> {
+  String _selectedDay = _currentDayKey();
+
+  static String _currentDayKey() {
+    const days = ['mon','tue','wed','thu','fri','sat','sun'];
+    return days[DateTime.now().weekday - 1];
+  }
+
+  static const _dayLabels = {
+    'mon': 'Lunes', 'tue': 'Martes', 'wed': 'Miércoles',
+    'thu': 'Jueves', 'fri': 'Viernes', 'sat': 'Sábado', 'sun': 'Domingo',
+  };
+  static const _dayShort = {
+    'mon': 'L', 'tue': 'M', 'wed': 'X',
+    'thu': 'J', 'fri': 'V', 'sat': 'S', 'sun': 'D',
+  };
+  static const _orderedDays = ['mon','tue','wed','thu','fri','sat','sun'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: _P.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: _P.border)),
+      child: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: _P.border))),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_view_week_rounded,
+                    size: 18, color: _P.purple),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.device.deviceName,
+                          style: const TextStyle(color: _P.textHi,
+                            fontWeight: FontWeight.w800, fontSize: 14)),
+                        const Text('Programaciones asignadas',
+                          style: TextStyle(color: _P.textMid, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: _P.card, borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: _P.border)),
+                      child: const Icon(Icons.close_rounded,
+                        size: 13, color: _P.textMid),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Selector de día
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Día de la semana',
+                    style: TextStyle(color: _P.textMid, fontSize: 11,
+                      fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: _orderedDays.map((d) {
+                      final sel = d == _selectedDay;
+                      final isToday = d == _currentDayKey();
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedDay = d),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 130),
+                            margin: const EdgeInsets.only(right: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: sel
+                                ? _P.purple.withOpacity(0.2)
+                                : isToday
+                                  ? _P.green.withOpacity(0.08)
+                                  : _P.card,
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: sel
+                                  ? _P.purple.withOpacity(0.6)
+                                  : isToday
+                                    ? _P.green.withOpacity(0.4)
+                                    : _P.border,
+                                width: sel ? 1.5 : 1)),
+                            child: Column(
+                              children: [
+                                Text(_dayShort[d]!,
+                                  style: TextStyle(
+                                    color: sel ? _P.purple
+                                      : isToday ? _P.green : _P.textMid,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800),
+                                  textAlign: TextAlign.center),
+                                if (isToday)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 2),
+                                    width: 4, height: 4,
+                                    decoration: BoxDecoration(
+                                      color: sel ? _P.purple : _P.green,
+                                      shape: BoxShape.circle),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Lista de programaciones del dispositivo para el día
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                  .collection('program_blocks')
+                  .where('companyId', isEqualTo: null)
+                  .snapshots(),
+                builder: (ctx, _) {
+                  // Cargamos todos los blocks y filtramos en cliente
+                  return StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                      .collection('program_blocks')
+                      .snapshots(),
+                    builder: (ctx2, snap) {
+                      if (!snap.hasData) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(
+                              color: _P.purple, strokeWidth: 2),
+                          ),
+                        );
+                      }
+
+                      // Filtra bloques que aplican al día seleccionado
+                      final allBlocks = snap.data!.docs.map((d) {
+                        final data = d.data() as Map<String, dynamic>;
+                        return _ScheduleBlock(
+                          id: d.id,
+                          name: data['name'] ?? 'Sin nombre',
+                          playlistId: data['playlistId'] ?? '',
+                          playlistName: data['playlistName'] ?? '—',
+                          days: List<String>.from(data['days'] ?? []),
+                          startMinute: (data['startMinute'] as num?)?.toInt() ?? 0,
+                          durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 60,
+                          isActive: data['isActive'] ?? true,
+                          colorValue: (data['colorValue'] as num?)?.toInt() ?? 0xFF6366F1,
+                        );
+                      }).toList();
+
+                      final dayBlocks = allBlocks
+                        .where((b) =>
+                          b.days.contains(_selectedDay) && b.isActive)
+                        .toList()
+                        ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+
+                      if (dayBlocks.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.event_busy_rounded,
+                                color: _P.textMid.withOpacity(0.5), size: 40),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Sin programación el ${_dayLabels[_selectedDay]}',
+                                style: const TextStyle(color: _P.textMid,
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'No hay bloques activos para este día',
+                                style: TextStyle(color: _P.textMid, fontSize: 12)),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                        itemCount: dayBlocks.length,
+                        itemBuilder: (_, i) {
+                          final b = dayBlocks[i];
+                          final color = Color(b.colorValue);
+                          final isNow = _isNowInBlock(b);
+                          return GestureDetector(
+                            onTap: () => _playBlock(context, b),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 11),
+                              decoration: BoxDecoration(
+                                color: isNow
+                                  ? color.withOpacity(0.15)
+                                  : _P.card,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isNow
+                                    ? color.withOpacity(0.6) : _P.border,
+                                  width: isNow ? 1.5 : 1)),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 4, height: 40,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius: BorderRadius.circular(2))),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(b.name,
+                                              style: TextStyle(
+                                                color: isNow ? color : _P.textHi,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13)),
+                                            if (isNow) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: color.withOpacity(0.2),
+                                                  borderRadius: BorderRadius.circular(4)),
+                                                child: Text('EN VIVO',
+                                                  style: TextStyle(
+                                                    color: color, fontSize: 8,
+                                                    fontWeight: FontWeight.w800)),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${_fmtMin(b.startMinute)} — ${_fmtMin(b.startMinute + b.durationMinutes)}  ·  ${b.playlistName}',
+                                          style: const TextStyle(
+                                            color: _P.textMid, fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 32, height: 32,
+                                    decoration: BoxDecoration(
+                                      color: color.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: color.withOpacity(0.4))),
+                                    child: Icon(Icons.play_arrow_rounded,
+                                      size: 16, color: color),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isNowInBlock(_ScheduleBlock b) {
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    return nowMin >= b.startMinute && nowMin < b.startMinute + b.durationMinutes;
+  }
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2,'0')}:${min.toString().padLeft(2,'0')}';
+  }
+
+  void _playBlock(BuildContext ctx, _ScheduleBlock block) {
+    Navigator.pop(ctx);
+    showDialog(
+      context: ctx,
+      builder: (_) => _SchedulePlaybackViewer(
+        block: block,
+        day: _selectedDay,
+        dayLabel: _dayLabels[_selectedDay]!,
+      ),
+    );
+  }
+}
+
+class _ScheduleBlock {
+  final String id;
+  final String name;
+  final String playlistId;
+  final String playlistName;
+  final List<String> days;
+  final int startMinute;
+  final int durationMinutes;
+  final bool isActive;
+  final int colorValue;
+
+  const _ScheduleBlock({
+    required this.id,
+    required this.name,
+    required this.playlistId,
+    required this.playlistName,
+    required this.days,
+    required this.startMinute,
+    required this.durationMinutes,
+    required this.isActive,
+    required this.colorValue,
+  });
+}
+
+class _SchedulePlaybackViewer extends StatefulWidget {
+  final _ScheduleBlock block;
+  final String day;
+  final String dayLabel;
+  const _SchedulePlaybackViewer({
+    required this.block,
+    required this.day,
+    required this.dayLabel,
+  });
+  @override
+  State<_SchedulePlaybackViewer> createState() => _SchedulePlaybackViewerState();
+}
+
+class _SchedulePlaybackViewerState extends State<_SchedulePlaybackViewer> {
+  _PlaylistData? _playlist;
+  bool _loading = true;
+  String? _error;
+  int _currentIndex = 0;
+  Timer? _timer;
+  bool _playing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlaylist();
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); super.dispose(); }
+
+  Future<void> _loadPlaylist() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+        .collection('playlists')
+        .doc(widget.block.playlistId)
+        .get();
+
+      if (!doc.exists) {
+        setState(() { _error = 'Playlist no encontrada'; _loading = false; });
+        return;
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+      final rawItems = (data['items'] as List<dynamic>?)
+          ?? (data['clips'] as List<dynamic>?) ?? [];
+
+      final items = rawItems.map((i) {
+        final map = i as Map<String, dynamic>;
+        return _PlaylistItem(
+          id: map['id'] ?? '',
+          type: map['type'] ?? 'text',
+          title: map['title'] ?? map['label'] ?? '',
+          url: map['url'],
+          textContent: map['textContent'] ?? map['text'],
+          durationSeconds: (() {
+            final v = map['durationSeconds'] ?? map['durationSec'] ?? 10;
+            return v is int ? v : (v as num).round();
+          })(),
+          order: map['order'] ?? 0,
+        );
+      }).toList()..sort((a, b) => a.order.compareTo(b.order));
+
+      setState(() {
+        _playlist = _PlaylistData(
+          id: doc.id,
+          name: data['name'] ?? widget.block.playlistName,
+          items: items,
+          isActive: true,
+          displayToken: '',
+        );
+        _loading = false;
+      });
+
+      if (_playing) _startTimer();
+    } catch (e) {
+      setState(() { _error = 'Error: $e'; _loading = false; });
+    }
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    final pl = _playlist;
+    if (pl == null || pl.items.isEmpty) return;
+    final idx = _currentIndex.clamp(0, pl.items.length - 1);
+    _timer = Timer(
+      Duration(seconds: pl.items[idx].durationSeconds),
+      _nextSlide,
+    );
+  }
+
+  void _nextSlide() {
+    final pl = _playlist;
+    if (pl == null || pl.items.isEmpty) return;
+    setState(() {
+      _currentIndex = (_currentIndex + 1) % pl.items.length;
+    });
+    if (_playing) _startTimer();
+  }
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2,'0')}:${min.toString().padLeft(2,'0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(widget.block.colorValue);
+    return Dialog(
+      backgroundColor: _P.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: _P.border)),
+      child: SizedBox(
+        width: 700,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: _P.border))),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4, height: 36,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.block.name,
+                          style: const TextStyle(color: _P.textHi,
+                            fontWeight: FontWeight.w800, fontSize: 14)),
+                        Text(
+                          '${widget.dayLabel}  ·  ${_fmtMin(widget.block.startMinute)} — ${_fmtMin(widget.block.startMinute + widget.block.durationMinutes)}  ·  ${widget.block.playlistName}',
+                          style: const TextStyle(color: _P.textMid, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: _P.card,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: _P.border)),
+                      child: const Icon(Icons.close_rounded,
+                        size: 13, color: _P.textMid),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(
+                  color: _P.purple, strokeWidth: 2),
+              )
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(_error!,
+                  style: const TextStyle(color: _P.red, fontSize: 13)),
+              )
+            else if (_playlist == null || _playlist!.items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Text('Esta playlist no tiene contenido',
+                  style: TextStyle(color: _P.textMid, fontSize: 13)),
+              )
+           else ...[
+  // Canvas 16:9
+  Padding(
+    padding: const EdgeInsets.all(16),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          children: [
+            _ItemPreview(
+              item: _playlist!.items[
+                _currentIndex.clamp(0, _playlist!.items.length - 1)]),
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: _MiniProgressBar(
+                index: _currentIndex.clamp(0, _playlist!.items.length - 1),
+                total: _playlist!.items.length,
+                durationSec: _playlist!.items[
+                  _currentIndex.clamp(0, _playlist!.items.length - 1)]
+                  .durationSeconds,
+                playing: _playing,
+                key: ValueKey('spv_$_currentIndex'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+
+              // Controls
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _currentIndex = 0),
+                      child: const Icon(Icons.skip_previous_rounded,
+                        color: _P.textMid, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _playing = !_playing);
+                        if (_playing) _startTimer();
+                        else _timer?.cancel();
+                      },
+                      child: Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(8)),
+                        child: Icon(
+                          _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white, size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '${_currentIndex + 1} / ${_playlist!.items.length}  ·  ${_playlist!.items[_currentIndex.clamp(0, _playlist!.items.length - 1)].title}',
+                        style: const TextStyle(color: _P.textMid, fontSize: 12),
+                        overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _ItemPreviewComposed extends StatefulWidget {
+  final _PlaylistItem item;
+  final double sx;
+  final double sy;
+  const _ItemPreviewComposed({
+    super.key,
+    required this.item,
+    required this.sx,
+    required this.sy,
+  });
+
+  @override
+  State<_ItemPreviewComposed> createState() => _ItemPreviewComposedState();
+}
+
+class _ItemPreviewComposedState extends State<_ItemPreviewComposed> {
+  late final String _viewId;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'composed-${widget.item.id}-${DateTime.now().millisecondsSinceEpoch}';
+    _registerView();
+  }
+
+  void _registerView() {
+    final item = widget.item;
+
+    if (item.type == 'image' && (item.url ?? '').isNotEmpty) {
+      try {
+        ui_web.platformViewRegistry.registerViewFactory(_viewId, (int id) {
+          final img = html.ImageElement()
+            ..src = item.url!
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..style.objectFit = 'cover'
+            ..style.display = 'block';
+          return img;
+        });
+      } catch (_) {}
+
+    } else if (item.type == 'video' && (item.url ?? '').isNotEmpty) {
+      try {
+        ui_web.platformViewRegistry.registerViewFactory(_viewId, (int id) {
+          if (item.url!.contains('.m3u8') ||
+              item.url!.contains('streaming.rtvc') ||
+              item.url!.contains('cdnmedia') ||
+              item.url!.contains('logicideas') ||
+              item.url!.contains('multistream') ||
+              item.url!.contains('mediaserver')) {
+            final iframe = html.IFrameElement()
+              ..srcdoc = '''
+<!DOCTYPE html><html><head>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#000;width:100vw;height:100vh;overflow:hidden;}
+  video{width:100%;height:100%;object-fit:cover;}
+</style>
+</head><body>
+<div id="r" style="width:100%;height:100%;position:relative;"></div>
+<script>
+const url="${item.url}";
+function start(){
+  const v=document.createElement('video');
+  v.autoplay=true;v.muted=true;v.controls=false;
+  v.style.cssText='width:100%;height:100%;object-fit:cover;';
+  if(typeof Hls!=='undefined'&&Hls.isSupported()){
+    const h=new Hls({enableWorker:false});
+    h.loadSource(url);h.attachMedia(v);
+    h.on(Hls.Events.MANIFEST_PARSED,()=>{
+      v.play();
+      document.getElementById('r').innerHTML='';
+      document.getElementById('r').appendChild(v);
+    });
+  } else if(v.canPlayType('application/vnd.apple.mpegurl')){
+    v.src=url;
+    v.addEventListener('loadedmetadata',()=>{
+      v.play();
+      document.getElementById('r').innerHTML='';
+      document.getElementById('r').appendChild(v);
+    });
+  }
+}
+const s=document.createElement('script');
+s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+s.onload=start;
+document.head.appendChild(s);
+</script>
+</body></html>'''
+              ..style.border = 'none'
+              ..style.width = '100%'
+              ..style.height = '100%'
+              ..setAttribute('sandbox', 'allow-scripts allow-same-origin');
+            return iframe;
+          }
+
+          if (item.url!.contains('youtube.com/embed')) {
+            final iframe = html.IFrameElement()
+              ..src = item.url!
+              ..style.border = 'none'
+              ..style.width = '100%'
+              ..style.height = '100%'
+              ..allowFullscreen = true
+              ..setAttribute('allow',
+                'accelerometer; autoplay; clipboard-write; '
+                'encrypted-media; gyroscope; picture-in-picture');
+            return iframe;
+          }
+
+          final video = html.VideoElement()
+            ..src = item.url!
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..style.objectFit = 'cover'
+            ..autoplay = true
+            ..controls = false
+            ..muted = true;
+          return video;
+        });
+      } catch (_) {}
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final sx = widget.sx;
+
+    switch (item.type) {
+      case 'image':
+        if ((item.url ?? '').isNotEmpty) {
+          return HtmlElementView(viewType: _viewId);
+        }
+        return Container(
+          color: const Color(0xFF1E3A5F),
+          child: Center(
+            child: Icon(Icons.image_rounded,
+              color: const Color(0xFF38BDF8), size: 48 * sx)),
+        );
+
+      case 'video':
+        if ((item.url ?? '').isNotEmpty) {
+          return HtmlElementView(viewType: _viewId);
+        }
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFFA855F7).withOpacity(0.3),
+                const Color(0xFFA855F7).withOpacity(0.1),
+              ],
+            ),
+          ),
+          child: Center(
+            child: Icon(Icons.play_circle_rounded,
+              color: const Color(0xFFA855F7), size: 64 * sx)),
+        );
+
+      case 'text':
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0A0F1E), Color(0xFF111827)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (item.title.isNotEmpty) ...[
+                Text(
+                  item.title,
+                  style: TextStyle(
+                    color: const Color(0xFF6366F1),
+                    fontSize: 18 * sx,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.5),
+                  textAlign: TextAlign.center),
+                SizedBox(height: 16 * sx),
+              ],
+              Text(
+                item.textContent ?? item.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 48 * sx,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        );
+
+      default:
+        return Container(
+          color: Colors.black,
+          child: Center(
+            child: Text(item.title,
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 14 * sx))),
+        );
+    }
+  }
+}
+
+// =============================================================================
+// CANVAS PORTAL — usa SavedPlaylist + PlaylistViewerDialog internamente
+// =============================================================================
+class _PortalPlaylistCanvas extends StatefulWidget {
+  final _PlaylistData playlist;
+  const _PortalPlaylistCanvas({required this.playlist});
+
+  @override
+  State<_PortalPlaylistCanvas> createState() => _PortalPlaylistCanvasState();
+}
+
+class _PortalPlaylistCanvasState extends State<_PortalPlaylistCanvas> {
+  SavedPlaylist? _saved;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDirect();
+  }
+
+  @override
+  void didUpdateWidget(_PortalPlaylistCanvas old) {
+    super.didUpdateWidget(old);
+    if (old.playlist.id != widget.playlist.id) _loadDirect();
+  }
+
+  // Lee directamente de Firestore para obtener startSec, durationSec, trackIndex reales
+  Future<void> _loadDirect() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('playlists')
+          .doc(widget.playlist.id)
+          .get();
+
+      if (!doc.exists) { _fallbackConvert(); return; }
+
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['clips'] as List<dynamic>?)
+               ?? (data['items'] as List<dynamic>?)
+               ?? [];
+
+      if (raw.isEmpty) { _fallbackConvert(); return; }
+
+      final clips = raw.map((i) {
+        final map = i as Map<String, dynamic>;
+        return EditorClip.fromMap(map);
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _saved = SavedPlaylist(
+            id:        widget.playlist.id,
+            name:      widget.playlist.name,
+            clips:     clips,
+            createdAt: DateTime.now(),
+            viewLink:  '',
+          );
+        });
+      }
+    } catch (e) {
+      _fallbackConvert();
+    }
+  }
+
+  // Fallback: convierte secuencialmente si no hay startSec en Firestore
+  void _fallbackConvert() {
+    double acc = 0;
+    final clips = <EditorClip>[];
+    for (final item in widget.playlist.items) {
+      EditorLayerType type;
+      switch (item.type) {
+        case 'image': type = EditorLayerType.image; break;
+        case 'video': type = EditorLayerType.video; break;
+        case 'audio': type = EditorLayerType.audio; break;
+        default:      type = EditorLayerType.text;
+      }
+      final start = acc;
+      acc += item.durationSeconds;
+      clips.add(EditorClip(
+        id:          item.id.isEmpty ? const Uuid().v4() : item.id,
+        type:        type,
+        label:       item.title,
+        url:         item.url,
+        text:        item.textContent ?? item.title,
+        startSec:    start,
+        durationSec: item.durationSeconds.toDouble(),
+        trackIndex:  0,
+        x: 640, y: 360,
+        width: 1280, height: 720,
+        textColor: Colors.white,
+        fontSize:  48,
+        bold:      false,
+      ));
+    }
+    if (mounted) {
+      setState(() {
+        _saved = SavedPlaylist(
+          id:        widget.playlist.id,
+          name:      widget.playlist.name,
+          clips:     clips,
+          createdAt: DateTime.now(),
+          viewLink:  '',
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_saved == null) {
+      return const AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Center(child: CircularProgressIndicator(
+          color: Color(0xFF6366F1), strokeWidth: 2)),
+      );
+    }
+    return _PlaylistViewerCanvasOnly(playlist: _saved!);
+  }
+}
+
+// Este widget ES el canvas de PlaylistViewerDialog — copiado literal, sin dialog, sin controles
+class _PlaylistViewerCanvasOnly extends StatefulWidget {
+  final SavedPlaylist playlist;
+  final double? externalPlayhead;        // recibe playhead externo
+  final void Function(double)? onProgress; // reporta progreso al padre
+  const _PlaylistViewerCanvasOnly({
+    required this.playlist,
+    this.externalPlayhead,
+    this.onProgress,
+  });
+
+  @override
+  State<_PlaylistViewerCanvasOnly> createState() => _PlaylistViewerCanvasOnlyState();
+}
+
+class _PlaylistViewerCanvasOnlyState extends State<_PlaylistViewerCanvasOnly> {
+  Timer? _timer;
+  double _playhead = 0;
+
+  double get _total => widget.playlist.clips.isEmpty
+      ? 30
+      : widget.playlist.clips
+          .map((c) => c.startSec + c.durationSec)
+          .reduce(math.max) + 2;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.externalPlayhead == null) _startTimer();
+  }
+
+  @override
+  void didUpdateWidget(_PlaylistViewerCanvasOnly old) {
+    super.didUpdateWidget(old);
+    // Si recibe playhead externo, úsalo
+    if (widget.externalPlayhead != null) {
+      _playhead = widget.externalPlayhead!;
+    }
+    if (old.playlist.id != widget.playlist.id) {
+      _timer?.cancel();
+      setState(() => _playhead = 0);
+      if (widget.externalPlayhead == null) _startTimer();
+    }
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); super.dispose(); }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      double next;
+      if (_playhead >= _total) {
+        next = 0;
+      } else {
+        next = _playhead + 0.05;
+      }
+      setState(() => _playhead = next);
+      widget.onProgress?.call(next); // reporta al padre
+    });
+  }
+
+  void pause() { _timer?.cancel(); }
+  void resume() { _startTimer(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final ph = widget.externalPlayhead ?? _playhead;
+    final active = widget.playlist.clips
+        .where((c) => ph >= c.startSec && ph <= c.startSec + c.durationSec)
+        .toList()
+      ..sort((a, b) => b.trackIndex.compareTo(a.trackIndex));
+
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: LayoutBuilder(builder: (ctx, constraints) {
+        final sx = constraints.maxWidth / 1280;
+        final sy = constraints.maxHeight / 720;
+        return Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0A0F1E), Color(0xFF111827)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+            ...active.map((clip) => Positioned(
+              left:   (clip.x - clip.width  / 2) * sx,
+              top:    (clip.y - clip.height / 2) * sy,
+              width:  clip.width  * sx,
+              height: clip.height * sy,
+              child: Opacity(
+                opacity: clip.opacity,
+                child: _renderClip(clip, sx, sy),
+              ),
+            )),
+            if (widget.playlist.clips.isEmpty)
+              const Center(child: Text('Sin clips',
+                style: TextStyle(color: Color(0xFF2E3D5C), fontSize: 12))),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _renderClip(EditorClip clip, double sx, double sy) {
+    switch (clip.type) {
+      case EditorLayerType.image:
+        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+          final viewId = 'img-${clip.id}';
+          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+            final img = html.ImageElement()
+              ..src = clip.url!
+              ..style.width = '100%'
+              ..style.height = '100%'
+              ..style.objectFit = 'cover'
+              ..style.display = 'block';
+            return img;
+          }); } catch (_) {}
+          return HtmlElementView(viewType: viewId);
+        }
+        return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
+          child: Center(child: Icon(Icons.image_rounded,
+            color: const Color(0xFF38BDF8), size: 22 * sx)));
+
+      case EditorLayerType.video:
+        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+          final viewId = 'vid-${clip.id}';
+          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+            final video = html.VideoElement()
+              ..src = clip.url!
+              ..style.width = '100%'
+              ..style.height = '100%'
+              ..style.objectFit = 'cover'
+              ..autoplay = false
+              ..controls = false
+              ..muted = true;
+            return video;
+          }); } catch (_) {}
+          return Stack(children: [
+            Positioned.fill(child: HtmlElementView(viewType: viewId)),
+            Positioned(bottom: 4 * sy, left: 0, right: 0,
+              child: Center(child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
+                decoration: BoxDecoration(color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4)),
+                child: Text(clip.label, style: TextStyle(
+                  color: Colors.white70, fontSize: 9 * sx,
+                  fontWeight: FontWeight.w600),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              ))),
+          ]);
+        }
+        return Container(
+          decoration: BoxDecoration(gradient: LinearGradient(
+            colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                     const Color(0xFFA855F7).withOpacity(0.1)])),
+          child: Center(child: Icon(Icons.play_circle_rounded,
+            color: const Color(0xFFA855F7), size: 36 * sx)));
+
+      case EditorLayerType.text:
+        final bgColor = clip.backgroundColor != null
+          ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
+          : Colors.transparent;
+        return Container(color: bgColor, alignment: Alignment.center,
+          child: Text(clip.text ?? '', textAlign: TextAlign.center,
+            style: TextStyle(color: clip.textColor ?? Colors.white,
+              fontSize: (clip.fontSize ?? 48) * sx,
+              fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
+              height: 1.2)));
+
+      case EditorLayerType.overlay:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF59E0B).withOpacity(0.15),
+            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4),
+              width: 2 * sx)),
+          child: Center(child: Icon(Icons.layers_rounded,
+            color: const Color(0xFFF59E0B), size: 20 * sx)));
+
+      case EditorLayerType.audio:
+        return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
+          child: Center(child: Icon(Icons.music_note_rounded,
+            color: const Color(0xFF22C55E), size: 20 * sx)));
+    }
   }
 }
