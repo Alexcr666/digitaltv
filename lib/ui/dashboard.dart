@@ -66,20 +66,34 @@ class DeviceEntity {
     }
   }
 
-  factory DeviceEntity.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
-    return DeviceEntity(
-      id: doc.id,
-      name: d['name'] as String? ?? 'Unknown Device',
-      uniqueDeviceId: d['uniqueDeviceId'] as String? ?? doc.id,
-      status: _parseStatus(d['status'] as String?),
-      groupId: d['groupId'] as String?,
-      groupName: d['groupName'] as String?,
-      lastSeen: (d['lastSeen'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      currentContentId: d['currentContentId'] as String?,
-      metadata: (d['metadata'] as Map<String, dynamic>?) ?? {},
-    );
+factory DeviceEntity.fromFirestore(DocumentSnapshot doc) {
+  final d = doc.data() as Map<String, dynamic>;
+  
+  final lastSeen = (d['lastSeen'] as Timestamp?)?.toDate() ?? DateTime.now();
+  final diffMinutes = DateTime.now().difference(lastSeen).inMinutes;
+  
+  // Si visto hace menos de 3 minutos → online, independientemente del campo status
+  DeviceStatus computedStatus;
+  if (diffMinutes < 3) {
+    computedStatus = DeviceStatus.online;
+  } else if (diffMinutes < 10) {
+    computedStatus = DeviceStatus.warning;
+  } else {
+    computedStatus = DeviceStatus.offline;
   }
+
+  return DeviceEntity(
+    id: doc.id,
+    name: d['name'] as String? ?? 'Unknown Device',
+    uniqueDeviceId: d['uniqueDeviceId'] as String? ?? doc.id,
+    status: computedStatus,          // <-- usa el computado, no el campo
+    groupId: d['groupId'] as String?,
+    groupName: d['groupName'] as String?,
+    lastSeen: lastSeen,
+    currentContentId: d['currentContentId'] as String?,
+    metadata: (d['metadata'] as Map<String, dynamic>?) ?? {},
+  );
+}
 
   Map<String, dynamic> toFirestore() => {
         'name': name,
@@ -678,7 +692,7 @@ class DashboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Dashboard',
+                    'Panel de control',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 2),
@@ -712,18 +726,18 @@ class DashboardScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: StatCard(
-                      label: 'Total Devices',
+                      label: 'Total Dispositivos',
                       value: devices.length.toString(),
                       icon: Icons.tv_outlined,
                       iconColor: AppColors.primary,
-                      trend: '+12 this week',
+                      trend: '',
                       trendPositive: true,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      label: 'Online Now',
+                      label: 'Encendidos',
                       value: online.toString(),
                       icon: Icons.circle,
                       iconColor: AppColors.online,
@@ -735,7 +749,7 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      label: 'Offline',
+                      label: 'Apagados',
                       value: offline.toString(),
                       icon: Icons.power_off_outlined,
                       iconColor: AppColors.offline,
@@ -750,7 +764,7 @@ class DashboardScreen extends ConsumerWidget {
                     error: (_, __) => const SizedBox(),
                     data: (content) => Expanded(
                       child: StatCard(
-                        label: 'Content Items',
+                        label: 'Total Contenidos',
                         value: content.length.toString(),
                         icon: Icons.perm_media_outlined,
                         iconColor: AppColors.warning,
@@ -779,7 +793,7 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionTitle('Device Status Map'),
+                    const _SectionTitle('Lista de dispositivos'),
                     const SizedBox(height: 12),
                     _DeviceStatusMap(),
                   ],
@@ -791,7 +805,7 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionTitle('Recent Activity'),
+                    const _SectionTitle('Actividad reciente'),
                     const SizedBox(height: 12),
                     _ActivityFeed(),
                   ],
@@ -803,7 +817,7 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(height: 28),
 
           // ── Quick Table ───────────────────────────────────────────────────
-          const _SectionTitle('All Devices — Quick View'),
+          const _SectionTitle('Todos'),
           const SizedBox(height: 12),
           _DevicesQuickList().animate().fadeIn(delay: 300.ms, duration: 400.ms),
         ],

@@ -32,6 +32,96 @@ abstract class _P {
   static const textLo  = Color(0xFF2E3D5C);
 }
 
+
+abstract class _T {
+  // Surface
+  static const bg        = Color(0xFF080C14);
+  static const surface   = Color(0xFF0E1420);
+  static const card      = Color(0xFF131B2B);
+  static const cardHover = Color(0xFF172035);
+  static const border    = Color(0xFF1E2D47);
+  static const divider   = Color(0xFF1A2540);
+
+  // Brand
+  static const primary    = Color(0xFF6366F1);
+  static const primaryLo  = Color(0x1A6366F1);
+  static const primaryMid = Color(0x336366F1);
+  static const accent     = Color(0xFF38BDF8);
+
+  // Text
+  static const textHi  = Color(0xFFF0F4FF);
+  static const textMid = Color(0xFF8B9CC8);
+  static const textLo  = Color(0xFF3D4F72);
+
+  // Semantic
+  static const success  = Color(0xFF22C55E);
+  static const warning  = Color(0xFFF59E0B);
+  static const error    = Color(0xFFEF4444);
+  static const errorLo  = Color(0x1AEF4444);
+
+  // Radius
+  static const r8  = BorderRadius.all(Radius.circular(8));
+  static const r12 = BorderRadius.all(Radius.circular(12));
+  static const r16 = BorderRadius.all(Radius.circular(16));
+  static const r20 = BorderRadius.all(Radius.circular(20));
+
+  static ThemeData get theme => ThemeData(
+        useMaterial3:       true,
+        scaffoldBackgroundColor: bg,
+        colorScheme: ColorScheme.dark(
+          primary:   primary,
+          secondary: accent,
+          surface:   surface,
+          error:     error,
+        ),
+        textTheme: const TextTheme().apply(
+          bodyColor:    textMid,
+          displayColor: textHi,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled:       true,
+          fillColor:    card,
+          hintStyle:    const TextStyle(color: textLo, fontSize: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          border: OutlineInputBorder(
+              borderRadius: r12, borderSide: const BorderSide(color: border)),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: r12, borderSide: const BorderSide(color: border)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: primary, width: 1.5)),
+          errorBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: error)),
+          focusedErrorBorder: OutlineInputBorder(
+              borderRadius: r12,
+              borderSide: const BorderSide(color: error, width: 1.5)),
+          errorStyle: const TextStyle(color: error, fontSize: 11),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor:         primary,
+            foregroundColor:         Colors.white,
+            disabledBackgroundColor: card,
+            elevation:               0,
+            shape: RoundedRectangleBorder(borderRadius: r12),
+            minimumSize:             const Size(double.infinity, 48),
+            textStyle: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+          ),
+        ),
+        cardTheme: CardTheme(
+          color: card,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: r16,
+            side: const BorderSide(color: border),
+          ),
+        ),
+      );
+}
+
 // =============================================================================
 // MODELOS
 // =============================================================================
@@ -465,6 +555,53 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
                                       fontSize: 15)),
                             ),
                           ),
+                          SizedBox(height: 20),
+
+                          GestureDetector(
+  onTap: () {
+   context.go(  '/login');
+  },
+  child: Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1E2D47), Color(0xFF172035)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ),
+      borderRadius: _T.r12,
+      border: Border.all(color: _T.primary.withOpacity(0.4)),
+      boxShadow: [
+        BoxShadow(
+          color: _T.primary.withOpacity(0.15),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.tv_rounded, color: _T.primary, size: 18),
+        SizedBox(width: 10),
+        Text(
+          'Acceder como dispositivo',
+          style: TextStyle(
+            color: _T.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+        SizedBox(width: 6),
+        Icon(Icons.arrow_forward_ios_rounded,
+            color: _T.primary, size: 11),
+      ],
+    ),
+  ),
+),
+SizedBox(height: 20),
                         ],
                       ),
                     ),
@@ -496,31 +633,63 @@ class DeviceDashboardScreen extends StatefulWidget {
 
 class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
     with TickerProviderStateMixin {
+String? _selectedScheduleId;
+      bool _showSchedules = false;
   _PlaylistData? _selectedPlaylist;
   bool _fullscreen = false;
   late AnimationController _sidebarCtrl;
   DeviceUser? _device;
+  Timer? _heartbeatTimer;
+@override
+void initState() {
+  super.initState();
+  _sidebarCtrl = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 400));
+  _sidebarCtrl.forward();
 
-  @override
-  void initState() {
-    super.initState();
-    _sidebarCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 400));
-    _sidebarCtrl.forward();
+  _device = widget.device ?? _sessionFromStorage();
 
-    // Recuperar sesión: primero del extra, si no del localStorage
-    _device = widget.device ?? _sessionFromStorage();
-
-    if (_device == null) {
-      // No hay sesión, redirigir al login
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.go('/portal');
-      });
-      return;
-    }
-
-    _loadCurrentPlaylist();
+  if (_device == null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.go('/portal');
+    });
+    return;
   }
+
+  _loadCurrentPlaylist();
+
+  if (_device != null) {
+    // Marcar online al entrar
+    FirebaseFirestore.instance
+        .collection('devices')
+        .doc(_device!.deviceId)
+        .update({
+          'lastSeen': FieldValue.serverTimestamp(),
+          'status': 'online',
+        }).catchError((_) {});
+
+    // Heartbeat cada 90 segundos
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (!mounted) return;
+      FirebaseFirestore.instance
+          .collection('devices')
+          .doc(_device!.deviceId)
+          .update({
+            'lastSeen': FieldValue.serverTimestamp(),
+            'status': 'online',
+          }).catchError((_) {});
+    });
+
+    // Detectar cierre de pestaña/ventana en web
+    html.window.onBeforeUnload.listen((_) {
+      FirebaseFirestore.instance
+          .collection('devices')
+          .doc(_device!.deviceId)
+          .update({'status': 'offline'})
+          .catchError((_) {});
+    });
+  }
+}
 
   DeviceUser? _sessionFromStorage() {
     try {
@@ -541,9 +710,22 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
     }
   }
 
-  @override
-  void dispose() { _sidebarCtrl.dispose(); super.dispose(); }
+@override
+void dispose() {
+  _sidebarCtrl.dispose();
+  _heartbeatTimer?.cancel();
 
+  // Marcar offline al destruir el widget
+  if (_device != null) {
+    FirebaseFirestore.instance
+        .collection('devices')
+        .doc(_device!.deviceId)
+        .update({'status': 'offline'})
+        .catchError((_) {});
+  }
+
+  super.dispose();
+}
   Future<void> _loadCurrentPlaylist() async {
     if (_device?.currentPlaylistId == null) return;
     try {
@@ -582,87 +764,118 @@ class _DeviceDashboardScreenState extends State<DeviceDashboardScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_device == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF060A14),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+@override
+Widget build(BuildContext context) {
+  if (_device == null) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF060A14),
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
 
-    if (_fullscreen && _selectedPlaylist != null) {
-      return _FullscreenViewer(
-        playlist: _selectedPlaylist!,
-        deviceId: _device!.deviceId,
-        onExit: () => setState(() => _fullscreen = false),
-      );
-    }
+  // Fullscreen para programación
+  if (_fullscreen && _selectedScheduleId != null) {
+    return _ScheduleFullscreenViewer(
+      scheduleId: _selectedScheduleId!,
+      onExit: () => setState(() => _fullscreen = false),
+    );
+  }
 
-    return Scaffold(
-      backgroundColor: _P.bg,
-      body: Row(
-        children: [
-          SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(-1, 0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: _sidebarCtrl, curve: Curves.easeOutCubic)),
-            child: _Sidebar(device: _device!),
+  // Fullscreen para playlist
+  if (_fullscreen && _selectedPlaylist != null) {
+    return _FullscreenViewer(
+      playlist: _selectedPlaylist!,
+      deviceId: _device!.deviceId,
+      onExit: () => setState(() => _fullscreen = false),
+    );
+  }
+
+  return Scaffold(
+    backgroundColor: _P.bg,
+    body: Row(
+      children: [
+        SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(-1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: _sidebarCtrl, curve: Curves.easeOutCubic)),
+          child: _Sidebar(
+            device: _device!,
+            showSchedules: _showSchedules,
+          onToggleSchedules: () => setState(() {
+  _showSchedules = !_showSchedules;
+  // Al volver a playlists, limpiar schedule seleccionado
+  if (!_showSchedules) _selectedScheduleId = null;
+}),
           ),
-          Expanded(
-            child: Column(
-              children: [
-                _DashboardTopBar(
-                  device: _device!,
-                  selectedPlaylist: _selectedPlaylist,
-                  onFullscreen: _selectedPlaylist != null
-                    ? () => setState(() => _fullscreen = true)
-                    : null,
-                  onLogout: () {
-                    html.window.localStorage.remove('portal_session');
-                    context.go('/portal');
-                  },
-                ),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 360,
-                        child: _PlaylistsPanel(
-                          deviceId: _device!.deviceId,
-                          selectedId: _selectedPlaylist?.id,
-                          onSelect: (pl) => setState(() =>
-                            _selectedPlaylist = pl),
-                        ),
-                      ),
-                      Container(width: 1,
-                        color: _P.border.withOpacity(0.5)),
-                      Expanded(
-                        child: _selectedPlaylist == null
+        ),
+        Expanded(
+          child: Column(
+            children: [
+              _DashboardTopBar(
+                device: _device!,
+                selectedPlaylist: _selectedPlaylist,
+                onFullscreen: (_selectedPlaylist != null || _selectedScheduleId != null)
+                  ? () => setState(() => _fullscreen = true)
+                  : null,
+                onLogout: () {
+                  html.window.localStorage.remove('portal_session');
+                  context.go('/portal');
+                },
+              ),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 360,
+                      child: _showSchedules
+                        ? _SchedulesListPanel(
+                            deviceId: _device!.deviceId,
+                            onScheduleSelected: (scheduleId) {
+                              setState(() {
+                                _selectedScheduleId = scheduleId;
+                                _selectedPlaylist = null;
+                              });
+                            },
+                          )
+                        : _PlaylistsPanel(
+                            deviceId: _device!.deviceId,
+                            selectedId: _selectedPlaylist?.id,
+                            onSelect: (pl) => setState(() {
+                              _selectedPlaylist = pl;
+                              _selectedScheduleId = null;
+                            }),
+                          ),
+                    ),
+                    Container(width: 1, color: _P.border.withOpacity(0.5)),
+                    Expanded(
+                      child: _selectedScheduleId != null
+                        ? _ScheduleAutoPlayer(
+                            scheduleId: _selectedScheduleId!,
+                            onFullscreen: () => setState(() => _fullscreen = true),
+                          )
+                        : _selectedPlaylist == null
                           ? _EmptyPreview()
                           : _PreviewPanel(
                               playlist: _selectedPlaylist!,
                               deviceId: _device!.deviceId,
-                              onFullscreen: () =>
-                                setState(() => _fullscreen = true),
+                              onFullscreen: () => setState(() => _fullscreen = true),
                             ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
-
-void _showSchedules(BuildContext context, DeviceUser device) {
+}
+void _openSchedulesDialog(BuildContext context, DeviceUser device) {
   showDialog(
     context: context,
     builder: (_) => _DeviceSchedulesDialog(device: device),
@@ -673,8 +886,14 @@ void _showSchedules(BuildContext context, DeviceUser device) {
 // SIDEBAR
 // =============================================================================
 class _Sidebar extends StatelessWidget {
-  final DeviceUser device;
-  const _Sidebar({required this.device});
+ final DeviceUser device;
+  final bool showSchedules;
+  final VoidCallback onToggleSchedules;
+  const _Sidebar({
+    required this.device,
+    required this.showSchedules,
+    required this.onToggleSchedules,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -715,11 +934,13 @@ class _Sidebar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 _SidebarBtn(
-  icon: Icons.calendar_view_week_rounded,
-  label: 'Programación',
-  selected: false,
+  icon: showSchedules
+    ? Icons.playlist_play_rounded
+    : Icons.calendar_view_week_rounded,
+  label: showSchedules ? 'Playlists' : 'Programación',
+  selected: showSchedules,
   color: _P.purple,
-  onTap: () => _showSchedules(context, device),
+  onTap: onToggleSchedules,
 ),
           const SizedBox(height: 8),
        /* _SidebarBtn(
@@ -1343,14 +1564,28 @@ void _fallbackSaved() {
     });
   }
 
-  void _togglePlay() {
-    setState(() => _playing = !_playing);
-    if (_playing) {
-      _startTimer();
-    } else {
-      _playTimer?.cancel();
-    }
+void _togglePlay() {
+  setState(() => _playing = !_playing);
+  if (_playing) {
+    _startTimer();
+    // Enviar play a todos los iframes
+    try {
+      final iframes = html.document.querySelectorAll('iframe');
+      for (final el in iframes) {
+        (el as html.IFrameElement).contentWindow?.postMessage('play', '*');
+      }
+    } catch (_) {}
+  } else {
+    _playTimer?.cancel();
+    // Enviar pause a todos los iframes
+    try {
+      final iframes = html.document.querySelectorAll('iframe');
+      for (final el in iframes) {
+        (el as html.IFrameElement).contentWindow?.postMessage('pause', '*');
+      }
+    } catch (_) {}
   }
+}
 
   Future<void> _assignToDevice() async {
     try {
@@ -2761,16 +2996,35 @@ class _SchedulePlaybackViewerState extends State<_SchedulePlaybackViewer> {
     }
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    final pl = _playlist;
-    if (pl == null || pl.items.isEmpty) return;
-    final idx = _currentIndex.clamp(0, pl.items.length - 1);
-    _timer = Timer(
-      Duration(seconds: pl.items[idx].durationSeconds),
-      _nextSlide,
-    );
-  }
+void _startTimer() {
+  _timer?.cancel();
+  if (_playlist == null || _playlist!.items.isEmpty) return;
+  final dur = _playlist!.items[
+    _currentIndex.clamp(0, _playlist!.items.length - 1)].durationSeconds;
+  _timer = Timer(Duration(seconds: dur), () {
+    if (!mounted) return;
+    _nextSlide();
+  });
+}
+
+void pause() {
+  _timer?.cancel();
+  _broadcastToIframes('pause');
+}
+
+void resume() {
+  _startTimer();
+}
+
+void _broadcastToIframes(String msg) {
+  try {
+    final iframes = html.document.querySelectorAll('iframe');
+    for (final el in iframes) {
+      final iframe = el as html.IFrameElement;
+      iframe.contentWindow?.postMessage(msg, '*');
+    }
+  } catch (_) {}
+}
 
   void _nextSlide() {
     final pl = _playlist;
@@ -3373,86 +3627,1197 @@ class _PlaylistViewerCanvasOnlyState extends State<_PlaylistViewerCanvasOnly> {
       }),
     );
   }
+Widget _renderClip(EditorClip clip, double sx, double sy) {
+  switch (clip.type) {
+    case EditorLayerType.image:
+      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+        final viewId = 'img-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          final img = html.ImageElement()
+            ..src = clip.url!
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..style.objectFit = 'cover'
+            ..style.display = 'block';
+          return img;
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
+        child: Center(child: Icon(Icons.image_rounded,
+          color: const Color(0xFF38BDF8), size: 22 * sx)));
 
-  Widget _renderClip(EditorClip clip, double sx, double sy) {
-    switch (clip.type) {
-      case EditorLayerType.image:
-        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-          final viewId = 'img-${clip.id}';
-          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-            final img = html.ImageElement()
-              ..src = clip.url!
-              ..style.width = '100%'
-              ..style.height = '100%'
-              ..style.objectFit = 'cover'
-              ..style.display = 'block';
-            return img;
-          }); } catch (_) {}
-          return HtmlElementView(viewType: viewId);
-        }
-        return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
-          child: Center(child: Icon(Icons.image_rounded,
-            color: const Color(0xFF38BDF8), size: 22 * sx)));
+    case EditorLayerType.video:
+      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+        final viewId = 'vid-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          final iframe = html.IFrameElement()
+            ..style.cssText = 'border:none;width:100%;height:100%;'
+            ..setAttribute('allow', 'autoplay')
+            ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+            ..srcdoc = '''
+<!DOCTYPE html><html><head>
+<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}
+video{width:100%;height:100%;object-fit:cover;}</style>
+</head><body>
+<video id="v" src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>
+<script>
+window.addEventListener('message', function(e) {
+  var v = document.getElementById('v');
+  if (!v) return;
+  if (e.data === 'pause') v.pause();
+  if (e.data === 'play') v.play();
+});
+</script>
+</body></html>''';
+          return iframe;
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(
+        decoration: BoxDecoration(gradient: LinearGradient(
+          colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                   const Color(0xFFA855F7).withOpacity(0.1)])),
+        child: Center(child: Icon(Icons.play_circle_rounded,
+          color: const Color(0xFFA855F7), size: 36 * sx)));
 
-      case EditorLayerType.video:
-        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-          final viewId = 'vid-${clip.id}';
-          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-            final video = html.VideoElement()
-              ..src = clip.url!
-              ..style.width = '100%'
-              ..style.height = '100%'
-              ..style.objectFit = 'cover'
-              ..autoplay = false
-              ..controls = false
-              ..muted = true;
-            return video;
-          }); } catch (_) {}
-          return Stack(children: [
-            Positioned.fill(child: HtmlElementView(viewType: viewId)),
-            Positioned(bottom: 4 * sy, left: 0, right: 0,
-              child: Center(child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
-                decoration: BoxDecoration(color: Colors.black54,
-                  borderRadius: BorderRadius.circular(4)),
-                child: Text(clip.label, style: TextStyle(
-                  color: Colors.white70, fontSize: 9 * sx,
-                  fontWeight: FontWeight.w600),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              ))),
-          ]);
-        }
-        return Container(
-          decoration: BoxDecoration(gradient: LinearGradient(
-            colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                     const Color(0xFFA855F7).withOpacity(0.1)])),
-          child: Center(child: Icon(Icons.play_circle_rounded,
-            color: const Color(0xFFA855F7), size: 36 * sx)));
+    case EditorLayerType.audio:
+      if (clip.url != null && clip.url!.isNotEmpty) {
+        final viewId = 'audio-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          final iframe = html.IFrameElement()
+            ..style.cssText = 'border:none;width:100%;height:100%;'
+            ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+            ..srcdoc = '''
+<!DOCTYPE html><html><head>
+<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;
+display:flex;flex-direction:column;align-items:center;justify-content:center;
+font-family:sans-serif;gap:8px;}
+.note{font-size:28px;}audio{width:88%;}
+.lbl{color:#7B8DB0;font-size:10px;}</style>
+</head><body>
+<div class="note">🎵</div>
+<audio id="a" src="${clip.url}" autoplay loop preload="auto"></audio>
+<div class="lbl">${clip.label}</div>
+<script>
+window.addEventListener('message', function(e) {
+  var a = document.getElementById('a');
+  if (!a) return;
+  if (e.data === 'pause') a.pause();
+  if (e.data === 'play') { a.play(); }
+});
+</script>
+</body></html>''';
+          return iframe;
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
+        child: Center(child: Icon(Icons.music_note_rounded,
+          color: const Color(0xFF22C55E), size: 20 * sx)));
 
-      case EditorLayerType.text:
-        final bgColor = clip.backgroundColor != null
-          ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
-          : Colors.transparent;
-        return Container(color: bgColor, alignment: Alignment.center,
-          child: Text(clip.text ?? '', textAlign: TextAlign.center,
-            style: TextStyle(color: clip.textColor ?? Colors.white,
-              fontSize: (clip.fontSize ?? 48) * sx,
-              fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
-              height: 1.2)));
+    case EditorLayerType.text:
+      final bgColor = clip.backgroundColor != null
+        ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
+        : Colors.transparent;
+      return Container(color: bgColor, alignment: Alignment.center,
+        child: Text(clip.text ?? '', textAlign: TextAlign.center,
+          style: TextStyle(color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
+            height: 1.2)));
 
-      case EditorLayerType.overlay:
-        return Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF59E0B).withOpacity(0.15),
-            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4),
-              width: 2 * sx)),
-          child: Center(child: Icon(Icons.layers_rounded,
-            color: const Color(0xFFF59E0B), size: 20 * sx)));
+    case EditorLayerType.overlay:
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B).withOpacity(0.15),
+          border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4),
+            width: 2 * sx)),
+        child: Center(child: Icon(Icons.layers_rounded,
+          color: const Color(0xFFF59E0B), size: 20 * sx)));
+  }
+}
+}
+class _SchedulesListPanel extends StatefulWidget {
+  final String deviceId;
+  final void Function(String scheduleId) onScheduleSelected;
+  const _SchedulesListPanel({
+    required this.deviceId,
+    required this.onScheduleSelected,
+  });
 
-      case EditorLayerType.audio:
-        return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
-          child: Center(child: Icon(Icons.music_note_rounded,
-            color: const Color(0xFF22C55E), size: 20 * sx)));
+  @override
+  State<_SchedulesListPanel> createState() => _SchedulesListPanelState();
+}
+
+class _SchedulesListPanelState extends State<_SchedulesListPanel> {
+  String? _selectedScheduleId;
+
+  static const _dayShortLabels = {
+    'mon': 'L', 'tue': 'M', 'wed': 'X',
+    'thu': 'J', 'fri': 'V', 'sat': 'S', 'sun': 'D',
+  };
+  static const _orderedDays = ['mon','tue','wed','thu','fri','sat','sun'];
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2,'0')}:${min.toString().padLeft(2,'0')}';
+  }
+
+  bool _hasBlockNow(List<Map<String, dynamic>> blocks) {
+    final now = DateTime.now();
+    const days = ['mon','tue','wed','thu','fri','sat','sun'];
+    final today = days[now.weekday - 1];
+    final nowMin = now.hour * 60 + now.minute;
+    return blocks.any((b) {
+      final bDays = List<String>.from(b['days'] ?? []);
+      final start = (b['startMinute'] as num?)?.toInt() ?? 0;
+      final dur = (b['durationMinutes'] as num?)?.toInt() ?? 0;
+      return bDays.contains(today) &&
+             nowMin >= start &&
+             nowMin < start + dur;
+    });
+  }
+
+Future<void> _onSelectSchedule(String scheduleId) async {
+  setState(() => _selectedScheduleId = scheduleId);
+  widget.onScheduleSelected(scheduleId);
+}
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: _P.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Programaciones',
+                  style: TextStyle(
+                    color: _P.textHi, fontWeight: FontWeight.w700,
+                    fontSize: 16, letterSpacing: -0.3)),
+                const SizedBox(height: 4),
+                const Text('Selecciona para ver su playlist activa',
+                  style: TextStyle(color: _P.textMid, fontSize: 12)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFF1A2540)),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('schedules')
+                  .snapshots(),
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: _P.purple, strokeWidth: 2));
+                }
+
+                final schedules = snap.data!.docs
+                    .where((d) => (d.data() as Map<String, dynamic>)['isActive'] ?? true)
+                    .toList();
+
+                if (schedules.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.event_busy_rounded,
+                          color: _P.textLo, size: 40),
+                        const SizedBox(height: 12),
+                        const Text('Sin programaciones',
+                          style: TextStyle(color: _P.textLo, fontSize: 13)),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: schedules.length,
+                  itemBuilder: (_, i) {
+                    final doc = schedules[i];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final scheduleId = doc.id;
+                    final name = data['name'] ?? 'Sin nombre';
+                    final description = data['description'] ?? '';
+                    final isSelected = scheduleId == _selectedScheduleId;
+
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('program_blocks')
+                          .where('scheduleId', isEqualTo: scheduleId)
+                          .snapshots(),
+                      builder: (ctx, blockSnap) {
+                        final blocks = blockSnap.hasData
+                            ? blockSnap.data!.docs
+                                .map((d) => d.data() as Map<String, dynamic>)
+                                .toList()
+                            : <Map<String, dynamic>>[];
+
+                        final blockCount = blocks.length;
+                        final isNow = _hasBlockNow(blocks);
+
+                        // Días que tiene bloques
+                        final daysWithBlocks = <String>{};
+                        for (final b in blocks) {
+                          daysWithBlocks.addAll(
+                            List<String>.from(b['days'] ?? []));
+                        }
+
+                        return GestureDetector(
+                          onTap: () => _onSelectSchedule(scheduleId),
+                          child: AnimatedContainer(
+                            duration: 150.ms,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                ? _P.purple.withOpacity(0.12)
+                                : _P.card,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                  ? _P.purple.withOpacity(0.5)
+                                  : _P.border,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                // Icono
+                                AnimatedContainer(
+                                  duration: 150.ms,
+                                  width: 42, height: 42,
+                                  decoration: BoxDecoration(
+                                    gradient: isSelected
+                                      ? const LinearGradient(
+                                          colors: [_P.purple, Color(0xFFBF7FFF)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight)
+                                      : null,
+                                    color: isSelected
+                                      ? null : _P.purple.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.calendar_view_week_rounded,
+                                    color: isSelected ? Colors.white : _P.purple,
+                                    size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(children: [
+                                        Expanded(
+                                          child: Text(name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                ? _P.textHi : _P.textMid,
+                                              fontWeight: isSelected
+                                                ? FontWeight.w700 : FontWeight.w500,
+                                              fontSize: 13)),
+                                        ),
+                                        if (isNow) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: _P.green.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(4)),
+                                            child: const Text('EN VIVO',
+                                              style: TextStyle(
+                                                color: _P.green, fontSize: 8,
+                                                fontWeight: FontWeight.w800)),
+                                          ),
+                                        ],
+                                      ]),
+                                      const SizedBox(height: 3),
+                                      Text('$blockCount bloques',
+                                        style: const TextStyle(
+                                          color: _P.textLo, fontSize: 11)),
+                                      if (daysWithBlocks.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Wrap(
+                                          spacing: 3,
+                                          children: _orderedDays
+                                            .where((d) => daysWithBlocks.contains(d))
+                                            .map((d) => Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: _P.purple.withOpacity(0.12),
+                                                borderRadius: BorderRadius.circular(4)),
+                                              child: Text(_dayShortLabels[d] ?? d,
+                                                style: const TextStyle(
+                                                  color: _P.purple, fontSize: 9,
+                                                  fontWeight: FontWeight.w700)),
+                                            )).toList(),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle_rounded,
+                                    size: 16, color: _P.purple)
+                                else
+                                  const Icon(Icons.play_circle_outline_rounded,
+                                    size: 16, color: _P.textMid),
+                              ],
+                            ),
+                          ),
+                        ).animate().fadeIn(
+                          delay: Duration(milliseconds: i * 40));
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+class _ScheduleAutoPlayer extends StatefulWidget {
+  final String scheduleId;
+  final VoidCallback onFullscreen;
+  const _ScheduleAutoPlayer({
+    required this.scheduleId,
+    required this.onFullscreen,
+  });
+
+  @override
+  State<_ScheduleAutoPlayer> createState() => _ScheduleAutoPlayerState();
+}
+
+class _ScheduleAutoPlayerState extends State<_ScheduleAutoPlayer>
+    with TickerProviderStateMixin {
+  List<_ScheduleBlock>? _blocks;
+  int _currentBlockIndex = 0;
+  _PlaylistData? _currentPlaylist;
+  bool _loading = true;
+  Timer? _blockTimer;
+  bool _playing = true;
+  SavedPlaylist? _saved;
+  late AnimationController _fadeCtrl;
+
+  // Playhead propio para controlar el canvas
+  double _playhead = 0;
+  Timer? _playheadTimer;
+  double _total = 30;
+
+  final GlobalKey<_PlaylistViewerCanvasOnlyState> _canvasKey =
+      GlobalKey<_PlaylistViewerCanvasOnlyState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 500));
+    _fadeCtrl.forward();
+    _loadSchedule();
+  }
+
+  @override
+  void didUpdateWidget(_ScheduleAutoPlayer old) {
+    super.didUpdateWidget(old);
+    if (old.scheduleId != widget.scheduleId) {
+      _blockTimer?.cancel();
+      _playheadTimer?.cancel();
+      setState(() {
+        _blocks = null;
+        _currentBlockIndex = 0;
+        _currentPlaylist = null;
+        _saved = null;
+        _loading = true;
+        _playhead = 0;
+      });
+      _fadeCtrl.forward(from: 0);
+      _loadSchedule();
     }
+  }
+
+  @override
+  void dispose() {
+    _blockTimer?.cancel();
+    _playheadTimer?.cancel();
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startPlayheadTimer() {
+    _playheadTimer?.cancel();
+    _playheadTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_playhead >= _total) {
+          _playhead = 0;
+        } else {
+          _playhead += 0.05;
+        }
+      });
+    });
+  }
+
+  void _stopPlayheadTimer() {
+    _playheadTimer?.cancel();
+  }
+
+  Future<void> _loadSchedule() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('program_blocks')
+          .where('scheduleId', isEqualTo: widget.scheduleId)
+          .get();
+
+      final now = DateTime.now();
+      const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+      final today = days[now.weekday - 1];
+      final nowMin = now.hour * 60 + now.minute;
+
+      final todayBlocks = snap.docs
+          .map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return _ScheduleBlock(
+              id: d.id,
+              name: data['name'] ?? '',
+              playlistId: data['playlistId'] ?? '',
+              playlistName: data['playlistName'] ?? '',
+              days: List<String>.from(data['days'] ?? []),
+              startMinute: (data['startMinute'] as num?)?.toInt() ?? 0,
+              durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 60,
+              isActive: data['isActive'] ?? true,
+              colorValue: (data['colorValue'] as num?)?.toInt() ?? 0xFF6366F1,
+            );
+          })
+          .where((b) => b.isActive && b.days.contains(today))
+          .toList()
+        ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+
+      if (todayBlocks.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      int startIndex = 0;
+      for (int i = 0; i < todayBlocks.length; i++) {
+        if (nowMin >= todayBlocks[i].startMinute &&
+            nowMin < todayBlocks[i].startMinute + todayBlocks[i].durationMinutes) {
+          startIndex = i;
+          break;
+        }
+        if (nowMin < todayBlocks[0].startMinute) { startIndex = 0; break; }
+        if (i == todayBlocks.length - 1) startIndex = i;
+      }
+
+      if (mounted) {
+        setState(() {
+          _blocks = todayBlocks;
+          _currentBlockIndex = startIndex;
+          _loading = false;
+        });
+      }
+
+      await _loadPlaylistForBlock(startIndex);
+      _scheduleNextBlock(startIndex);
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadPlaylistForBlock(int index) async {
+    if (_blocks == null || index >= _blocks!.length) return;
+    final block = _blocks![index];
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('playlists')
+          .doc(block.playlistId)
+          .get();
+      if (!doc.exists || !mounted) return;
+
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['clips'] as List<dynamic>?)
+               ?? (data['items'] as List<dynamic>?) ?? [];
+
+      if (raw.isNotEmpty) {
+        try {
+          final clips = raw
+              .map((i) => EditorClip.fromMap(i as Map<String, dynamic>))
+              .toList();
+          final saved = SavedPlaylist(
+            id: doc.id,
+            name: data['name'] ?? block.playlistName,
+            clips: clips,
+            createdAt: DateTime.now(),
+            viewLink: '',
+          );
+          // Calcular total del nuevo saved
+          final newTotal = clips.isEmpty ? 30.0
+              : clips.map((c) => c.startSec + c.durationSec)
+                  .reduce(math.max) + 2;
+          if (mounted) {
+            setState(() {
+              _saved = saved;
+              _currentPlaylist = _PlaylistData.fromFirestore(doc);
+              _playhead = 0;
+              _total = newTotal;
+            });
+            _fadeCtrl.forward(from: 0);
+            if (_playing) _startPlayheadTimer();
+          }
+          return;
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentPlaylist = _PlaylistData.fromFirestore(doc);
+          _saved = null;
+          _playhead = 0;
+        });
+        _fadeCtrl.forward(from: 0);
+      }
+    } catch (e) {
+      debugPrint('Error loading playlist for block: $e');
+    }
+  }
+
+  void _scheduleNextBlock(int currentIndex) {
+    _blockTimer?.cancel();
+    if (_blocks == null || currentIndex >= _blocks!.length) return;
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    final block = _blocks![currentIndex];
+    final blockEndMin = block.startMinute + block.durationMinutes;
+    final remainingSeconds = (blockEndMin - nowMin) * 60 - now.second;
+    if (remainingSeconds <= 0) { _goToNextBlock(currentIndex); return; }
+    _blockTimer = Timer(Duration(seconds: remainingSeconds.clamp(1, 86400)), () {
+      if (!mounted) return;
+      _goToNextBlock(currentIndex);
+    });
+  }
+
+  void _goToNextBlock(int currentIndex) {
+    if (_blocks == null) return;
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= _blocks!.length) return;
+    setState(() => _currentBlockIndex = nextIndex);
+    _loadPlaylistForBlock(nextIndex);
+    _scheduleNextBlock(nextIndex);
+  }
+
+  void _togglePlay() {
+    setState(() => _playing = !_playing);
+    if (_playing) {
+      _startPlayheadTimer();
+      try {
+        final iframes = html.document.querySelectorAll('iframe');
+        for (final el in iframes) {
+          (el as html.IFrameElement).contentWindow?.postMessage('play', '*');
+        }
+      } catch (_) {}
+    } else {
+      _stopPlayheadTimer();
+      try {
+        final iframes = html.document.querySelectorAll('iframe');
+        for (final el in iframes) {
+          (el as html.IFrameElement).contentWindow?.postMessage('pause', '*');
+        }
+      } catch (_) {}
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _P.purple, strokeWidth: 2));
+    }
+
+    if (_blocks == null || _blocks!.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                color: _P.purple.withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: _P.purple.withOpacity(0.2))),
+              child: const Icon(Icons.event_busy_rounded,
+                color: _P.purple, size: 36),
+            ),
+            const SizedBox(height: 20),
+            const Text('Sin bloques programados hoy',
+              style: TextStyle(color: _P.textHi,
+                fontWeight: FontWeight.w700, fontSize: 18)),
+            const SizedBox(height: 8),
+            const Text('Esta programación no tiene bloques activos para hoy',
+              style: TextStyle(color: _P.textMid, fontSize: 14),
+              textAlign: TextAlign.center),
+          ],
+        ),
+      );
+    }
+
+    final block = _blocks![_currentBlockIndex];
+    final color = Color(block.colorValue);
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 4, height: 40,
+                  decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Text(block.name,
+                          style: const TextStyle(
+                            color: _P.textHi, fontWeight: FontWeight.w700,
+                            fontSize: 16, letterSpacing: -0.3)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: color.withOpacity(0.4))),
+                          child: Text('EN CURSO',
+                            style: TextStyle(color: color, fontSize: 9,
+                              fontWeight: FontWeight.w800)),
+                        ),
+                      ]),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${_fmtMin(block.startMinute)} — ${_fmtMin(block.startMinute + block.durationMinutes)}  ·  ${block.playlistName}',
+                        style: const TextStyle(color: _P.textMid, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                // Miniaturas bloques
+                Row(
+                  children: List.generate(_blocks!.length, (i) {
+                    final b = _blocks![i];
+                    final isCurrent = i == _currentBlockIndex;
+                    final bc = Color(b.colorValue);
+                    return GestureDetector(
+                      onTap: () {
+                        _blockTimer?.cancel();
+                        _playheadTimer?.cancel();
+                        setState(() {
+                          _currentBlockIndex = i;
+                          _playhead = 0;
+                        });
+                        _loadPlaylistForBlock(i);
+                        _scheduleNextBlock(i);
+                      },
+                      child: AnimatedContainer(
+                        duration: 150.ms,
+                        margin: const EdgeInsets.only(left: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? bc.withOpacity(0.2) : _P.card,
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(
+                            color: isCurrent ? bc.withOpacity(0.6) : _P.border,
+                            width: isCurrent ? 1.5 : 1)),
+                        child: Text('${i + 1}',
+                          style: TextStyle(
+                            color: isCurrent ? bc : _P.textMid,
+                            fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
+                  icon: Icons.fullscreen_rounded,
+                  label: 'Pantalla completa',
+                  color: _P.accent,
+                  onTap: widget.onFullscreen,
+                ),
+              ],
+            ),
+          ),
+
+          // Canvas 16:9
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _P.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.4),
+                    blurRadius: 30, offset: const Offset(0, 10)),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Stack(
+                  children: [
+                    // Canvas con playhead externo
+                    if (_saved != null)
+                      _PlaylistViewerCanvasOnly(
+                      //  key: _canvasKey,
+                        playlist: _saved!,
+                        externalPlayhead: _playhead,
+                      )
+                    else if (_currentPlaylist != null)
+                      _PortalPlaylistCanvas(playlist: _currentPlaylist!)
+                    else
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Container(
+                          color: const Color(0xFF0A0F1E),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: _P.purple, strokeWidth: 2)),
+                        ),
+                      ),
+
+                    // Barra de controles
+                    Positioned(
+                      bottom: 0, left: 0, right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.7),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Botón play/pause
+                            GestureDetector(
+                              onTap: _togglePlay,
+                              child: Container(
+                                width: 30, height: 30,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(6)),
+                                child: Icon(
+                                  _playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                  color: Colors.white, size: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            // Barra de progreso
+                            Expanded(
+                              child: SliderTheme(
+                                data: SliderThemeData(
+                                  trackHeight: 2,
+                                  thumbColor: color,
+                                  activeTrackColor: color,
+                                  inactiveTrackColor: Colors.white24,
+                                  overlayShape: SliderComponentShape.noOverlay,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 5),
+                                ),
+                                child: Slider(
+                                  value: _playhead.clamp(0, _total),
+                                  min: 0,
+                                  max: _total,
+                                  onChanged: (v) {
+                                    setState(() => _playhead = v);
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_playhead.toStringAsFixed(1)}s / ${_total.toStringAsFixed(1)}s',
+                              style: const TextStyle(
+                                color: Colors.white54, fontSize: 9,
+                                fontFamily: 'monospace')),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Lista de bloques del día
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Bloques de hoy',
+                  style: TextStyle(color: _P.textMid, fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                ..._blocks!.asMap().entries.map((e) {
+                  final i = e.key;
+                  final b = e.value;
+                  final isCurrent = i == _currentBlockIndex;
+                  final bc = Color(b.colorValue);
+                  return GestureDetector(
+                    onTap: () {
+                      _blockTimer?.cancel();
+                      _playheadTimer?.cancel();
+                      setState(() {
+                        _currentBlockIndex = i;
+                        _playhead = 0;
+                      });
+                      _loadPlaylistForBlock(i);
+                      _scheduleNextBlock(i);
+                    },
+                    child: AnimatedContainer(
+                      duration: 150.ms,
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isCurrent ? bc.withOpacity(0.12) : _P.card,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isCurrent ? bc.withOpacity(0.5) : _P.border,
+                          width: isCurrent ? 1.5 : 1)),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4, height: 36,
+                            decoration: BoxDecoration(
+                              color: bc,
+                              borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(b.name,
+                                  style: TextStyle(
+                                    color: isCurrent ? bc : _P.textHi,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12)),
+                                Text(
+                                  '${_fmtMin(b.startMinute)} — ${_fmtMin(b.startMinute + b.durationMinutes)}  ·  ${b.playlistName}',
+                                  style: const TextStyle(
+                                    color: _P.textMid, fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                          if (isCurrent)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: bc.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(5)),
+                              child: Text('EN CURSO',
+                                style: TextStyle(
+                                  color: bc, fontSize: 8,
+                                  fontWeight: FontWeight.w800)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  String _fmtMin(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    return '${h.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}';
+  }
+}
+
+class _ScheduleFullscreenViewer extends StatefulWidget {
+  final String scheduleId;
+  final VoidCallback onExit;
+  const _ScheduleFullscreenViewer({
+    required this.scheduleId,
+    required this.onExit,
+  });
+
+  @override
+  State<_ScheduleFullscreenViewer> createState() => _ScheduleFullscreenViewerState();
+}
+
+class _ScheduleFullscreenViewerState extends State<_ScheduleFullscreenViewer> {
+  List<_ScheduleBlock>? _blocks;
+  int _currentBlockIndex = 0;
+  SavedPlaylist? _saved;
+  bool _loading = true;
+  bool _showUI = true;
+  Timer? _blockTimer;
+  Timer? _hideUITimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSchedule();
+    _scheduleHideUI();
+  }
+
+  @override
+  void dispose() {
+    _blockTimer?.cancel();
+    _hideUITimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleHideUI() {
+    _hideUITimer?.cancel();
+    setState(() => _showUI = true);
+    _hideUITimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showUI = false);
+    });
+  }
+
+  Future<void> _loadSchedule() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('program_blocks')
+          .where('scheduleId', isEqualTo: widget.scheduleId)
+          .get();
+
+      final now = DateTime.now();
+      const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+      final today = days[now.weekday - 1];
+      final nowMin = now.hour * 60 + now.minute;
+
+      final todayBlocks = snap.docs
+          .map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            return _ScheduleBlock(
+              id: d.id,
+              name: data['name'] ?? '',
+              playlistId: data['playlistId'] ?? '',
+              playlistName: data['playlistName'] ?? '',
+              days: List<String>.from(data['days'] ?? []),
+              startMinute: (data['startMinute'] as num?)?.toInt() ?? 0,
+              durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 60,
+              isActive: data['isActive'] ?? true,
+              colorValue: (data['colorValue'] as num?)?.toInt() ?? 0xFF6366F1,
+            );
+          })
+          .where((b) => b.isActive && b.days.contains(today))
+          .toList()
+        ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
+
+      if (todayBlocks.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      int startIndex = 0;
+      for (int i = 0; i < todayBlocks.length; i++) {
+        if (nowMin >= todayBlocks[i].startMinute &&
+            nowMin < todayBlocks[i].startMinute + todayBlocks[i].durationMinutes) {
+          startIndex = i;
+          break;
+        }
+        if (i == todayBlocks.length - 1) startIndex = i;
+      }
+
+      if (mounted) {
+        setState(() {
+          _blocks = todayBlocks;
+          _currentBlockIndex = startIndex;
+          _loading = false;
+        });
+      }
+
+      await _loadPlaylistForBlock(startIndex);
+      _scheduleNextBlock(startIndex);
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadPlaylistForBlock(int index) async {
+    if (_blocks == null || index >= _blocks!.length) return;
+    final block = _blocks![index];
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('playlists')
+          .doc(block.playlistId)
+          .get();
+      if (!doc.exists || !mounted) return;
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['clips'] as List<dynamic>?)
+               ?? (data['items'] as List<dynamic>?) ?? [];
+      if (raw.isNotEmpty) {
+        final clips = raw
+            .map((i) => EditorClip.fromMap(i as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() => _saved = SavedPlaylist(
+            id: doc.id,
+            name: data['name'] ?? block.playlistName,
+            clips: clips,
+            createdAt: DateTime.now(),
+            viewLink: '',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error: $e');
+    }
+  }
+
+  void _scheduleNextBlock(int currentIndex) {
+    _blockTimer?.cancel();
+    if (_blocks == null || currentIndex >= _blocks!.length) return;
+    final now = DateTime.now();
+    final nowMin = now.hour * 60 + now.minute;
+    final block = _blocks![currentIndex];
+    final blockEndMin = block.startMinute + block.durationMinutes;
+    final remainingSeconds = (blockEndMin - nowMin) * 60 - now.second;
+    if (remainingSeconds <= 0) {
+      _goToNextBlock(currentIndex);
+      return;
+    }
+    _blockTimer = Timer(Duration(seconds: remainingSeconds.clamp(1, 86400)), () {
+      if (!mounted) return;
+      _goToNextBlock(currentIndex);
+    });
+  }
+
+  void _goToNextBlock(int currentIndex) {
+    if (_blocks == null) return;
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= _blocks!.length) return;
+    setState(() => _currentBlockIndex = nextIndex);
+    _loadPlaylistForBlock(nextIndex);
+    _scheduleNextBlock(nextIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator(color: _P.purple)),
+      );
+    }
+
+    if (_saved == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator(color: _P.purple)),
+      );
+    }
+
+    return MouseRegion(
+      onHover: (_) => _scheduleHideUI(),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            _PlaylistViewerCanvasOnly(playlist: _saved!),
+            AnimatedOpacity(
+              opacity: _showUI ? 1.0 : 0.0,
+              duration: 400.ms,
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 0, left: 0, right: 0, height: 100,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: widget.onExit,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white24)),
+                              child: const Row(children: [
+                                Icon(Icons.fullscreen_exit_rounded,
+                                  size: 16, color: Colors.white70),
+                                SizedBox(width: 6),
+                                Text('Salir', style: TextStyle(
+                                  color: Colors.white70, fontSize: 12)),
+                              ]),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (_blocks != null && _currentBlockIndex < _blocks!.length)
+                            Text(
+                              _blocks![_currentBlockIndex].playlistName,
+                              style: const TextStyle(
+                                color: Colors.white70, fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

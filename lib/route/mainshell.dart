@@ -244,8 +244,8 @@ class _Sidebar extends ConsumerWidget {
               route: "/playlist2", current: location),
    _NavItem(icon: Icons.send_outlined, label: 'Programación',
               route: "/schedules", current: location),
-  _NavItem(icon: Icons.send_outlined, label: 'Analitica',
-              route: "/analytics", current: location),
+  //_NavItem(icon: Icons.send_outlined, label: 'Analitica',
+    //          route: "/analytics", current: location),
 
   _NavItem(icon: Icons.send_outlined, label: 'Biblioteca de medios',
               route: "/media", current: location),

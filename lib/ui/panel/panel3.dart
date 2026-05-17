@@ -2108,70 +2108,53 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
           )),
         );
 
-      case EditorLayerType.video:
-        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-          final viewId = 'vid-${clip.id}';
-          try {
-            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-              final video = html.VideoElement()
-                ..src = clip.url!
-                ..style.width = '100%'
-                ..style.height = '100%'
-                ..style.objectFit = 'cover'
-                ..autoplay = false
-                ..controls = false
-                ..muted = true;
-              return video;
-            });
-          } catch (_) {}
-          return Stack(
-            children: [
-              Positioned.fill(child: HtmlElementView(viewType: viewId)),
-              Positioned(
-                bottom: 4 * sy, left: 0, right: 0,
-                child: Center(
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(clip.label,
-                      style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-                        fontWeight: FontWeight.w600),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-        return Container(
+    case EditorLayerType.video:
+  if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+    final viewId = 'vid-${clip.id}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('allow', 'autoplay')
+          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+          ..srcdoc = '<!DOCTYPE html><html><head>'
+              '<meta http-equiv="Content-Security-Policy" content="default-src * data: blob: \'unsafe-inline\' \'unsafe-eval\'">'
+              '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
+              'video{width:100%;height:100%;object-fit:cover;}</style>'
+              '</head><body>'
+              '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
+              '</body></html>';
+        return iframe;
+      });
+    } catch (_) {}
+    return HtmlElementView(viewType: viewId);
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                 const Color(0xFFA855F7).withOpacity(0.1)],
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ),
+    ),
+    child: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 36 * sx, height: 36 * sx,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                       const Color(0xFFA855F7).withOpacity(0.1)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-          ),
-          child: Center(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36 * sx, height: 36 * sx,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFA855F7).withOpacity(0.85),
-                  shape: BoxShape.circle),
-                child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
-              ),
-              SizedBox(height: 5 * sy),
-              Text(clip.label,
-                style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-                  fontWeight: FontWeight.w600),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            ],
-          )),
-        );
+            color: const Color(0xFFA855F7).withOpacity(0.85),
+            shape: BoxShape.circle),
+          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
+        ),
+        SizedBox(height: 5 * sy),
+        Text(clip.label,
+          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+            fontWeight: FontWeight.w600),
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    )),
+  );
 
       case EditorLayerType.text:
         final bgColor = clip.backgroundColor != null
@@ -2202,12 +2185,30 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
             color: const Color(0xFFF59E0B), size: 20 * sx)),
         );
 
-      case EditorLayerType.audio:
-        return Container(
-          color: const Color(0xFF22C55E).withOpacity(0.1),
-          child: Center(child: Icon(Icons.music_note_rounded,
-            color: const Color(0xFF22C55E), size: 20 * sx)),
-        );
+    case EditorLayerType.audio:
+  if (clip.url != null && clip.url!.isNotEmpty) {
+    final viewId = 'audio-${clip.id}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+          ..srcdoc = '<!DOCTYPE html><html><head>'
+              '<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;'
+              'display:flex;align-items:center;justify-content:center;}'
+              'audio{width:90%;}</style></head><body>'
+              '<audio src="${clip.url}" controls autoplay loop>'
+              '</audio></body></html>';
+        return iframe;
+      });
+    } catch (_) {}
+    return HtmlElementView(viewType: viewId);
+  }
+  return Container(
+    color: const Color(0xFF22C55E).withOpacity(0.1),
+    child: Center(child: Icon(Icons.music_note_rounded,
+      color: const Color(0xFF22C55E), size: 20 * sx)),
+  );
     }
   }
 }
@@ -4584,67 +4585,53 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
         )),
       );
 
-    case EditorLayerType.video:
-      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-        final viewId = 'vid-${clip.id}';
-        // ignore: undefined_prefixed_name
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final video = html.VideoElement()
-            ..src = clip.url!
-            ..style.width = '100%'
-            ..style.height = '100%'
-            ..style.objectFit = 'cover'
-            ..autoplay = false
-            ..controls = false
-            ..muted = true;
-          return video;
-        });
-        return Stack(
-          children: [
-            Positioned.fill(child: HtmlElementView(viewType: viewId)),
-            Positioned(
-              bottom: 4 * sy, left: 0, right: 0,
-              child: Center(
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6 * sx, vertical: 2 * sy),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(clip.label,
-                    style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-                      fontWeight: FontWeight.w600),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-      return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [_EC.purple.withOpacity(0.3), _EC.purple.withOpacity(0.1)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
+   case EditorLayerType.video:
+  if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+    final viewId = 'vid-${clip.id}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('allow', 'autoplay')
+          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+          ..srcdoc = '''
+<!DOCTYPE html><html><head>
+<meta http-equiv="Content-Security-Policy" content="default-src * data: blob: 'unsafe-inline' 'unsafe-eval'">
+<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}video{width:100%;height:100%;object-fit:cover;}</style>
+</head><body>
+<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>
+</body></html>''';
+        return iframe;
+      });
+    } catch (_) {}
+    return HtmlElementView(viewType: viewId);
+  }
+  return Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                 const Color(0xFFA855F7).withOpacity(0.1)],
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ),
+    ),
+    child: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 36 * sx, height: 36 * sx,
+          decoration: BoxDecoration(
+            color: const Color(0xFFA855F7).withOpacity(0.85),
+            shape: BoxShape.circle),
+          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
         ),
-        child: Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36 * sx, height: 36 * sx,
-              decoration: BoxDecoration(
-                color: _EC.purple.withOpacity(0.85), shape: BoxShape.circle),
-              child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
-            ),
-            SizedBox(height: 5 * sy),
-            Text(clip.label,
-              style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-                fontWeight: FontWeight.w600),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        )),
-      );
+        SizedBox(height: 5 * sy),
+        Text(clip.label,
+          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
+            fontWeight: FontWeight.w600),
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    )),
+  );
 
     case EditorLayerType.text:
       final bgColor = clip.backgroundColor != null

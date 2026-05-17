@@ -224,30 +224,38 @@ final routerProvider = Provider<GoRouter>((ref) {
       final path      = state.matchedLocation;
 
       if (isLoading) return null;
-
-      // Rutas públicas libres
       if (path.startsWith('/view/')) return null;
 
       const publicRoutes = [
         AppRoutes.login,
         AppRoutes.register,
+        '/panel',
         AppRoutes.forgotPassword,
+        '/portal',
       ];
       final isPublic = publicRoutes.contains(path);
 
       if (!isAuth && !isPublic) return AppRoutes.login;
 
       if (isAuth && isPublic) {
-        // Redirige según tipo de usuario
         if (user?.isSuperAdmin == true) return AppRoutes.superDashboard;
         return AppRoutes.dashboard;
       }
 
-      // Protege rutas exclusivas de superAdmin
-    /*  if (path == AppRoutes.companies || path == AppRoutes.superDashboard) {
-        if (user?.isSuperAdmin != true) return AppRoutes.dashboard;
+      if (isAuth && user?.isSuperAdmin == true) {
+        final superRoutes = [
+          AppRoutes.superDashboard,
+          AppRoutes.companies,
+          AppRoutes.users,
+          AppRoutes.roles,
+          AppRoutes.notifications2,
+          AppRoutes.profile,
+        ];
+        if (!superRoutes.contains(path) && !path.startsWith('/company/')) {
+          return AppRoutes.superDashboard;
+        }
       }
-*/
+
       return null;
     },
     routes: [
@@ -256,54 +264,50 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) =>
             _ViewPlaylistScreen(playlistId: state.pathParameters['id']!),
       ),
-
-      // Auth
       GoRoute(path: AppRoutes.login,          builder: (_, __) => const LoginPage()),
       GoRoute(path: AppRoutes.register,       builder: (_, __) => const RegisterPage()),
       GoRoute(path: AppRoutes.forgotPassword, builder: (_, __) => const ForgotPasswordPage()),
       GoRoute(path: '/portal',                builder: (_, __) => const DevicePortalScreen()),
-    GoRoute(
-  path: '/portal/dashboard',
-  builder: (context, state) {
-    final device = state.extra as DeviceUser?;
-    return DeviceDashboardScreen(device: device);
-  },
-),
+      GoRoute(
+        path: '/portal/dashboard',
+        builder: (context, state) {
+          final device = state.extra as DeviceUser?;
+          return DeviceDashboardScreen(device: device);
+        },
+      ),
 
-      // SuperAdmin shell exclusivo
+      // ── SuperAdmin shell ──
       ShellRoute(
         builder: (_, __, child) => _SuperAdminShell(child: child),
         routes: [
+          GoRoute(path: AppRoutes.superDashboard, builder: (_, __) => const _SuperDashboardHome()),
+          GoRoute(path: AppRoutes.companies,      builder: (_, __) => const CompaniesPage()),
+          GoRoute(path: AppRoutes.users,          builder: (_, __) => const UsersManagementPage()),
+          GoRoute(path: AppRoutes.roles,          builder: (_, __) => const RolesManagementPage()),
+          GoRoute(path: AppRoutes.notifications2, builder: (_, __) => const NotificationsPage22()),
+          GoRoute(path: AppRoutes.profile,        builder: (_, __) => const ProfilePage()),
           GoRoute(
-            path: AppRoutes.superDashboard,
-            builder: (_, __) => const _SuperDashboardHome(),
-          ),
-          GoRoute(
-            path: AppRoutes.companies,
-            builder: (_, __) => const CompaniesPage(),
+            path: '/company/:companyId',
+            builder: (_, state) => _CompanyDetailPage(
+              companyId: state.pathParameters['companyId']!,
+            ),
           ),
         ],
       ),
 
-      // Shell normal para company admin y usuarios
+      // ── Shell normal ──
       ShellRoute(
         builder: (_, __, child) => _DashboardShell(child: child),
         routes: [
-          GoRoute(path: AppRoutes.dashboard,     builder: (_, __) => const DashboardScreen()),
-
-
-          GoRoute(path: '/devices',              builder: (_, __) => const DevicesScreen()),
-          GoRoute(path: '/content',              builder: (_, __) => const PlaylistsScreen()),
-          GoRoute(path: '/playlist2',            builder: (_, __) => const PlaylistsListScreen()),
-          GoRoute(path: '/schedules',            builder: (_, __) => const ProgrammingScreen()),
-          GoRoute(path: '/analytics',            builder: (_, __) => const AnalyticsScreen()),
-          GoRoute(path: '/media',                builder: (_, __) => const MediaLibraryScreen()),
-          GoRoute(path: '/editor',               builder: (_, __) => const ScreenEditorScreen()),
-          GoRoute(path: AppRoutes.users,         builder: (_, __) => const UsersManagementPage()),
-          GoRoute(path: AppRoutes.roles,         builder: (_, __) => const RolesManagementPage()),
-          GoRoute(path: AppRoutes.profile,       builder: (_, __) => const ProfilePage()),
-          GoRoute(path: AppRoutes.notifications, builder: (_, __) => const NotificationsPage()),
-          GoRoute(path: AppRoutes.notifications2,builder: (_, __) => const NotificationsPage22()),
+          GoRoute(path: AppRoutes.dashboard,      builder: (_, __) => const DashboardScreen()),
+          GoRoute(path: '/devices',               builder: (_, __) => const DevicesScreen()),
+          GoRoute(path: '/content',               builder: (_, __) => const PlaylistsScreen()),
+          GoRoute(path: '/playlist2',             builder: (_, __) => const PlaylistsListScreen()),
+          GoRoute(path: '/schedules',             builder: (_, __) => const ProgrammingScreen()),
+          GoRoute(path: '/analytics',             builder: (_, __) => const AnalyticsScreen()),
+          GoRoute(path: '/media',                 builder: (_, __) => const MediaLibraryScreen()),
+          GoRoute(path: '/editor',                builder: (_, __) => const ScreenEditorScreen()),
+          GoRoute(path: AppRoutes.notifications,  builder: (_, __) => const NotificationsPage()),
         ],
       ),
     ],
@@ -747,14 +751,11 @@ Widget build(BuildContext context, WidgetRef ref) {
 }
 
 List<_NavItemData?> _buildNavItems(AppUser? user) {
-  // companyAdmin ve gestión de su empresa
   final isCompanyAdmin = user?.isCompanyAdmin ?? false;
   final canViewUsers   = user?.hasPermission(AppPermission.usersView)   ?? false;
   final canViewRoles   = user?.hasPermission(AppPermission.rolesView)   ?? false;
 
   return [
-
-     
     _NavItemData(
       route: AppRoutes.dashboard,
       icon:  Icons.space_dashboard_outlined,
@@ -774,11 +775,6 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
       route: '/schedules',
       icon:  Icons.calendar_month_outlined,
       label: 'Programación',
-    ),
-    _NavItemData(
-      route: '/analytics',
-      icon:  Icons.bar_chart_outlined,
-      label: 'Analítica',
     ),
     _NavItemData(
       route: '/media',
@@ -814,30 +810,26 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
       icon:  Icons.person_outline_rounded,
       label: 'Mi Perfil',
     ),
-
-     _NavItemData(
+    _NavItemData(
       route: AppRoutes.superDashboard,
       icon:  Icons.space_dashboard_outlined,
       label: 'SuperAdministrador',
     ),
-
-      _NavItemData(
+    _NavItemData(
       route: AppRoutes.companies,
       icon:  Icons.space_dashboard_outlined,
       label: 'Empresas',
     ),
-
-    _NavItemData(
+   /* _NavItemData(
       route: '/portal',
       icon:  Icons.space_dashboard_outlined,
       label: 'Portal',
     ),
-
- _NavItemData(
+    _NavItemData(
       route: '/portal/dashboard',
       icon:  Icons.tv_outlined,
       label: 'Dashboard Panel',
-    ),
+    ),*/
   ];
 }
 }
@@ -944,7 +936,7 @@ class _SuperSidebar extends ConsumerWidget {
       _NavItemData(
         route: AppRoutes.superDashboard,
         icon:  Icons.admin_panel_settings_rounded,
-        label: 'Dashboard Global',
+        label: 'Dashboard Global1',
       ),
       _NavItemData(
         route: AppRoutes.companies,
@@ -1090,22 +1082,22 @@ class _SuperDashboardHome extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user       = ref.watch(currentUserProvider).valueOrNull;
-    final companies  = ref.watch(companiesProvider);
-    final allUsers   = ref.watch(allUsersProvider);
+    final user          = ref.watch(currentUserProvider).valueOrNull;
+    final companies     = ref.watch(companiesProvider);
+    final allUsers      = ref.watch(allUsersProvider);
 
-    final totalCompanies = companies.valueOrNull?.length ?? 0;
-    final activeCompanies = companies.valueOrNull
-            ?.where((c) => c.isActive)
-            .length ?? 0;
-    final totalUsers = allUsers.valueOrNull?.length ?? 0;
+    final totalCompanies  = companies.valueOrNull?.length ?? 0;
+    final activeCompanies = companies.valueOrNull?.where((c) => c.isActive).length ?? 0;
+    final suspendedCompanies = companies.valueOrNull?.where((c) => c.status == 'suspended').length ?? 0;
+    final totalUsers      = allUsers.valueOrNull?.length ?? 0;
+    final activeUsers     = allUsers.valueOrNull?.where((u) => u.status == 'active').length ?? 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // ── Header ──
           Row(
             children: [
               Container(
@@ -1115,18 +1107,14 @@ class _SuperDashboardHome extends ConsumerWidget {
                   borderRadius: _T.r12,
                   border: Border.all(color: _T.error.withOpacity(0.3)),
                 ),
-                child: const Icon(Icons.admin_panel_settings_rounded,
-                    color: _T.error, size: 22),
+                child: const Icon(Icons.admin_panel_settings_rounded, color: _T.error, size: 22),
               ),
               const SizedBox(width: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Hola, ${user?.name ?? '—'} 👋',
-                      style: const TextStyle(
-                          color: _T.textHi,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700)),
+                      style: const TextStyle(color: _T.textHi, fontSize: 22, fontWeight: FontWeight.w700)),
                   const Text('Panel de Control Global · Super Administrador',
                       style: TextStyle(color: _T.error, fontSize: 13)),
                 ],
@@ -1135,44 +1123,23 @@ class _SuperDashboardHome extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // Stats globales
+          // ── Stats Row ──
           Wrap(
             spacing: 12, runSpacing: 12,
             children: [
-              _StatCard(
-                label: 'Empresas',
-                value: '$totalCompanies',
-                icon:  Icons.business_rounded,
-                color: _T.primary,
-              ),
-              _StatCard(
-                label: 'Activas',
-                value: '$activeCompanies',
-                icon:  Icons.check_circle_rounded,
-                color: _T.success,
-              ),
-              _StatCard(
-                label: 'Usuarios',
-                value: '$totalUsers',
-                icon:  Icons.people_rounded,
-                color: _T.accent,
-              ),
-              _StatCard(
-                label: 'Sistema',
-                value: '99.9%',
-                icon:  Icons.bolt_rounded,
-                color: _T.warning,
-              ),
+              _StatCard(label: 'Empresas totales',  value: '$totalCompanies',    icon: Icons.business_rounded,       color: _T.primary),
+              _StatCard(label: 'Empresas activas',  value: '$activeCompanies',   icon: Icons.check_circle_rounded,   color: _T.success),
+              _StatCard(label: 'Suspendidas',        value: '$suspendedCompanies',icon: Icons.block_rounded,          color: _T.warning),
+              _StatCard(label: 'Usuarios totales',  value: '$totalUsers',        icon: Icons.people_rounded,         color: _T.accent),
+              _StatCard(label: 'Usuarios activos',  value: '$activeUsers',       icon: Icons.person_rounded,         color: _T.success),
+              _StatCard(label: 'Sistema',            value: '99.9%',              icon: Icons.bolt_rounded,           color: _T.warning),
             ],
           ),
           const SizedBox(height: 24),
 
-          // Acciones rápidas
+          // ── Acciones rápidas ──
           const Text('Acciones rápidas',
-              style: TextStyle(
-                  color: _T.textHi,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600)),
+              style: TextStyle(color: _T.textHi, fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12, runSpacing: 12,
@@ -1195,42 +1162,147 @@ class _SuperDashboardHome extends ConsumerWidget {
                 color: _T.success,
                 onTap: () => context.go(AppRoutes.roles),
               ),
+              _QuickAction(
+                label: 'Notificaciones',
+                icon:  Icons.notifications_rounded,
+                color: _T.warning,
+                onTap: () => context.go(AppRoutes.notifications2),
+              ),
             ],
           ),
-
           const SizedBox(height: 24),
 
-          // Lista rápida de empresas
+          // ── Empresas recientes ──
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Empresas recientes',
-                  style: TextStyle(
-                      color: _T.textHi,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600)),
+              const Text('Empresas registradas',
+                  style: TextStyle(color: _T.textHi, fontSize: 16, fontWeight: FontWeight.w600)),
               TextButton(
                 onPressed: () => context.go(AppRoutes.companies),
-                child: const Text('Ver todas',
-                    style: TextStyle(color: _T.primary, fontSize: 13)),
+                child: const Text('Ver todas', style: TextStyle(color: _T.primary, fontSize: 13)),
               ),
             ],
           ),
           const SizedBox(height: 8),
           companies.when(
-            loading: () => const Center(
-                child: CircularProgressIndicator(color: _T.primary)),
-            error: (e, _) => Text('Error: $e',
-                style: const TextStyle(color: _T.error)),
-            data: (list) {
-              final recent = list.take(5).toList();
-              return Column(
-                children: recent
-                    .map((c) => _CompanyMiniTile(company: c))
-                    .toList(),
-              );
-            },
+            loading: () => const Center(child: CircularProgressIndicator(color: _T.primary)),
+            error: (e, _) => Text('Error: $e', style: const TextStyle(color: _T.error)),
+            data: (list) => Column(
+              children: list.take(6).map((c) => _CompanyClickableTile(company: c)).toList(),
+            ),
           ),
+
+          const SizedBox(height: 24),
+
+          // ── Usuarios recientes ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Usuarios recientes',
+                  style: TextStyle(color: _T.textHi, fontSize: 16, fontWeight: FontWeight.w600)),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.users),
+                child: const Text('Ver todos', style: TextStyle(color: _T.primary, fontSize: 13)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          allUsers.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: _T.primary)),
+            error: (e, _) => Text('Error: $e', style: const TextStyle(color: _T.error)),
+            data: (users) => Column(
+              children: users.take(5).map((u) => _UserMiniTile(user: u)).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Tile de empresa clicable ──────────────────────────────────────────────────
+class _CompanyClickableTile extends StatelessWidget {
+  final Company company;
+  const _CompanyClickableTile({required this.company});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.go('/company/${company.id}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: _T.card,
+          borderRadius: _T.r12,
+          border: const Border.fromBorderSide(BorderSide(color: _T.border)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: _T.primaryLo, borderRadius: _T.r8),
+              child: const Icon(Icons.business_rounded, color: _T.primary, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(company.name,
+                      style: const TextStyle(color: _T.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(company.email,
+                      style: const TextStyle(color: _T.textMid, fontSize: 11)),
+                ],
+              ),
+            ),
+            _StatusBadge(status: company.status),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: _T.textLo, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Tile de usuario mini ──────────────────────────────────────────────────────
+class _UserMiniTile extends StatelessWidget {
+  final AppUser user;
+  const _UserMiniTile({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _T.card,
+        borderRadius: _T.r12,
+        border: const Border.fromBorderSide(BorderSide(color: _T.border)),
+      ),
+      child: Row(
+        children: [
+          _Avatar(user: user, size: 34),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(user.name,
+                    style: const TextStyle(color: _T.textHi, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text(user.email,
+                    style: const TextStyle(color: _T.textMid, fontSize: 11)),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 4,
+            children: user.roles.take(2).map((r) => _RoleChip(role: r)).toList(),
+          ),
+          const SizedBox(width: 8),
+          _StatusBadge(status: user.status),
         ],
       ),
     );
@@ -1940,8 +2012,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => _loading = false);
 
     switch (result) {
-      case Success():
-        context.go(AppRoutes.dashboard);
+ case Success():
+  // Espera que currentUserProvider se hidrate
+  await Future.delayed(const Duration(milliseconds: 300));
+  if (!mounted) return;
+  final updatedUser = ref.read(currentUserProvider).valueOrNull;
+  if (updatedUser?.isSuperAdmin == true) {
+    context.go(AppRoutes.superDashboard);
+  } else {
+    context.go(AppRoutes.dashboard);
+  }
       case Failure(:final message):
         setState(() => _error = message);
     }
@@ -2038,11 +2118,61 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               onTap:   _submit,
             ),
             const SizedBox(height: 20),
-
+// ── BOTÓN PORTAL DISPOSITIVOS ──
+GestureDetector(
+  onTap: () => context.go('/portal'),
+  child: Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1E2D47), Color(0xFF172035)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ),
+      borderRadius: _T.r12,
+      border: Border.all(color: _T.primary.withOpacity(0.4)),
+      boxShadow: [
+        BoxShadow(
+          color: _T.primary.withOpacity(0.15),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.tv_rounded, color: _T.primary, size: 18),
+        SizedBox(width: 10),
+        Text(
+          'Acceder como dispositivo',
+          style: TextStyle(
+            color: _T.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+        SizedBox(width: 6),
+        Icon(Icons.arrow_forward_ios_rounded,
+            color: _T.primary, size: 11),
+      ],
+    ),
+  ),
+),
+SizedBox(height: 20),
             _ToggleLink(
               prompt: '¿No tienes cuenta?',
               action: 'Crear cuenta',
-              onTap:  () => context.go(AppRoutes.register),
+              onTap:  () { 
+                print("objectportal");
+             context.go('/portal');
+                
+                
+               // context.go(AppRoutes.register);
+                
+                },
             ),
           ],
         ),
@@ -2200,6 +2330,50 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               action: 'Iniciar sesión',
               onTap:  () => context.go(AppRoutes.login),
             ),
+
+            // ── BOTÓN PORTAL DISPOSITIVOS ──
+GestureDetector(
+  onTap: () => context.go('/portal'),
+  child: Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1E2D47), Color(0xFF172035)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ),
+      borderRadius: _T.r12,
+      border: Border.all(color: _T.primary.withOpacity(0.4)),
+      boxShadow: [
+        BoxShadow(
+          color: _T.primary.withOpacity(0.15),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.tv_rounded, color: _T.primary, size: 18),
+        SizedBox(width: 10),
+        Text(
+          'Acceder como dispositivo',
+          style: TextStyle(
+            color: _T.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+        SizedBox(width: 6),
+        Icon(Icons.arrow_forward_ios_rounded,
+            color: _T.primary, size: 11),
+      ],
+    ),
+  ),
+),
           ],
         ),
       ),
@@ -3497,29 +3671,30 @@ class _StatCard extends StatelessWidget {
 // =============================================================================
 // 11. ERROR & ACCESS DENIED
 // =============================================================================
-
-class _ErrorPage extends StatelessWidget {
+class _ErrorPage extends ConsumerWidget {
   final String error;
   const _ErrorPage({required this.error});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSuperAdmin = ref.watch(currentUserProvider).valueOrNull?.isSuperAdmin ?? false;
+
     return Scaffold(
       backgroundColor: _T.bg,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                color: _T.error, size: 48),
+            const Icon(Icons.error_outline_rounded, color: _T.error, size: 48),
             const SizedBox(height: 12),
             Text('Error 404 — $error',
-              style: const TextStyle(color: _T.textMid)),
+                style: const TextStyle(color: _T.textMid)),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => context.go(AppRoutes.dashboard),
-              style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(140, 44)),
+              onPressed: () => context.go(
+                isSuperAdmin ? AppRoutes.superDashboard : AppRoutes.dashboard,
+              ),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(140, 44)),
               child: const Text('Volver al inicio'),
             ),
           ],
@@ -6058,6 +6233,194 @@ class _SecurityCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CompanyDetailPage extends ConsumerWidget {
+  final String companyId;
+  const _CompanyDetailPage({required this.companyId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final companies = ref.watch(companiesProvider);
+    final allUsers  = ref.watch(allUsersProvider);
+
+    final company = companies.valueOrNull?.where((c) => c.id == companyId).firstOrNull;
+    final companyUsers = allUsers.valueOrNull?.where((u) => u.companyId == companyId).toList() ?? [];
+
+    if (company == null) {
+      return const Center(child: CircularProgressIndicator(color: _T.primary));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => context.go(AppRoutes.superDashboard),
+                child: const Icon(Icons.arrow_back_rounded, color: _T.textMid, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _T.primaryLo,
+                  borderRadius: _T.r12,
+                  border: Border.all(color: _T.primary.withOpacity(0.3)),
+                ),
+                child: const Icon(Icons.business_rounded, color: _T.primary, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(company.name,
+                        style: const TextStyle(color: _T.textHi, fontSize: 22, fontWeight: FontWeight.w800)),
+                    Text(company.email,
+                        style: const TextStyle(color: _T.textMid, fontSize: 13)),
+                  ],
+                ),
+              ),
+              _StatusBadge(status: company.status),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── Info de empresa ──
+          _CardContainer(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Información de la empresa',
+                      style: TextStyle(color: _T.textHi, fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  _InfoRow(label: 'Razón social', value: company.legalName),
+                  _InfoRow(label: 'Email',        value: company.email),
+                  _InfoRow(label: 'Teléfono',     value: company.phone.isEmpty ? '—' : company.phone),
+                  _InfoRow(label: 'Dirección',    value: company.address.isEmpty ? '—' : company.address),
+                  _InfoRow(label: 'Estado',       value: company.status),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Stats empresa ──
+          Wrap(
+            spacing: 12, runSpacing: 12,
+            children: [
+              _StatCard(
+                label: 'Usuarios',
+                value: '${companyUsers.length}',
+                icon:  Icons.people_rounded,
+                color: _T.accent,
+              ),
+              _StatCard(
+                label: 'Activos',
+                value: '${companyUsers.where((u) => u.status == 'active').length}',
+                icon:  Icons.check_circle_rounded,
+                color: _T.success,
+              ),
+              _StatCard(
+                label: 'Bloqueados',
+                value: '${companyUsers.where((u) => u.status == 'suspended').length}',
+                icon:  Icons.block_rounded,
+                color: _T.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── Acciones rápidas con permisos superAdmin ──
+          const Text('Gestión de la empresa',
+              style: TextStyle(color: _T.textHi, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12, runSpacing: 12,
+            children: [
+              _QuickAction(
+                label: 'Usuarios',
+                icon:  Icons.people_rounded,
+                color: _T.accent,
+                onTap: () => context.go(AppRoutes.users),
+              ),
+              _QuickAction(
+                label: 'Roles',
+                icon:  Icons.shield_rounded,
+                color: _T.success,
+                onTap: () => context.go(AppRoutes.roles),
+              ),
+              _QuickAction(
+                label: 'Editar empresa',
+                icon:  Icons.edit_rounded,
+                color: _T.primary,
+                onTap: () => context.go(AppRoutes.companies),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── Lista de usuarios ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Usuarios (${companyUsers.length})',
+                  style: const TextStyle(color: _T.textHi, fontSize: 16, fontWeight: FontWeight.w600)),
+              TextButton(
+                onPressed: () => context.go(AppRoutes.users),
+                child: const Text('Ver todos', style: TextStyle(color: _T.primary, fontSize: 13)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (companyUsers.isEmpty)
+            const _CardContainer(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: Text('No hay usuarios en esta empresa',
+                      style: TextStyle(color: _T.textMid, fontSize: 13)),
+                ),
+              ),
+            )
+          else
+            ...companyUsers.map((u) => _UserMiniTile(user: u)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Info row simple ───────────────────────────────────────────────────────────
+class _InfoRow extends StatelessWidget {
+  final String label, value;
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label,
+                style: const TextStyle(color: _T.textLo, fontSize: 12, fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(color: _T.textMid, fontSize: 13)),
+          ),
+        ],
       ),
     );
   }

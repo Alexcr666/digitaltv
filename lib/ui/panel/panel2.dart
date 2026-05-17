@@ -3,6 +3,8 @@
 // =============================================================================
 import 'package:digitaltv/auth/auth.dart' as current2;
 import 'dart:async';
+import 'dart:ui_web' as ui_web;
+import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:digitaltv/ui/panel/panel.dart';
 import 'package:digitaltv/ui/panel/programing.dart';
@@ -1735,84 +1737,54 @@ class _MediaCardState extends State<_MediaCard> {
         '${dt.minute.toString().padLeft(2,'0')}';
   }
 
-  void _openVideo(BuildContext context, String url) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: SizedBox(
-          width: 700,
-          height: 420,
-          child: Stack(
-            children: [
-              Center(
-                child: HtmlElementView.fromTagName(
-                  tagName: 'video',
-                  onElementCreated: (element) {
-                    // Solo funciona en web; en mobile usar video_player
-                  },
-                ),
-              ),
-              // Fallback con iframe-style player via url
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.play_circle_outline_rounded,
-                      color: _C.purple, size: 64),
-                    const SizedBox(height: 12),
-                    SelectableText(url,
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
-                      textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: url));
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.copy_rounded, size: 14),
-                      label: const Text('Copiar URL del video'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _C.purple,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                top: 8, right: 8,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: const Icon(Icons.close_rounded,
-                      size: 14, color: Colors.white70),
+void _openVideo(BuildContext context, String url) {
+  final viewId = 'vplay-${widget.id}-${DateTime.now().millisecondsSinceEpoch}';
+  try {
+    html.window.open(url, '_blank');
+  } catch (_) {}
+  
+  showDialog(
+    context: context,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: SizedBox(
+        width: 700,
+        height: 420,
+        child: Stack(
+          children: [
+            _VideoPlayerView(url: url, viewId: viewId),
+            Positioned(
+              top: 8, right: 8,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(7),
                   ),
+                  child: const Icon(Icons.close_rounded,
+                    size: 14, color: Colors.white70),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 // Agrega este helper dentro de _MediaCardState:
 bool _isBlobOrLocal(String url) {
   return url.startsWith('blob:') || url.startsWith('data:');
 }
 
 String _proxyUrl(String url) {
-  if (_isBlobOrLocal(url)) return url; // no proxiar blobs
+  if (_isBlobOrLocal(url)) return url;
+  // Firebase Storage: no proxiar, usar directo
+  if (url.contains('firebasestorage.googleapis.com')) return url;
   return 'https://wsrv.nl/?url=${Uri.encodeComponent(url)}&w=200&h=120&fit=cover';
 }
   @override
@@ -1860,7 +1832,7 @@ String _proxyUrl(String url) {
                  // Imagen: se muestra directo
 if (type == 'image' && url.isNotEmpty)
   _isBlobOrLocal(url)
-    ? _iconPlaceholder(typeIcon, typeColor) // blob local → solo ícono
+    ? _iconPlaceholder(typeIcon, typeColor)
     : Image.network(
         _proxyUrl(url),
         fit: BoxFit.cover,
@@ -1868,7 +1840,6 @@ if (type == 'image' && url.isNotEmpty)
         errorBuilder: (_, __, ___) =>
           _iconPlaceholder(typeIcon, typeColor),
       )
-// Video
 else if (type == 'video' && url.isNotEmpty)
   Stack(
     fit: StackFit.expand,
@@ -1914,7 +1885,10 @@ else if (type == 'video' && url.isNotEmpty)
       ),
     ],
   )
+else if (type == 'audio' && url.isNotEmpty)
+  _AudioPreviewCard(url: url, id: widget.id, color: typeColor)
 else
+
   _iconPlaceholder(typeIcon, typeColor),
 
                       // Badge de tipo (siempre visible)
@@ -2218,6 +2192,206 @@ class _AddMediaSheetState extends ConsumerState<_AddMediaSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _VideoThumbnailView extends StatefulWidget {
+  final String url;
+  final String id;
+  const _VideoThumbnailView({required this.url, required this.id});
+
+  @override
+  State<_VideoThumbnailView> createState() => _VideoThumbnailViewState();
+}
+
+class _VideoThumbnailViewState extends State<_VideoThumbnailView> {
+  late final String _viewId;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'vthumb-${widget.id}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('allow', 'autoplay')
+          ..setAttribute('sandbox',
+              'allow-scripts allow-same-origin allow-popups')
+          ..srcdoc = _buildHtml(widget.url, false);
+        return iframe;
+      });
+    } catch (_) {}
+  }
+
+  static String _buildHtml(String url, bool autoplay) => '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Security-Policy" 
+  content="default-src * data: blob: 'unsafe-inline' 'unsafe-eval'">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { 
+    background:#1a0a2e; 
+    width:100vw; height:100vh; 
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  video { 
+    width:100%; height:100%; 
+    object-fit:cover;
+  }
+</style>
+</head>
+<body>
+<video 
+  src="$url"
+  ${autoplay ? 'autoplay' : ''}
+  muted
+  playsinline
+  preload="auto"
+  crossorigin="anonymous"
+  onloadedmetadata="this.currentTime=1;this.play();"
+  onerror="document.body.innerHTML='<div style=color:#fff;padding:8px;font-size:11px;text-align:center>⚠️ Error CORS<br>Video subido OK</div>'"
+></video>
+</body>
+</html>
+''';
+
+  @override
+  Widget build(BuildContext context) => HtmlElementView(viewType: _viewId);
+}
+class _VideoPlayerView extends StatefulWidget {
+  final String url;
+  final String viewId;
+  const _VideoPlayerView({required this.url, required this.viewId});
+
+  @override
+  State<_VideoPlayerView> createState() => _VideoPlayerViewState();
+}
+
+class _VideoPlayerViewState extends State<_VideoPlayerView> {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(widget.viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('allow', 'autoplay; fullscreen')
+          ..setAttribute('sandbox',
+              'allow-scripts allow-same-origin allow-popups allow-forms')
+          ..srcdoc = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Security-Policy"
+  content="default-src * data: blob: 'unsafe-inline' 'unsafe-eval'">
+<style>
+  * { margin:0; padding:0; }
+  body { 
+    background:#000; 
+    width:100vw; height:100vh; 
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  video { width:100%; height:100%; object-fit:contain; }
+  .err { 
+    color:#fff; text-align:center; padding:24px; font-family:sans-serif;
+  }
+  .err a {
+    display:inline-block; margin-top:12px; padding:8px 16px;
+    background:#6366F1; color:#fff; border-radius:8px;
+    text-decoration:none; font-size:13px;
+  }
+</style>
+</head>
+<body>
+<video 
+  src="${widget.url}"
+  controls
+  autoplay
+  playsinline
+  preload="auto"
+  crossorigin="anonymous"
+  onerror="
+    document.body.innerHTML = 
+    \'<div class=err><p>⚠️ CORS bloqueado por el navegador</p><p style=font-size:11px;margin-top:8px;color:#aaa>Firebase Storage bloquea reproducción directa.<br>Abre el video en una nueva pestaña:</p><a href=\' + this.src + \' target=_blank>▶ Abrir video</a></div>\'
+  "
+></video>
+</body>
+</html>
+''';
+        return iframe;
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: HtmlElementView(viewType: widget.viewId),
+  );
+}
+
+class _AudioPreviewCard extends StatefulWidget {
+  final String url;
+  final String id;
+  final Color color;
+  const _AudioPreviewCard({
+    required this.url,
+    required this.id,
+    required this.color,
+  });
+
+  @override
+  State<_AudioPreviewCard> createState() => _AudioPreviewCardState();
+}
+
+class _AudioPreviewCardState extends State<_AudioPreviewCard> {
+  late final String _viewId;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'audio-prev-${widget.id}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (int id) {
+        final iframe = html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+          ..srcdoc = '''
+<!DOCTYPE html><html><head>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#0d1220;
+    width:100vw; height:100vh;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:sans-serif; gap:10px;
+  }
+  .icon { font-size:32px; }
+  audio { width:88%; }
+  .label { color:#7B8DB0; font-size:10px; text-align:center; padding:0 8px; }
+</style>
+</head><body>
+<div class="icon">🎵</div>
+<audio src="${widget.url}" controls preload="metadata"></audio>
+<div class="label">Audio</div>
+</body></html>''';
+        return iframe;
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: widget.color.withOpacity(0.08),
+      child: HtmlElementView(viewType: _viewId),
     );
   }
 }
