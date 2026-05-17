@@ -1253,57 +1253,81 @@ class _PlaylistsPanelState extends State<_PlaylistsPanel> {
 
           // List
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('playlists')
-                  //.where('isActive', isEqualTo: true)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: _P.primary, strokeWidth: 2));
-                }
+            child: // En _PlaylistsPanel, reemplaza el StreamBuilder por este:
+StreamBuilder<DocumentSnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('devices')
+      .doc(widget.deviceId)
+      .snapshots(),
+  builder: (context, deviceSnap) {
+    final deviceData = deviceSnap.data?.data() as Map<String, dynamic>? ?? {};
+    final assignedIds = List<String>.from(deviceData['assignedPlaylistIds'] ?? []);
 
-                var playlists = snap.data!.docs
-                    .map((d) => _PlaylistData.fromFirestore(d))
-                    .toList();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('playlists')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: _P.primary, strokeWidth: 2));
+        }
 
-                if (_search.isNotEmpty) {
-                  playlists = playlists.where((p) =>
-                    p.name.toLowerCase().contains(_search.toLowerCase()))
-                    .toList();
-                }
+        var playlists = snap.data!.docs
+            .map((d) => _PlaylistData.fromFirestore(d))
+            .toList();
 
-                if (playlists.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.playlist_remove_rounded,
-                          color: _P.textLo, size: 40),
-                        const SizedBox(height: 12),
-                        const Text('Sin playlists disponibles',
-                          style: TextStyle(color: _P.textLo, fontSize: 13)),
-                      ],
-                    ),
-                  );
-                }
+        // Filtrar solo las asignadas (si hay asignadas)
+        if (assignedIds.isNotEmpty) {
+          playlists = playlists
+              .where((p) => assignedIds.contains(p.id))
+              .toList();
+        }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: playlists.length,
-                  itemBuilder: (_, i) => _PlaylistTile(
-                    playlist: playlists[i],
-                    isSelected: playlists[i].id == widget.selectedId,
-                    index: i,
-                    onTap: () => widget.onSelect(playlists[i]),
-                  ).animate().fadeIn(
-                    delay: Duration(milliseconds: i * 50)),
-                );
-              },
+        if (_search.isNotEmpty) {
+          playlists = playlists.where((p) =>
+            p.name.toLowerCase().contains(_search.toLowerCase())).toList();
+        }
+
+        if (playlists.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.playlist_remove_rounded, color: _P.textLo, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  assignedIds.isEmpty
+                    ? 'Sin playlists asignadas'
+                    : 'Sin playlists disponibles',
+                  style: const TextStyle(color: _P.textLo, fontSize: 13)),
+                if (assignedIds.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Pide al administrador que asigne playlists',
+                      style: TextStyle(color: _P.textLo, fontSize: 11),
+                      textAlign: TextAlign.center),
+                  ),
+              ],
             ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: playlists.length,
+          itemBuilder: (_, i) => _PlaylistTile(
+            playlist: playlists[i],
+            isSelected: playlists[i].id == widget.selectedId,
+            index: i,
+            onTap: () => widget.onSelect(playlists[i]),
+          ),
+        );
+      },
+    );
+  },
+),
           ),
         ],
       ),
@@ -3808,36 +3832,53 @@ Future<void> _onSelectSchedule(String scheduleId) async {
           ),
           const Divider(height: 1, color: Color(0xFF1A2540)),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('schedules')
-                  .snapshots(),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: _P.purple, strokeWidth: 2));
-                }
+            child: StreamBuilder<DocumentSnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('devices')
+      .doc(widget.deviceId)
+      .snapshots(),
+  builder: (context, deviceSnap) {
+    final deviceData = deviceSnap.data?.data() as Map<String, dynamic>? ?? {};
+    final assignedScheduleIds = List<String>.from(
+      deviceData['assignedScheduleIds'] ?? []);
 
-                final schedules = snap.data!.docs
-                    .where((d) => (d.data() as Map<String, dynamic>)['isActive'] ?? true)
-                    .toList();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('schedules')
+          .snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: _P.purple, strokeWidth: 2));
+        }
 
-                if (schedules.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.event_busy_rounded,
-                          color: _P.textLo, size: 40),
-                        const SizedBox(height: 12),
-                        const Text('Sin programaciones',
-                          style: TextStyle(color: _P.textLo, fontSize: 13)),
-                      ],
-                    ),
-                  );
-                }
+        var schedules = snap.data!.docs
+            .where((d) => (d.data() as Map<String, dynamic>)['isActive'] ?? true)
+            .toList();
 
+        // Filtrar solo las asignadas al dispositivo
+        if (assignedScheduleIds.isNotEmpty) {
+          schedules = schedules
+              .where((d) => assignedScheduleIds.contains(d.id))
+              .toList();
+        }
+
+        if (schedules.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_busy_rounded, color: _P.textLo, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  assignedScheduleIds.isEmpty
+                    ? 'Sin programaciones asignadas'
+                    : 'Sin programaciones activas',
+                  style: const TextStyle(color: _P.textLo, fontSize: 13)),
+              ],
+            ),
+          );
+        }
                 return ListView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: schedules.length,
@@ -3986,7 +4027,7 @@ Future<void> _onSelectSchedule(String scheduleId) async {
                   },
                 );
               },
-            ),
+             );} ),
           ),
         ],
       ),

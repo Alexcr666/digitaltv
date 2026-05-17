@@ -457,7 +457,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Programaciones',
+              const Text('Programaciones1',
                 style: TextStyle(color: _C.textHi, fontSize: 22,
                   fontWeight: FontWeight.w800, letterSpacing: -0.5)),
               Text('$total programaciones · $active activas',

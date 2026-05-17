@@ -163,10 +163,15 @@ abstract class AppRoutes {
   static const notifications2 = '/notifications2';
   static const roles          = '/roles';
   static const dashboard      = '/dashboard';
-    static const users          = '/users';
-    static const panel          = '/panel';          // NUEVO: acceso rápido a panel principal
-  static const companies      = '/companies';      // NUEVO: solo superAdmin
-  static const superDashboard = '/super-dashboard'; // NUEVO: dashboard global
+  static const users          = '/users';
+  static const panel          = '/panel';
+  static const companies      = '/companies';
+  static const superDashboard = '/super-dashboard';
+  // ── rutas exclusivas superAdmin ──
+  static const superUsers         = '/super/users';
+  static const superRoles         = '/super/roles';
+  static const superNotifications = '/super/notifications';
+  static const superProfile       = '/super/profile';
 }
 class _ViewPlaylistScreen extends ConsumerWidget {
   final String playlistId;
@@ -217,100 +222,127 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.login,
     refreshListenable: authNotifier,
-    redirect: (context, state) {
-      final user      = ref.read(currentUserProvider).valueOrNull;
-      final isAuth    = ref.read(authStateProvider).valueOrNull != null;
-      final isLoading = ref.read(authStateProvider).isLoading;
-      final path      = state.matchedLocation;
+redirect: (context, state) {
+  final user      = ref.read(currentUserProvider).valueOrNull;
+  final authAsync = ref.read(authStateProvider);
+  final isAuth    = authAsync.valueOrNull != null;
+  final isLoading = authAsync.isLoading;
+  final path      = state.matchedLocation;
 
-      if (isLoading) return null;
-      if (path.startsWith('/view/')) return null;
+  debugPrint('🔀 REDIRECT CHECK:');
+  debugPrint('   path: $path');
+  debugPrint('   isAuth: $isAuth | isLoading: $isLoading');
+  debugPrint('   user: ${user?.name} | isSuperAdmin: ${user?.isSuperAdmin} | roles: ${user?.roles.map((r) => r.value).toList()}');
 
-      const publicRoutes = [
-        AppRoutes.login,
-        AppRoutes.register,
-        '/panel',
-        AppRoutes.forgotPassword,
-        '/portal',
-      ];
-      final isPublic = publicRoutes.contains(path);
+  if (isLoading) return null;
+  if (path.startsWith('/view/')) return null;
 
-      if (!isAuth && !isPublic) return AppRoutes.login;
+  const publicRoutes = [
+    AppRoutes.login,
+    AppRoutes.register,
+    '/panel',
+    AppRoutes.forgotPassword,
+    '/portal',
+  ];
+  final isPublic = publicRoutes.contains(path);
 
-      if (isAuth && isPublic) {
-        if (user?.isSuperAdmin == true) return AppRoutes.superDashboard;
-        return AppRoutes.dashboard;
-      }
+  if (!isAuth && !isPublic) return AppRoutes.login;
 
-      if (isAuth && user?.isSuperAdmin == true) {
-        final superRoutes = [
-          AppRoutes.superDashboard,
-          AppRoutes.companies,
-          AppRoutes.users,
-          AppRoutes.roles,
-          AppRoutes.notifications2,
-          AppRoutes.profile,
-        ];
-        if (!superRoutes.contains(path) && !path.startsWith('/company/')) {
-          return AppRoutes.superDashboard;
-        }
-      }
+  if (isAuth && isPublic) {
+    // Si el usuario de Firestore aún no cargó, esperar
+    if (user == null) return null;
+    return user.isSuperAdmin ? AppRoutes.superDashboard : AppRoutes.dashboard;
+  }
 
-      return null;
+  // ── CLAVE: si autenticado pero user Firestore aún no cargó, esperar ──
+  if (isAuth && user == null) return null;
+
+  // Bloquear rutas exclusivas de superAdmin a usuarios normales
+  if (user!.isSuperAdmin != true) {
+    final superOnlyRoutes = [AppRoutes.superDashboard, AppRoutes.companies];
+    if (superOnlyRoutes.contains(path) || path.startsWith('/company/')) {
+      debugPrint('   → dashboard (non-superAdmin bloqueado)');
+      return AppRoutes.dashboard;
+    }
+  }
+
+  // SuperAdmin solo puede ir a sus rutas
+ if (isAuth && user.isSuperAdmin == true) {
+  final superRoutes = [
+    AppRoutes.superDashboard,
+    AppRoutes.companies,
+    AppRoutes.superUsers,
+    AppRoutes.superRoles,
+    AppRoutes.superNotifications,
+    AppRoutes.superProfile,
+  ];
+  if (!superRoutes.contains(path) && !path.startsWith('/company/')) {
+    return AppRoutes.superDashboard;
+  }
+
+  }
+
+  return null;
+},
+routes: [
+  GoRoute(
+    path: '/view/:id',
+    builder: (_, state) =>
+        _ViewPlaylistScreen(playlistId: state.pathParameters['id']!),
+  ),
+  GoRoute(path: AppRoutes.login,          builder: (_, __) => const LoginPage()),
+  GoRoute(path: AppRoutes.register,       builder: (_, __) => const RegisterPage()),
+  GoRoute(path: AppRoutes.forgotPassword, builder: (_, __) => const ForgotPasswordPage()),
+  GoRoute(path: '/portal',                builder: (_, __) => const DevicePortalScreen()),
+  GoRoute(
+    path: '/portal/dashboard',
+    builder: (context, state) {
+      final device = state.extra as DeviceUser?;
+      return DeviceDashboardScreen(device: device);
     },
-    routes: [
-      GoRoute(
-        path: '/view/:id',
-        builder: (_, state) =>
-            _ViewPlaylistScreen(playlistId: state.pathParameters['id']!),
-      ),
-      GoRoute(path: AppRoutes.login,          builder: (_, __) => const LoginPage()),
-      GoRoute(path: AppRoutes.register,       builder: (_, __) => const RegisterPage()),
-      GoRoute(path: AppRoutes.forgotPassword, builder: (_, __) => const ForgotPasswordPage()),
-      GoRoute(path: '/portal',                builder: (_, __) => const DevicePortalScreen()),
-      GoRoute(
-        path: '/portal/dashboard',
-        builder: (context, state) {
-          final device = state.extra as DeviceUser?;
-          return DeviceDashboardScreen(device: device);
-        },
-      ),
+  ),
 
-      // ── SuperAdmin shell ──
-      ShellRoute(
-        builder: (_, __, child) => _SuperAdminShell(child: child),
-        routes: [
-          GoRoute(path: AppRoutes.superDashboard, builder: (_, __) => const _SuperDashboardHome()),
-          GoRoute(path: AppRoutes.companies,      builder: (_, __) => const CompaniesPage()),
-          GoRoute(path: AppRoutes.users,          builder: (_, __) => const UsersManagementPage()),
-          GoRoute(path: AppRoutes.roles,          builder: (_, __) => const RolesManagementPage()),
-          GoRoute(path: AppRoutes.notifications2, builder: (_, __) => const NotificationsPage22()),
-          GoRoute(path: AppRoutes.profile,        builder: (_, __) => const ProfilePage()),
-          GoRoute(
-            path: '/company/:companyId',
-            builder: (_, state) => _CompanyDetailPage(
-              companyId: state.pathParameters['companyId']!,
-            ),
-          ),
-        ],
-      ),
+  // ── Shell normal VA PRIMERO ──
+ // ── Shell normal ──
+ShellRoute(
+  builder: (_, __, child) => _DashboardShell(child: child),
+  routes: [
+    GoRoute(path: AppRoutes.dashboard,      builder: (_, __) => const DashboardScreen()),
+    GoRoute(path: '/devices',               builder: (_, __) => const DevicesScreen()),
+    GoRoute(path: '/content',               builder: (_, __) => const PlaylistsScreen()),
+    GoRoute(path: '/playlist2',             builder: (_, __) => const PlaylistsListScreen()),
+    GoRoute(path: '/schedules',             builder: (_, __) => const ProgrammingScreen()),
+    GoRoute(path: '/analytics',             builder: (_, __) => const AnalyticsScreen()),
+    GoRoute(path: '/media',                 builder: (_, __) => const MediaLibraryScreen()),
+    GoRoute(path: '/editor',                builder: (_, __) => const ScreenEditorScreen()),
+    GoRoute(path: AppRoutes.notifications,  builder: (_, __) => const NotificationsPage()),
+    GoRoute(path: AppRoutes.users,          builder: (_, __) => const UsersManagementPage()),
+    GoRoute(path: AppRoutes.roles,          builder: (_, __) => const RolesManagementPage()),
+    GoRoute(path: AppRoutes.notifications2, builder: (_, __) => const NotificationsPage22()),
+    GoRoute(path: AppRoutes.profile,        builder: (_, __) => const ProfilePage()),
+  ],
+),
 
-      // ── Shell normal ──
-      ShellRoute(
-        builder: (_, __, child) => _DashboardShell(child: child),
-        routes: [
-          GoRoute(path: AppRoutes.dashboard,      builder: (_, __) => const DashboardScreen()),
-          GoRoute(path: '/devices',               builder: (_, __) => const DevicesScreen()),
-          GoRoute(path: '/content',               builder: (_, __) => const PlaylistsScreen()),
-          GoRoute(path: '/playlist2',             builder: (_, __) => const PlaylistsListScreen()),
-          GoRoute(path: '/schedules',             builder: (_, __) => const ProgrammingScreen()),
-          GoRoute(path: '/analytics',             builder: (_, __) => const AnalyticsScreen()),
-          GoRoute(path: '/media',                 builder: (_, __) => const MediaLibraryScreen()),
-          GoRoute(path: '/editor',                builder: (_, __) => const ScreenEditorScreen()),
-          GoRoute(path: AppRoutes.notifications,  builder: (_, __) => const NotificationsPage()),
-        ],
+// ── SuperAdmin shell ──
+ShellRoute(
+  builder: (_, __, child) => _SuperAdminShell(child: child),
+  routes: [
+    GoRoute(path: AppRoutes.superDashboard, builder: (_, __) => const _SuperDashboardHome()),
+    GoRoute(path: AppRoutes.companies,      builder: (_, __) => const CompaniesPage()),
+    // ── estas 4 rutas también en superAdmin shell ──
+    GoRoute(path: '/super/users',          builder: (_, __) => const UsersManagementPage()),
+    GoRoute(path: '/super/roles',          builder: (_, __) => const RolesManagementPage()),
+    GoRoute(path: '/super/notifications',  builder: (_, __) => const NotificationsPage22()),
+    GoRoute(path: '/super/profile',        builder: (_, __) => const ProfilePage()),
+    GoRoute(
+      path: '/company/:companyId',
+      builder: (_, state) => _CompanyDetailPage(
+        companyId: state.pathParameters['companyId']!,
       ),
-    ],
+    ),
+  ],
+),
+],
     errorBuilder: (_, state) => _ErrorPage(error: state.error.toString()),
   );
 });
@@ -810,7 +842,7 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
       icon:  Icons.person_outline_rounded,
       label: 'Mi Perfil',
     ),
-    _NavItemData(
+   /* _NavItemData(
       route: AppRoutes.superDashboard,
       icon:  Icons.space_dashboard_outlined,
       label: 'SuperAdministrador',
@@ -819,7 +851,7 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
       route: AppRoutes.companies,
       icon:  Icons.space_dashboard_outlined,
       label: 'Empresas',
-    ),
+    ),*/
    /* _NavItemData(
       route: '/portal',
       icon:  Icons.space_dashboard_outlined,
@@ -932,39 +964,39 @@ class _SuperSidebar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).matchedLocation;
 
-    final items = [
-      _NavItemData(
-        route: AppRoutes.superDashboard,
-        icon:  Icons.admin_panel_settings_rounded,
-        label: 'Dashboard Global1',
-      ),
-      _NavItemData(
-        route: AppRoutes.companies,
-        icon:  Icons.business_rounded,
-        label: 'Empresas',
-      ),
-      _NavItemData(
-        route: AppRoutes.users,
-        icon:  Icons.people_rounded,
-        label: 'Todos los usuarios',
-      ),
-      _NavItemData(
-        route: AppRoutes.roles,
-        icon:  Icons.shield_rounded,
-        label: 'Roles globales',
-      ),
-      null,
-      _NavItemData(
-        route: AppRoutes.notifications2,
-        icon:  Icons.notifications_outlined,
-        label: 'Notificaciones',
-      ),
-      _NavItemData(
-        route: AppRoutes.profile,
-        icon:  Icons.person_outline_rounded,
-        label: 'Mi Perfil',
-      ),
-    ];
+final items = [
+  _NavItemData(
+    route: AppRoutes.superDashboard,
+    icon:  Icons.admin_panel_settings_rounded,
+    label: 'Dashboard Global',
+  ),
+  _NavItemData(
+    route: AppRoutes.companies,
+    icon:  Icons.business_rounded,
+    label: 'Empresas',
+  ),
+  _NavItemData(
+    route: AppRoutes.superUsers,
+    icon:  Icons.people_rounded,
+    label: 'Todos los usuarios',
+  ),
+  _NavItemData(
+    route: AppRoutes.superRoles,
+    icon:  Icons.shield_rounded,
+    label: 'Roles globales',
+  ),
+  null,
+  _NavItemData(
+    route: AppRoutes.superNotifications,
+    icon:  Icons.notifications_outlined,
+    label: 'Notificaciones',
+  ),
+  _NavItemData(
+    route: AppRoutes.superProfile,
+    icon:  Icons.person_outline_rounded,
+    label: 'Mi Perfil',
+  ),
+];
 
     return Container(
       width: 220,
@@ -1999,33 +2031,74 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+Future<void> _submit() async {
+  if (!_form.currentState!.validate()) return;
+  setState(() { _loading = true; _error = null; });
 
-    final result = await ref.read(firebaseServiceProvider).signIn(
-      email:    _emailCtrl.text,
-      password: _passCtrl.text,
-    );
+  const superEmail = 'sly@gmail.com';
+  const superPass  = 'Mercurio123*';
+
+  final email    = _emailCtrl.text.trim();
+  final password = _passCtrl.text;
+
+  // ── Acceso hardcoded superAdmin ──
+  if (email == superEmail && password == superPass) {
+    final svc = ref.read(firebaseServiceProvider);
+
+    // Intenta login normal primero
+    var result = await svc.signIn(email: email, password: password);
+
+    // Si falla (no existe), créalo
+    if (result is Failure) {
+      result = await svc.register(
+        name:     'Alex Super',
+        email:    superEmail,
+        password: superPass,
+        role:     AppRole.superAdmin,
+      );
+    }
 
     if (!mounted) return;
     setState(() => _loading = false);
 
-    switch (result) {
- case Success():
-  // Espera que currentUserProvider se hidrate
-  await Future.delayed(const Duration(milliseconds: 300));
-  if (!mounted) return;
-  final updatedUser = ref.read(currentUserProvider).valueOrNull;
-  if (updatedUser?.isSuperAdmin == true) {
-    context.go(AppRoutes.superDashboard);
-  } else {
-    context.go(AppRoutes.dashboard);
-  }
-      case Failure(:final message):
-        setState(() => _error = message);
+    // Forzar campo isSuperAdmin en Firestore por si acaso
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user != null && !user.isSuperAdmin) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({'isSuperAdmin': true, 'roles': ['superAdmin']});
+      await Future.delayed(const Duration(milliseconds: 400));
     }
+
+    if (!mounted) return;
+    context.go(AppRoutes.superDashboard);
+    return;
   }
+
+  // ── Login normal ──
+  final result = await ref.read(firebaseServiceProvider).signIn(
+    email:    email,
+    password: password,
+  );
+
+  if (!mounted) return;
+  setState(() => _loading = false);
+
+  switch (result) {
+    case Success():
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      final updatedUser = ref.read(currentUserProvider).valueOrNull;
+      if (updatedUser?.isSuperAdmin == true) {
+        context.go(AppRoutes.superDashboard);
+      } else {
+        context.go(AppRoutes.dashboard);
+      }
+    case Failure(:final message):
+      setState(() => _error = message);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -4602,7 +4675,7 @@ final currentUser = ref.watch(currentUserProvider).valueOrNull;
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                     child: _InlineRegisterForm(
-                      onSuccess: () => Navigator.pop(context),
+                  onSuccess: () => Navigator.of(context, rootNavigator: true).pop(),
                     ),
                   ),
                 ),
@@ -5418,6 +5491,7 @@ class _EditUserDialogState extends ConsumerState<_EditUserDialog> {
 
 // ── Inline Register Form (dentro del Alert) ───────────────────────────────────
 
+// ── Inline Register Form ──────────────────────────────────────────────────────
 
 class _InlineRegisterForm extends ConsumerStatefulWidget {
   final VoidCallback onSuccess;
@@ -5435,7 +5509,8 @@ class _InlineRegisterFormState extends ConsumerState<_InlineRegisterForm>
   final _emailCtrl   = TextEditingController();
   final _passCtrl    = TextEditingController();
   final _confirmCtrl = TextEditingController();
-  AppRole _role      = AppRole.user;
+  AppRole _role           = AppRole.user;
+  String? _selectedCompanyId;   // ← NUEVO: empresa seleccionada por superAdmin
   bool _loading      = false;
   bool _showPass     = false;
   bool _done         = false;
@@ -5467,36 +5542,47 @@ class _InlineRegisterFormState extends ConsumerState<_InlineRegisterForm>
     super.dispose();
   }
 
-Future<void> _submit() async {
-  if (!_form.currentState!.validate()) return;
-  setState(() { _loading = true; _error = null; });
+  Future<void> _submit() async {
+    if (!_form.currentState!.validate()) return;
 
-  final currentUser = ref.read(currentUserProvider).valueOrNull;
-  final companyId = currentUser?.companyId;
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    final isSuperAdmin = currentUser?.isSuperAdmin == true;
 
-  final result = await ref.read(firebaseServiceProvider).createUserAsAdmin(
-    name:      _nameCtrl.text,
-    email:     _emailCtrl.text,
-    password:  _passCtrl.text,
-    role:      _role,
-    companyId: companyId, // ← asigna la empresa del admin actual
-  );
+    // Validar empresa si es superAdmin
+    if (isSuperAdmin && _selectedCompanyId == null) {
+      setState(() => _error = 'Debes seleccionar una empresa para el usuario');
+      return;
+    }
 
-  if (!mounted) return;
-  setState(() => _loading = false);
+    setState(() { _loading = true; _error = null; });
 
-  switch (result) {
-    case Success(:final value):
-      setState(() {
-        _done        = true;
-        _createdName = value.name;
-      });
-      _successCtrl.forward();
-      // ← YA NO cierra automáticamente, el usuario cierra manualmente
-    case Failure(:final message):
-      setState(() => _error = message);
+    // Si es superAdmin usa la empresa seleccionada, si no usa la propia
+    final companyId = isSuperAdmin
+        ? _selectedCompanyId
+        : currentUser?.companyId;
+
+    final result = await ref.read(firebaseServiceProvider).createUserAsAdmin(
+      name:      _nameCtrl.text,
+      email:     _emailCtrl.text,
+      password:  _passCtrl.text,
+      role:      _role,
+      companyId: companyId,
+    );
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    switch (result) {
+      case Success(:final value):
+        setState(() {
+          _done        = true;
+          _createdName = value.name;
+        });
+        _successCtrl.forward();
+      case Failure(:final message):
+        setState(() => _error = message);
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -5504,47 +5590,52 @@ Future<void> _submit() async {
     return _buildForm();
   }
 
-Widget _buildSuccess() {
-  return FadeTransition(
-    opacity: _successFade,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ScaleTransition(
-            scale: _successScale,
-            child: Container(
-              width: 80, height: 80,
-              decoration: BoxDecoration(
-                color:  _T.success.withOpacity(0.12),
-                shape:  BoxShape.circle,
-                border: Border.all(color: _T.success.withOpacity(0.3), width: 2),
+  Widget _buildSuccess() {
+    return FadeTransition(
+      opacity: _successFade,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _successScale,
+              child: Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  color:  _T.success.withOpacity(0.12),
+                  shape:  BoxShape.circle,
+                  border: Border.all(color: _T.success.withOpacity(0.3), width: 2),
+                ),
+                child: const Icon(Icons.check_rounded, color: _T.success, size: 40),
               ),
-              child: const Icon(Icons.check_rounded, color: _T.success, size: 40),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text('¡Usuario creado!',
-              style: const TextStyle(color: _T.textHi, fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(
-            '${_createdName ?? 'El usuario'} ya puede iniciar sesión.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: _T.textMid, fontSize: 13),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: widget.onSuccess,
-            style: ElevatedButton.styleFrom(minimumSize: const Size(160, 44)),
-            child: const Text('Cerrar'),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text('¡Usuario creado!',
+                style: const TextStyle(
+                    color: _T.textHi, fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(
+              '${_createdName ?? 'El usuario'} ya puede iniciar sesión.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _T.textMid, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: widget.onSuccess,
+              style: ElevatedButton.styleFrom(minimumSize: const Size(160, 44)),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   Widget _buildForm() {
+    final currentUser  = ref.watch(currentUserProvider).valueOrNull;
+    final isSuperAdmin = currentUser?.isSuperAdmin == true;
+
     return Form(
       key: _form,
       child: Column(
@@ -5608,6 +5699,18 @@ Widget _buildSuccess() {
                 v != _passCtrl.text ? 'No coinciden' : null,
           ),
           const SizedBox(height: 16),
+
+          // ── SELECTOR DE EMPRESA (solo superAdmin) ──────────────────────────
+          if (isSuperAdmin) ...[
+            const _FieldLabel('Empresa asignada'),
+            const SizedBox(height: 6),
+            _CompanyDropdown(
+              selectedId: _selectedCompanyId,
+              onChanged: (id) => setState(() => _selectedCompanyId = id),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           const _FieldLabel('Rol del usuario'),
           const SizedBox(height: 8),
           _RoleSelector(
@@ -5629,6 +5732,132 @@ Widget _buildSuccess() {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Company Dropdown (para superAdmin al crear usuario) ───────────────────────
+
+class _CompanyDropdown extends ConsumerWidget {
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+  const _CompanyDropdown({required this.selectedId, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final companiesAsync = ref.watch(companiesProvider);
+
+    return companiesAsync.when(
+      loading: () => Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: _T.card,
+          borderRadius: _T.r12,
+          border: Border.all(color: _T.border),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _T.primary),
+          ),
+        ),
+      ),
+      error: (e, _) => Text('Error: $e',
+          style: const TextStyle(color: _T.error, fontSize: 12)),
+      data: (companies) {
+        final active = companies.where((c) => c.isActive).toList();
+
+        if (active.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: _T.card,
+              borderRadius: _T.r12,
+              border: Border.all(color: _T.border),
+            ),
+            child: const Text(
+              'No hay empresas activas disponibles',
+              style: TextStyle(color: _T.textLo, fontSize: 13),
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: _T.card,
+            borderRadius: _T.r12,
+            border: Border.all(
+              color: selectedId == null ? _T.border : _T.primary.withOpacity(0.6),
+              width: selectedId == null ? 1 : 1.5,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedId,
+              hint: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.business_rounded, size: 16, color: _T.textLo),
+                    SizedBox(width: 8),
+                    Text('Seleccionar empresa...',
+                        style: TextStyle(color: _T.textLo, fontSize: 13)),
+                  ],
+                ),
+              ),
+              isExpanded: true,
+              dropdownColor: _T.card,
+              icon: const Padding(
+                padding: EdgeInsets.only(right: 12),
+                child: Icon(Icons.expand_more_rounded,
+                    color: _T.textMid, size: 18),
+              ),
+              borderRadius: _T.r12,
+              items: active.map((company) {
+                return DropdownMenuItem<String>(
+                  value: company.id,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28, height: 28,
+                          decoration: BoxDecoration(
+                            color: _T.primaryLo,
+                            borderRadius: _T.r8,
+                          ),
+                          child: const Icon(Icons.business_rounded,
+                              color: _T.primary, size: 14),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(company.name,
+                                  style: const TextStyle(
+                                      color: _T.textHi,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis),
+                              Text(company.email,
+                                  style: const TextStyle(
+                                      color: _T.textMid, fontSize: 10),
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        );
+      },
     );
   }
 }

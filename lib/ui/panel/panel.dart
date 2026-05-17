@@ -49,6 +49,7 @@ abstract class _C {
 enum DeviceStatus { online, offline, warning }
 enum ContentType  { image, video, text, url }
 
+
 class DeviceModel {
   final String id;
   final String name;
@@ -68,6 +69,8 @@ class DeviceModel {
   final List<String> tags;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final List<String> assignedPlaylistIds;
+final List<String> assignedScheduleIds;
 
   const DeviceModel({
     required this.id,
@@ -88,6 +91,8 @@ class DeviceModel {
     this.tags = const [],
     this.createdAt,
     this.updatedAt,
+    this.assignedPlaylistIds = const [],
+this.assignedScheduleIds = const [],
   });
 factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
   final d = doc.data() as Map<String, dynamic>;
@@ -124,6 +129,9 @@ factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
       tags:                  List<String>.from(d['tags'] ?? []),
       createdAt:             parseDate(d['createdAt']),
       updatedAt:             parseDate(d['updatedAt']),
+      assignedPlaylistIds: List<String>.from(d['assignedPlaylistIds'] ?? []),
+assignedScheduleIds: List<String>.from(d['assignedScheduleIds'] ?? []),
+
     );
   } catch (e, stack) {
     debugPrint('[DeviceModel.fromFirestore] ERROR doc=${doc.id}: $e');
@@ -164,6 +172,8 @@ factory DeviceModel.fromFirestore(DocumentSnapshot doc) {
     'orientation':    orientation,
     'notes':          notes,
     'tags':           tags,
+    'assignedPlaylistIds': assignedPlaylistIds,
+'assignedScheduleIds': assignedScheduleIds,
   };
 }
 class PlaylistItemModel {
@@ -919,6 +929,34 @@ void _showDeviceSchedules(BuildContext ctx, DeviceModel device) {
 }
 
 class _DeviceCardState extends ConsumerState<_DeviceCard> {
+  void _showCredentials(BuildContext ctx, DeviceModel device) async {
+  // Obtener credenciales frescas de Firestore
+  final doc = await FirebaseFirestore.instance
+      .collection('devices')
+      .doc(device.id)
+      .get();
+  if (!ctx.mounted) return;
+  final data = doc.data() as Map<String, dynamic>? ?? {};
+  final username = data['portalUsername'] ?? '—';
+  final password = data['portalPassword'] ?? '—';
+
+  showDialog(
+    context: ctx,
+    builder: (_) => _CredentialsDialog(
+      deviceName: device.name,
+      username: username,
+      password: password,
+    ),
+  );
+}
+void _showAssignSchedules(BuildContext ctx, DeviceModel device) {
+  showModalBottomSheet(
+    context: ctx,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _AssignSchedulesSheet(device: device),
+  );
+}
   bool _hovered = false;
 void _showEditDevice(BuildContext ctx, DeviceModel device) {
   showModalBottomSheet(
@@ -1015,9 +1053,16 @@ void _showEditDevice(BuildContext ctx, DeviceModel device) {
               const SizedBox(width: 12),
 
               // Actions
-   // Actions
+  // Actions en _DeviceCard - reemplaza el Row de Actions completo:
 Row(
   children: [
+    _IconBtn(
+      icon: Icons.key_rounded,
+      tooltip: 'Ver credenciales',
+      color: _C.amber,
+      onTap: () => _showCredentials(context, d),
+    ),
+    const SizedBox(width: 8),
     _IconBtn(
       icon: Icons.edit_outlined,
       tooltip: 'Editar',
@@ -1036,15 +1081,8 @@ Row(
       icon: Icons.calendar_view_week_rounded,
       tooltip: 'Programaciones',
       color: _C.purple,
-      onTap: () => _showDeviceSchedules(context, d),
+      onTap: () => _showAssignSchedules(context, d),
     ),
-    const SizedBox(width: 8),
-   /* _IconBtn(
-      icon: Icons.open_in_new_rounded,
-      tooltip: 'Ver display',
-      color: _C.green,
-      onTap: () => _openDisplay(context, d),
-    ),*/
     const SizedBox(width: 8),
     _IconBtn(
       icon: Icons.delete_outline_rounded,
@@ -1487,89 +1525,179 @@ class _OrientationChip extends StatelessWidget {
 // ASSIGN PLAYLIST SHEET
 // =============================================================================
 
-class _AssignPlaylistSheet extends ConsumerWidget {
+class _AssignPlaylistSheet extends ConsumerStatefulWidget {
   final DeviceModel device;
   const _AssignPlaylistSheet({required this.device});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AssignPlaylistSheet> createState() => _AssignPlaylistSheetState();
+}
+
+class _AssignPlaylistSheetState extends ConsumerState<_AssignPlaylistSheet> {
+  late Set<String> _selected;
+  String _search = '';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.device.assignedPlaylistIds);
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    await FirebaseFirestore.instance
+        .collection('devices')
+        .doc(widget.device.id)
+        .update({'assignedPlaylistIds': _selected.toList()});
+    if (mounted) {
+      setState(() => _saving = false);
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        _snack('✅ Playlists actualizadas en ${widget.device.name}'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final playlistsAsync = ref.watch(playlistsStreamProvider);
     return _Sheet(
       title: 'Gestionar playlists',
-      subtitle: 'Asigna una o varias playlists a "${device.name}"',
+      subtitle: 'Selecciona las playlists para "${widget.device.name}"',
       icon: Icons.playlist_play_rounded,
       iconColor: _C.accent,
-      child: playlistsAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: _C.primary, strokeWidth: 2),
-        ),
-        error: (e, _) => _ErrorBanner(message: e.toString()),
-        data: (playlists) {
-          if (playlists.isEmpty) {
-            return _EmptyState(
-              icon: Icons.playlist_add_rounded,
-              title: 'Sin playlists',
-              subtitle: 'Crea una playlist primero.',
-              compact: true,
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Playlist activa actual
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: _C.accentLo,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.accent.withOpacity(0.3))),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline_rounded,
-                      size: 14, color: _C.accent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        device.currentPlaylistName != null
-                          ? 'Activa ahora: ${device.currentPlaylistName}'
-                          : 'Sin playlist activa actualmente',
-                        style: const TextStyle(color: _C.accent, fontSize: 11)),
-                    ),
-                  ],
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Buscador
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: _C.card,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _C.border),
+            ),
+            child: TextField(
+              style: const TextStyle(color: _C.textHi, fontSize: 13),
+              decoration: const InputDecoration(
+                hintText: 'Buscar playlist...',
+                hintStyle: TextStyle(color: _C.textLo, fontSize: 13),
+                prefixIcon: Icon(Icons.search_rounded, color: _C.textMid, size: 16),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                filled: false,
               ),
-              const Text('Toca una playlist para activarla en el dispositivo:',
-                style: TextStyle(color: _C.textMid, fontSize: 11,
-                  fontWeight: FontWeight.w500)),
-              const SizedBox(height: 10),
-              ...playlists.asMap().entries.map((e) {
-                final pl = e.value;
-                final isActive = pl.id == device.currentPlaylistId;
-                return _PlaylistSelectTile(
-                  playlist: pl,
-                  itemCount: pl.items.length,
-                  isSelected: isActive,
-                  onTap: () async {
-                    await DeviceService().assignPlaylist(device.id, pl);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✅ "${pl.name}" activada en ${device.name}'),
-                          backgroundColor: _C.green.withOpacity(0.9),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                ).animate().fadeIn(delay: Duration(milliseconds: e.key * 40));
-              }),
+              onChanged: (v) => setState(() => _search = v.toLowerCase()),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Info seleccionadas
+          Row(
+            children: [
+              Text('${_selected.length} seleccionadas',
+                style: const TextStyle(color: _C.accent, fontSize: 12, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _selected.clear()),
+                child: const Text('Limpiar todo',
+                  style: TextStyle(color: _C.red, fontSize: 11)),
+              ),
             ],
-          );
-        },
+          ),
+          const SizedBox(height: 8),
+          playlistsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator(color: _C.primary)),
+            error: (e, _) => _ErrorBanner(message: e.toString()),
+            data: (playlists) {
+              final filtered = _search.isEmpty
+                  ? playlists
+                  : playlists.where((p) => p.name.toLowerCase().contains(_search)).toList();
+
+              if (filtered.isEmpty) {
+                return _EmptyState(
+                  icon: Icons.playlist_remove_rounded,
+                  title: 'Sin resultados',
+                  subtitle: 'No se encontraron playlists',
+                  compact: true,
+                );
+              }
+              return Column(
+                children: [
+                  ...filtered.map((pl) {
+                    final isSelected = _selected.contains(pl.id);
+                    return GestureDetector(
+                      onTap: () => setState(() {
+                        if (isSelected) _selected.remove(pl.id);
+                        else _selected.add(pl.id);
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isSelected ? _C.primaryLo : _C.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? _C.primary.withOpacity(0.5) : _C.border,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                color: _C.primaryLo,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.playlist_play_rounded,
+                                  color: _C.primary, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(pl.name,
+                                    style: TextStyle(
+                                      color: isSelected ? _C.textHi : _C.textMid,
+                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                      fontSize: 13)),
+                                  Text('${pl.items.length} elementos',
+                                    style: const TextStyle(color: _C.textLo, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              width: 22, height: 22,
+                              decoration: BoxDecoration(
+                                color: isSelected ? _C.primary : Colors.transparent,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSelected ? _C.primary : _C.textLo),
+                              ),
+                              child: isSelected
+                                  ? const Icon(Icons.check_rounded,
+                                      size: 14, color: Colors.white)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  _SheetSubmitButton(
+                    label: _saving ? '' : 'Guardar (${_selected.length} seleccionadas)',
+                    loading: _saving,
+                    onTap: _save,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -4894,5 +5022,208 @@ class _BlockPlaylistViewerState extends State<_BlockPlaylistViewer>
       case ContentType.text:  return Icons.text_fields_rounded;
       case ContentType.url:   return Icons.language_rounded;
     }
+  }
+}
+
+
+
+
+class _AssignSchedulesSheet extends ConsumerStatefulWidget {
+  final DeviceModel device;
+  const _AssignSchedulesSheet({required this.device});
+
+  @override
+  ConsumerState<_AssignSchedulesSheet> createState() => _AssignSchedulesSheetState();
+}
+
+class _AssignSchedulesSheetState extends ConsumerState<_AssignSchedulesSheet> {
+  late Set<String> _selected;
+  String _search = '';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.device.assignedScheduleIds);
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    await FirebaseFirestore.instance
+        .collection('devices')
+        .doc(widget.device.id)
+        .update({'assignedScheduleIds': _selected.toList()});
+    if (mounted) {
+      setState(() => _saving = false);
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        _snack('✅ Programaciones actualizadas en ${widget.device.name}'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Sheet(
+      title: 'Gestionar programaciones',
+      subtitle: 'Selecciona las programaciones para "${widget.device.name}"',
+      icon: Icons.calendar_view_week_rounded,
+      iconColor: _C.purple,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('schedules').snapshots(),
+        builder: (ctx, snap) {
+          if (!snap.hasData) return const Center(
+            child: CircularProgressIndicator(color: _C.purple, strokeWidth: 2));
+
+          final schedules = snap.data!.docs
+              .map((d) => {'id': d.id, ...d.data() as Map<String, dynamic>})
+              .toList();
+
+          final filtered = _search.isEmpty
+              ? schedules
+              : schedules.where((s) =>
+                  (s['name'] as String? ?? '').toLowerCase().contains(_search)).toList();
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Buscador
+              Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _C.card,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.border),
+                ),
+                child: TextField(
+                  style: const TextStyle(color: _C.textHi, fontSize: 13),
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar programación...',
+                    hintStyle: TextStyle(color: _C.textLo, fontSize: 13),
+                    prefixIcon: Icon(Icons.search_rounded, color: _C.textMid, size: 16),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    filled: false,
+                  ),
+                  onChanged: (v) => setState(() => _search = v.toLowerCase()),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text('${_selected.length} seleccionadas',
+                    style: const TextStyle(color: _C.purple, fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => setState(() => _selected.clear()),
+                    child: const Text('Limpiar todo',
+                      style: TextStyle(color: _C.red, fontSize: 11)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (filtered.isEmpty)
+                _EmptyState(
+                  icon: Icons.event_busy_rounded,
+                  title: 'Sin programaciones',
+                  subtitle: 'No hay programaciones disponibles',
+                  compact: true,
+                )
+              else ...[
+                ...filtered.map((s) {
+                  final id = s['id'] as String;
+                  final name = s['name'] as String? ?? '—';
+                  final desc = s['description'] as String? ?? '';
+                  final isActive = s['isActive'] as bool? ?? true;
+                  final isSelected = _selected.contains(id);
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      if (isSelected) _selected.remove(id);
+                      else _selected.add(id);
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? _C.purple.withOpacity(0.10) : _C.card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? _C.purple.withOpacity(0.5) : _C.border,
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38, height: 38,
+                            decoration: BoxDecoration(
+                              color: _C.purple.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.calendar_view_week_rounded,
+                                color: _C.purple, size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  Expanded(child: Text(name,
+                                    style: TextStyle(
+                                      color: isSelected ? _C.textHi : _C.textMid,
+                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                      fontSize: 13))),
+                                  if (!isActive)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: _C.red.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('Inactiva',
+                                        style: TextStyle(color: _C.red, fontSize: 9,
+                                            fontWeight: FontWeight.w700)),
+                                    ),
+                                ]),
+                                if (desc.isNotEmpty)
+                                  Text(desc,
+                                    style: const TextStyle(color: _C.textLo, fontSize: 11),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 22, height: 22,
+                            decoration: BoxDecoration(
+                              color: isSelected ? _C.purple : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected ? _C.purple : _C.textLo),
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check_rounded,
+                                    size: 14, color: Colors.white)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 16),
+                _SheetSubmitButton(
+                  label: _saving ? '' : 'Guardar (${_selected.length} seleccionadas)',
+                  loading: _saving,
+                  onTap: _save,
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
   }
 }
