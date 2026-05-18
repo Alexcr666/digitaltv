@@ -583,10 +583,10 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
     child: const Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.tv_rounded, color: _T.primary, size: 18),
+     
         SizedBox(width: 10),
         Text(
-          'Acceder como dispositivo',
+          'Volver',
           style: TextStyle(
             color: _T.primary,
             fontSize: 14,
@@ -594,9 +594,7 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
             letterSpacing: 0.2,
           ),
         ),
-        SizedBox(width: 6),
-        Icon(Icons.arrow_forward_ios_rounded,
-            color: _T.primary, size: 11),
+      
       ],
     ),
   ),

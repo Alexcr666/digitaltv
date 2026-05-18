@@ -233,9 +233,9 @@ redirect: (context, state) {
   debugPrint('   path: $path');
   debugPrint('   isAuth: $isAuth | isLoading: $isLoading');
   debugPrint('   user: ${user?.name} | isSuperAdmin: ${user?.isSuperAdmin} | roles: ${user?.roles.map((r) => r.value).toList()}');
-
-  if (isLoading) return null;
-  if (path.startsWith('/view/')) return null;
+if (isLoading) return null;
+if (path.startsWith('/view/')) return null;
+if (path.startsWith('/portal')) return null;
 
   const publicRoutes = [
     AppRoutes.login,
@@ -258,16 +258,38 @@ redirect: (context, state) {
   if (isAuth && user == null) return null;
 
   // Bloquear rutas exclusivas de superAdmin a usuarios normales
-  if (user!.isSuperAdmin != true) {
-    final superOnlyRoutes = [AppRoutes.superDashboard, AppRoutes.companies];
-    if (superOnlyRoutes.contains(path) || path.startsWith('/company/')) {
-      debugPrint('   → dashboard (non-superAdmin bloqueado)');
+// Bloquear rutas protegidas según rol
+if (user != null && !user.isSuperAdmin) {
+  // Rutas solo super admin
+  final superOnlyRoutes = [AppRoutes.superDashboard, AppRoutes.companies];
+  if (superOnlyRoutes.contains(path) || path.startsWith('/company/')) {
+    return AppRoutes.dashboard;
+  }
+
+  // Rutas que requieren permiso específico
+  final permissionRoutes = {
+    AppRoutes.users:          AppPermission.usersView,
+    AppRoutes.roles:          AppPermission.rolesView,
+    AppRoutes.notifications2: AppPermission.notificationsSend,
+  };
+
+  for (final entry in permissionRoutes.entries) {
+    if (path == entry.key &&
+        !user.hasPermission(entry.value) &&
+        !user.isCompanyAdmin) {
       return AppRoutes.dashboard;
     }
   }
 
+  // Rutas de contenido/dispositivos solo para companyAdmin o superior
+  final adminOnlyPaths = ['/devices','/playlist2','/schedules','/media','/editor','/content'];
+  if (adminOnlyPaths.contains(path) && !user.isCompanyAdmin) {
+    return AppRoutes.dashboard;
+  }
+}
+
   // SuperAdmin solo puede ir a sus rutas
- if (isAuth && user.isSuperAdmin == true) {
+ if (isAuth && user!.isSuperAdmin == true) {
   final superRoutes = [
     AppRoutes.superDashboard,
     AppRoutes.companies,
@@ -783,85 +805,37 @@ Widget build(BuildContext context, WidgetRef ref) {
 }
 
 List<_NavItemData?> _buildNavItems(AppUser? user) {
-  final isCompanyAdmin = user?.isCompanyAdmin ?? false;
-  final canViewUsers   = user?.hasPermission(AppPermission.usersView)   ?? false;
-  final canViewRoles   = user?.hasPermission(AppPermission.rolesView)   ?? false;
+  if (user == null) return [];
+  final isSuperAdmin   = user.isSuperAdmin;
+  final isCompanyAdmin = user.isCompanyAdmin;
+  final canViewUsers   = user.hasPermission(AppPermission.usersView);
+  final canViewRoles   = user.hasPermission(AppPermission.rolesView);
+  final canViewReports = user.hasPermission(AppPermission.reportsView);
+  final canSendNotifs  = user.hasPermission(AppPermission.notificationsSend);
+  final canViewDash    = user.hasPermission(AppPermission.dashboardCompany);
 
   return [
-    _NavItemData(
-      route: AppRoutes.dashboard,
-      icon:  Icons.space_dashboard_outlined,
-      label: 'Panel de control',
-    ),
-    _NavItemData(
-      route: '/devices',
-      icon:  Icons.tv_outlined,
-      label: 'Dispositivos',
-    ),
-    _NavItemData(
-      route: '/playlist2',
-      icon:  Icons.queue_music_outlined,
-      label: 'Lista de reproducción',
-    ),
-    _NavItemData(
-      route: '/schedules',
-      icon:  Icons.calendar_month_outlined,
-      label: 'Programación',
-    ),
-    _NavItemData(
-      route: '/media',
-      icon:  Icons.photo_library_outlined,
-      label: 'Biblioteca de medios',
-    ),
-    _NavItemData(
-      route: '/editor',
-      icon:  Icons.edit_outlined,
-      label: 'Editor Playlists',
-    ),
+    if (canViewDash || isCompanyAdmin)
+      _NavItemData(route: AppRoutes.dashboard, icon: Icons.space_dashboard_outlined, label: 'Panel de control'),
+    if (isCompanyAdmin || isSuperAdmin)
+      _NavItemData(route: '/devices', icon: Icons.tv_outlined, label: 'Dispositivos'),
+    if (isCompanyAdmin || isSuperAdmin)
+      _NavItemData(route: '/playlist2', icon: Icons.queue_music_outlined, label: 'Lista de reproducción'),
+    if (isCompanyAdmin || isSuperAdmin)
+      _NavItemData(route: '/schedules', icon: Icons.calendar_month_outlined, label: 'Programación'),
+    if (isCompanyAdmin || isSuperAdmin)
+      _NavItemData(route: '/media', icon: Icons.photo_library_outlined, label: 'Biblioteca de medios'),
+    if (isCompanyAdmin || isSuperAdmin)
+      _NavItemData(route: '/editor', icon: Icons.edit_outlined, label: 'Editor Playlists'),
     null,
     if (canViewUsers || isCompanyAdmin)
-      _NavItemData(
-        route: AppRoutes.users,
-        icon:  Icons.people_rounded,
-        label: 'Usuarios',
-      ),
+      _NavItemData(route: AppRoutes.users, icon: Icons.people_rounded, label: 'Usuarios'),
     if (canViewRoles || isCompanyAdmin)
-      _NavItemData(
-        route: AppRoutes.roles,
-        icon:  Icons.shield_rounded,
-        label: 'Roles',
-      ),
+      _NavItemData(route: AppRoutes.roles, icon: Icons.shield_rounded, label: 'Roles'),
     null,
-    _NavItemData(
-      route: AppRoutes.notifications2,
-      icon:  Icons.notifications_outlined,
-      label: 'Notificaciones',
-    ),
-    _NavItemData(
-      route: AppRoutes.profile,
-      icon:  Icons.person_outline_rounded,
-      label: 'Mi Perfil',
-    ),
-   /* _NavItemData(
-      route: AppRoutes.superDashboard,
-      icon:  Icons.space_dashboard_outlined,
-      label: 'SuperAdministrador',
-    ),
-    _NavItemData(
-      route: AppRoutes.companies,
-      icon:  Icons.space_dashboard_outlined,
-      label: 'Empresas',
-    ),*/
-   /* _NavItemData(
-      route: '/portal',
-      icon:  Icons.space_dashboard_outlined,
-      label: 'Portal',
-    ),
-    _NavItemData(
-      route: '/portal/dashboard',
-      icon:  Icons.tv_outlined,
-      label: 'Dashboard Panel',
-    ),*/
+    if (canSendNotifs || isCompanyAdmin)
+      _NavItemData(route: AppRoutes.notifications2, icon: Icons.notifications_outlined, label: 'Notificaciones'),
+    _NavItemData(route: AppRoutes.profile, icon: Icons.person_outline_rounded, label: 'Mi Perfil'),
   ];
 }
 }
@@ -3170,61 +3144,101 @@ class _NotifTile extends StatelessWidget {
 class RolesManagementPage extends ConsumerWidget {
   const RolesManagementPage({super.key});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rolesAsync = ref.watch(rolesProvider);
-    final usersAsync = ref.watch(allUsersProvider);
-    final svc = ref.read(firebaseServiceProvider);
+@override
+Widget build(BuildContext context, WidgetRef ref) {
+  final rolesAsync = ref.watch(rolesProvider);
+  final usersAsync = ref.watch(allUsersProvider);
+  final svc = ref.read(firebaseServiceProvider);
+  final currentUser = ref.watch(currentUserProvider).valueOrNull;
+  final isSuperAdmin = currentUser?.isSuperAdmin == true;
 
-    return DefaultTabController(
-      length: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Roles y permisos',
-              style: TextStyle(
-                color: _T.textHi, fontSize: 22,
-                fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            const TabBar(
-              isScrollable: true,
-              labelColor:     _T.primary,
-              unselectedLabelColor: _T.textMid,
-              indicatorColor: _T.primary,
-              tabs: [
-                Tab(text: 'Definición de roles'),
-                Tab(text: 'Usuarios y roles'),
-              ],
-            ),
-            const Divider(color: _T.divider, height: 1),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  // Roles list
+  // Roles del sistema siempre visibles
+  final systemRoles = AppRole.values.map((r) => RoleDefinition(
+    id: r.value,
+    name: r.value,
+    displayName: r.displayName,
+    description: _roleDesc(r),
+    permissions: _defaultPermissions(r),
+    createdAt: DateTime(2024),
+  )).toList();
+
+  return DefaultTabController(
+    length: isSuperAdmin ? 3 : 2,
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Roles y permisos',
+            style: TextStyle(
+              color: _T.textHi, fontSize: 22,
+              fontWeight: FontWeight.w700)),
+          const SizedBox(height: 16),
+          TabBar(
+            isScrollable: true,
+            labelColor:     _T.primary,
+            unselectedLabelColor: _T.textMid,
+            indicatorColor: _T.primary,
+            tabs: [
+              const Tab(text: 'Roles del sistema'),
+              if (isSuperAdmin) const Tab(text: 'Roles personalizados'),
+              const Tab(text: 'Usuarios y roles'),
+            ],
+          ),
+          const Divider(color: _T.divider, height: 1),
+          const SizedBox(height: 16),
+          Expanded(
+            child: TabBarView(
+              children: [
+                // Roles del sistema (siempre, no editables)
+                _SystemRolesTab(roles: systemRoles),
+
+                // Roles personalizados solo superAdmin
+                if (isSuperAdmin)
                   rolesAsync.when(
                     loading: () => const Center(
                         child: CircularProgressIndicator(color: _T.primary)),
                     error: (e, _) => Text('Error: $e'),
                     data: (roles) => _RolesTab(roles: roles, svc: svc),
                   ),
-                  // Users with roles
-                  usersAsync.when(
-                    loading: () => const Center(
-                        child: CircularProgressIndicator(color: _T.primary)),
-                    error: (e, _) => Text('Error: $e'),
-                    data: (users) => _UsersRolesTab(users: users, svc: svc),
-                  ),
-                ],
-              ),
+
+                // Usuarios con roles
+                usersAsync.when(
+                  loading: () => const Center(
+                      child: CircularProgressIndicator(color: _T.primary)),
+                  error: (e, _) => Text('Error: $e'),
+                  data: (users) => _UsersRolesTab(users: users, svc: svc),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
+String _roleDesc(AppRole r) => switch (r) {
+  AppRole.superAdmin   => 'Control total del sistema',
+  AppRole.companyAdmin => 'Gestiona usuarios y dispositivos',
+  AppRole.manager      => 'Supervisa equipos y contenido',
+  AppRole.editor       => 'Crea y edita contenido',
+  AppRole.user         => 'Acceso básico al sistema',
+};
+
+List<AppPermission> _defaultPermissions(AppRole r) => switch (r) {
+  AppRole.superAdmin   => AppPermission.values.toList(),
+  AppRole.companyAdmin => [
+    AppPermission.usersView, AppPermission.usersCreate,
+    AppPermission.usersEdit, AppPermission.usersDelete,
+    AppPermission.rolesView,
+  ],
+  AppRole.manager => [
+    AppPermission.usersView, AppPermission.rolesView,
+  ],
+  AppRole.editor  => [AppPermission.usersView],
+  AppRole.user    => [],
+};
 }
 
 class _RolesTab extends StatelessWidget {
@@ -3253,45 +3267,56 @@ class _RolesTab extends StatelessWidget {
           child: ListView.separated(
             itemCount: roles.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) {
-              final role = roles[i];
-              final appRole = AppRole.fromString(role.name);
-              return _CardContainer(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: _roleColor(appRole).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.shield_rounded, color: _roleColor(appRole), size: 18),
-                  ),
-                  title: Text(role.displayName,
-                    style: const TextStyle(color: _T.textHi, fontSize: 14, fontWeight: FontWeight.w600)),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Wrap(
-                      spacing: 4, runSpacing: 4,
-                      children: role.permissions.map((p) => _PermBadge(permission: p)).toList(),
-                    ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 16, color: _T.textMid),
-                        onPressed: () => _showEditRoleDialog(context, role),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 16, color: _T.error),
-                        onPressed: () => _confirmDelete(context, role),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+         itemBuilder: (_, i) {
+  final role = roles[i];
+  final appRole = AppRole.fromString(role.name);
+  return _CardContainer(
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: _roleColor(appRole).withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(Icons.shield_rounded, color: _roleColor(appRole), size: 18),
+      ),
+      title: Text(role.displayName,
+        style: const TextStyle(color: _T.textHi, fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(
+          spacing: 4, runSpacing: 4,
+          children: role.permissions.map((p) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _T.primaryLo,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: _T.primary.withOpacity(0.2)),
+            ),
+            child: Text(
+              _permLabel(p),
+              style: const TextStyle(color: _T.primary, fontSize: 10, fontWeight: FontWeight.w500),
+            ),
+          )).toList(),
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 16, color: _T.textMid),
+            onPressed: () => _showEditRoleDialog(context, role),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, size: 16, color: _T.error),
+            onPressed: () => _confirmDelete(context, role),
+          ),
+        ],
+      ),
+    ),
+  );
+},
           ),
         ),
       ],
@@ -3328,144 +3353,61 @@ class _RolesTab extends StatelessWidget {
     );
   }
 
-  void _showCreateRoleDialog(BuildContext context) {
-    final nameCtrl = TextEditingController();
-    final displayCtrl = TextEditingController();
-    final selected = <AppPermission>{};
-    final formKey = GlobalKey<FormState>();
+ void _showCreateRoleDialog(BuildContext context) {
+  final nameCtrl = TextEditingController();
+  final displayCtrl = TextEditingController();
+  final selected = <AppPermission>{};
+  final formKey = GlobalKey<FormState>();
 
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: _T.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: _T.border),
-          ),
-          title: const Text('Crear nuevo rol', style: TextStyle(color: _T.textHi)),
-          content: SizedBox(
-            width: 420,
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Nombre interno (sin espacios)', style: TextStyle(color: _T.textMid, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: nameCtrl,
-                      style: const TextStyle(color: _T.textHi, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'ej: content_manager',
-                        hintStyle: const TextStyle(color: _T.textLo, fontSize: 13),
-                        filled: true, fillColor: _T.surface,
-                        border: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
-                        enabledBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
-                        focusedBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.primary, width: 1.5)),
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Nombre visible', style: TextStyle(color: _T.textMid, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    TextFormField(
-                      controller: displayCtrl,
-                      style: const TextStyle(color: _T.textHi, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'ej: Content Manager',
-                        hintStyle: const TextStyle(color: _T.textLo, fontSize: 13),
-                        filled: true, fillColor: _T.surface,
-                        border: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
-                        enabledBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
-                        focusedBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.primary, width: 1.5)),
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Permisos', style: TextStyle(color: _T.textMid, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    ...AppPermission.values.map((perm) => CheckboxListTile(
-                      dense: true,
-                      value: selected.contains(perm),
-                      onChanged: (v) {
-                        setState(() {
-                          if (v == true) selected.add(perm);
-                          else selected.remove(perm);
-                        });
-                      },
-                      title: Text(perm.value, style: const TextStyle(color: _T.textMid, fontSize: 13)),
-                      activeColor: _T.primary,
-                      checkColor: Colors.white,
-                      side: const BorderSide(color: _T.textLo),
-                    )),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: _T.textMid)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-                final now = DateTime.now();
-                await svc.createRole(RoleDefinition(
-                  id: nameCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-                  name: nameCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
-                  displayName: displayCtrl.text.trim(),
-                  description: 'Rol personalizado',
-                  permissions: selected.toList(),
-                  createdAt: now,
-                ));
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(minimumSize: const Size(80, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              child: const Text('Crear'),
-            ),
-          ],
+  showDialog(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: _T.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _T.border),
         ),
-      ),
-    );
-  }
-
-  void _showEditRoleDialog(BuildContext context, RoleDefinition role) {
-    final selected = Set<AppPermission>.from(role.permissions);
-    final displayCtrl = TextEditingController(text: role.displayName);
-
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: _T.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: _T.border),
-          ),
-          title: Text('Editar: ${role.displayName}', style: const TextStyle(color: _T.textHi)),
-          content: SizedBox(
-            width: 400,
+        title: const Text('Crear nuevo rol', style: TextStyle(color: _T.textHi)),
+        content: SizedBox(
+          width: 420,
+          child: Form(
+            key: formKey,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Text('Nombre interno (sin espacios)', style: TextStyle(color: _T.textMid, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: nameCtrl,
+                    style: const TextStyle(color: _T.textHi, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'ej: gestor_contenido',
+                      hintStyle: const TextStyle(color: _T.textLo, fontSize: 13),
+                      filled: true, fillColor: _T.surface,
+                      border: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.primary, width: 1.5)),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                  ),
+                  const SizedBox(height: 12),
                   const Text('Nombre visible', style: TextStyle(color: _T.textMid, fontSize: 12)),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: displayCtrl,
                     style: const TextStyle(color: _T.textHi, fontSize: 14),
                     decoration: InputDecoration(
+                      hintText: 'ej: Gestor de Contenido',
+                      hintStyle: const TextStyle(color: _T.textLo, fontSize: 13),
                       filled: true, fillColor: _T.surface,
                       border: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
                       enabledBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
                       focusedBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.primary, width: 1.5)),
                     ),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 16),
                   const Text('Permisos', style: TextStyle(color: _T.textMid, fontSize: 12)),
@@ -3479,7 +3421,8 @@ class _RolesTab extends StatelessWidget {
                         else selected.remove(perm);
                       });
                     },
-                    title: Text(perm.value, style: const TextStyle(color: _T.textMid, fontSize: 13)),
+                    title: Text(_permLabel(perm), style: const TextStyle(color: _T.textMid, fontSize: 13)),
+                    subtitle: Text(_permDesc(perm), style: const TextStyle(color: _T.textLo, fontSize: 11)),
                     activeColor: _T.primary,
                     checkColor: Colors.white,
                     side: const BorderSide(color: _T.textLo),
@@ -3488,31 +3431,147 @@ class _RolesTab extends StatelessWidget {
               ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: _T.textMid)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await svc.updateRole(RoleDefinition(
-                  id: role.id,
-                  name: role.name,
-                  displayName: displayCtrl.text.trim().isEmpty ? role.displayName : displayCtrl.text.trim(),
-                  description: role.description,
-                  permissions: selected.toList(),
-                  createdAt: role.createdAt,
-                ));
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(minimumSize: const Size(80, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              child: const Text('Guardar'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: _T.textMid)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final now = DateTime.now();
+              await svc.createRole(RoleDefinition(
+                id: nameCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                name: nameCtrl.text.trim().toLowerCase().replaceAll(' ', '_'),
+                displayName: displayCtrl.text.trim(),
+                description: 'Rol personalizado',
+                permissions: selected.toList(),
+                createdAt: now,
+              ));
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(minimumSize: const Size(80, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
+            child: const Text('Crear'),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
+void _showEditRoleDialog(BuildContext context, RoleDefinition role) {
+  final selected = Set<AppPermission>.from(role.permissions);
+  final displayCtrl = TextEditingController(text: role.displayName);
+
+  showDialog(
+    context: context,
+    builder: (_) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
+        backgroundColor: _T.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _T.border),
+        ),
+        title: Text('Editar: ${role.displayName}', style: const TextStyle(color: _T.textHi)),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Nombre visible', style: TextStyle(color: _T.textMid, fontSize: 12)),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: displayCtrl,
+                  style: const TextStyle(color: _T.textHi, fontSize: 14),
+                  decoration: InputDecoration(
+                    filled: true, fillColor: _T.surface,
+                    border: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
+                    enabledBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.border)),
+                    focusedBorder: OutlineInputBorder(borderRadius: _T.r8, borderSide: const BorderSide(color: _T.primary, width: 1.5)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Permisos disponibles', style: TextStyle(color: _T.textMid, fontSize: 12)),
+                const SizedBox(height: 6),
+                ...AppPermission.values.map((perm) => CheckboxListTile(
+                  dense: true,
+                  value: selected.contains(perm),
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) selected.add(perm);
+                      else selected.remove(perm);
+                    });
+                  },
+                  title: Text(_permLabel(perm), style: const TextStyle(color: _T.textMid, fontSize: 13)),
+                  subtitle: Text(_permDesc(perm), style: const TextStyle(color: _T.textLo, fontSize: 11)),
+                  activeColor: _T.primary,
+                  checkColor: Colors.white,
+                  side: const BorderSide(color: _T.textLo),
+                )),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: _T.textMid)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await svc.updateRole(RoleDefinition(
+                id: role.id,
+                name: role.name,
+                displayName: displayCtrl.text.trim().isEmpty ? role.displayName : displayCtrl.text.trim(),
+                description: role.description,
+                permissions: selected.toList(),
+                createdAt: role.createdAt,
+              ));
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(minimumSize: const Size(80, 36), padding: const EdgeInsets.symmetric(horizontal: 16)),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+String _permLabel(AppPermission p) => switch (p) {
+  AppPermission.companiesView   => '👁 Ver empresas',
+  AppPermission.companiesCreate => '➕ Crear empresas',
+  AppPermission.companiesEdit   => '✏️ Editar empresas',
+  AppPermission.companiesDelete => '🗑 Eliminar empresas',
+  AppPermission.usersView       => '👁 Ver usuarios',
+  AppPermission.usersCreate     => '➕ Crear usuarios',
+  AppPermission.usersEdit       => '✏️ Editar usuarios',
+  AppPermission.usersDelete     => '🗑 Eliminar usuarios',
+  AppPermission.rolesView       => '👁 Ver roles',
+  AppPermission.rolesCreate     => '➕ Crear roles',
+  AppPermission.rolesEdit       => '✏️ Editar roles',
+  AppPermission.rolesDelete     => '🗑 Eliminar roles',
+  _ => p.value,
+};
+
+String _permDesc(AppPermission p) => switch (p) {
+  AppPermission.companiesView   => 'Puede ver la lista de empresas registradas',
+  AppPermission.companiesCreate => 'Puede registrar nuevas empresas en el sistema',
+  AppPermission.companiesEdit   => 'Puede modificar datos de empresas existentes',
+  AppPermission.companiesDelete => 'Puede eliminar o desactivar empresas',
+  AppPermission.usersView       => 'Puede ver la lista de usuarios del sistema',
+  AppPermission.usersCreate     => 'Puede crear nuevas cuentas de usuario',
+  AppPermission.usersEdit       => 'Puede modificar datos y roles de usuarios',
+  AppPermission.usersDelete     => 'Puede eliminar o desactivar usuarios',
+  AppPermission.rolesView       => 'Puede ver los roles y sus permisos',
+  AppPermission.rolesCreate     => 'Puede crear nuevos roles personalizados',
+  AppPermission.rolesEdit       => 'Puede modificar permisos de roles existentes',
+  AppPermission.rolesDelete     => 'Puede eliminar roles del sistema',
+  _ => 'Permiso del sistema',
+};
 
   Color _roleColor(AppRole role) => switch (role) {
     AppRole.superAdmin => const Color(0xFFEF4444),
@@ -4928,12 +4987,12 @@ class _UserTableRow extends StatelessWidget {
           // Last login
           Expanded(
             flex: 2,
-            child: Text(
+            child:Container(margin: EdgeInsets.only(left: 10),child: Text(
               user.lastLogin != null
                   ? _formatDate(user.lastLogin!)
                   : 'Sin acceso',
               style: const TextStyle(color: _T.textLo, fontSize: 11),
-            ),
+            )),
           ),
           // Actions
           SizedBox(
@@ -4948,6 +5007,7 @@ class _UserTableRow extends StatelessWidget {
                     tooltip: 'Editar',
                     onTap: () => onEdit(user),
                   ),
+                    SizedBox(width: 2,),
                 if (canEdit && !isSelf)
                   _ActionBtn(
                     icon: isBlocked
@@ -4957,6 +5017,7 @@ class _UserTableRow extends StatelessWidget {
                     tooltip: isBlocked ? 'Desbloquear' : 'Bloquear',
                     onTap: () => _toggleBlock(context, user, svc),
                   ),
+                  SizedBox(width: 2,),
                 if (canDelete && !isSelf)
                   _ActionBtn(
                     icon: Icons.delete_outline_rounded,
@@ -5252,6 +5313,7 @@ class _StatusBadge extends StatelessWidget {
     };
 
     return Container(
+      margin: const EdgeInsets.only(right: 20),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: color.withOpacity(0.10),
@@ -6653,4 +6715,90 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SystemRolesTab extends StatelessWidget {
+  final List<RoleDefinition> roles;
+  const _SystemRolesTab({required this.roles});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      itemCount: roles.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final role = roles[i];
+        final appRole = AppRole.fromString(role.name);
+        return _CardContainer(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: _roleColor(appRole).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.shield_rounded, color: _roleColor(appRole), size: 18),
+            ),
+            title: Row(
+              children: [
+                Text(role.displayName,
+                  style: const TextStyle(color: _T.textHi, fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _T.primaryLo,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('Sistema',
+                    style: TextStyle(color: _T.primary, fontSize: 9, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            subtitle: Padding(
+  padding: const EdgeInsets.only(top: 4),
+  child: Wrap(
+    spacing: 4, runSpacing: 4,
+    children: role.permissions.map((p) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _T.primaryLo,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _T.primary.withOpacity(0.2)),
+      ),
+      child: Text(
+        _permLabel(p),
+        style: const TextStyle(color: _T.primary, fontSize: 10, fontWeight: FontWeight.w500),
+      ),
+    )).toList(),
+  ),
+),
+          ),
+        );
+      },
+    );
+  }
+String _permLabel(AppPermission p) => switch (p) {
+  AppPermission.companiesView   => '👁 Ver empresas',
+  AppPermission.companiesCreate => '➕ Crear empresas',
+  AppPermission.companiesEdit   => '✏️ Editar empresas',
+  AppPermission.companiesDelete => '🗑 Eliminar empresas',
+  AppPermission.usersView       => '👁 Ver usuarios',
+  AppPermission.usersCreate     => '➕ Crear usuarios',
+  AppPermission.usersEdit       => '✏️ Editar usuarios',
+  AppPermission.usersDelete     => '🗑 Eliminar usuarios',
+  AppPermission.rolesView       => '👁 Ver roles',
+  AppPermission.rolesCreate     => '➕ Crear roles',
+  AppPermission.rolesEdit       => '✏️ Editar roles',
+  AppPermission.rolesDelete     => '🗑 Eliminar roles',
+  _ => p.value,
+};
+  Color _roleColor(AppRole role) => switch (role) {
+    AppRole.superAdmin   => const Color(0xFFEF4444),
+    AppRole.companyAdmin => const Color(0xFF6366F1),
+    AppRole.manager      => const Color(0xFF38BDF8),
+    AppRole.editor       => const Color(0xFF22C55E),
+    AppRole.user         => const Color(0xFFF59E0B),
+  };
 }
