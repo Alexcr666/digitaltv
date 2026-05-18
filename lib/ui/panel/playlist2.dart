@@ -2,6 +2,7 @@ import 'package:digitaltv/ui/panel/panel3.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 abstract class _EC {
   static const bg       = Color(0xFF070B12);
   static const surface  = Color(0xFF0C1018);
@@ -43,12 +44,16 @@ class _PlaylistsListDialogState extends State<PlaylistsListDialog> {
   @override
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
-  String _fmtDate(DateTime d) =>
-    '${d.day.toString().padLeft(2,'0')}/'
-    '${d.month.toString().padLeft(2,'0')}/'
-    '${d.year}  '
-    '${d.hour.toString().padLeft(2,'0')}:'
-    '${d.minute.toString().padLeft(2,'0')}';
+String _fmtDate(DateTime d) {
+  final hour = d.hour;
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+  return '${d.day.toString().padLeft(2,'0')}/'
+         '${d.month.toString().padLeft(2,'0')}/'
+         '${d.year}  '
+         '${hour12.toString().padLeft(2,'0')}:'
+         '${d.minute.toString().padLeft(2,'0')} $period';
+}
 
   @override
 Widget build(BuildContext context) {
@@ -93,7 +98,7 @@ Widget build(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Mis playlists guardadas1',
+                        const Text('Listas de reproducción1',
                           style: TextStyle(color: _EC.textHi,
                             fontWeight: FontWeight.w800, fontSize: 18,
                             letterSpacing: -0.3)),
@@ -187,7 +192,7 @@ Widget build(BuildContext context) {
         ),
 
         // ── Footer ────────────────────────────────────────────────
-        Container(
+        /*Container(
           padding: EdgeInsets.fromLTRB(24, 12, 24,
             MediaQuery.of(context).padding.bottom + 16),
           decoration: const BoxDecoration(
@@ -207,7 +212,7 @@ Widget build(BuildContext context) {
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             ),
           ),
-        ),
+        ),*/
       ],
     ),
   );
@@ -289,16 +294,25 @@ void _visualize(BuildContext context, SavedPlaylist pl) {
     builder: (_) => PlaylistViewerDialog(playlist: pl),
   );
 }
-
 void _loadInEditor(BuildContext context, SavedPlaylist pl) {
   final notifier = widget.ref.read(editorClipsProvider.notifier);
   for (final c in notifier.state.toList()) notifier.remove(c.id);
   for (final c in pl.clips) notifier.add(c);
-  Navigator.pop(context);
+  // Usa go_router para navegar al editor sin hacer pop
+  GoRouter.of(context).go('/editor');
   ScaffoldMessenger.of(context).showSnackBar(
-    _snackEC('"${pl.name}" cargada en el editor'));
+    SnackBar(
+      content: Text('"${pl.name}" cargada en el editor'),
+      backgroundColor: _EC.card,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: _EC.border),
+      ),
+      duration: const Duration(seconds: 2),
+    ),
+  );
 }
-
   SnackBar _snackEC(String msg) => SnackBar(
     content: Text(msg, style: const TextStyle(color: _EC.textHi)),
     backgroundColor: _EC.card,
@@ -355,7 +369,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
         padding: EdgeInsets.symmetric(
-          vertical: widget.isNarrow ? 14 : 16,
+          vertical: widget.isNarrow ? 2 : 2,
           horizontal: 4),
         color: _hovered
           ? _EC.primary.withOpacity(0.04) : Colors.transparent,
@@ -369,7 +383,7 @@ class _PlaylistRowState extends State<_PlaylistRow> {
 Widget _wideLayout(SavedPlaylist pl, bool hasClips, int clipsCount) {
   return Container(
     margin: const EdgeInsets.symmetric(vertical: 4),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 14),
     decoration: BoxDecoration(
       color: _hovered ? _EC.cardHi : _EC.card,
       borderRadius: BorderRadius.circular(12),

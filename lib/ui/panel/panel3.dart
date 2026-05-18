@@ -1999,162 +1999,178 @@ class _DraggableClip extends ConsumerStatefulWidget {
 
 }
 class _DraggableClipState extends ConsumerState<_DraggableClip> {
-  double _accDx = 0;
-  double _accDy = 0;
   bool _isDragging = false;
+  Offset _pointerStart = Offset.zero;
+  double _startX = 0, _startY = 0;
 
   @override
-Widget build(BuildContext context) {
-  final clip = widget.clip;
-  final scaleX = widget.scaleX;
-  final scaleY = widget.scaleY;
-  final isSelected = widget.isSelected;
-  final width  = clip.width  * scaleX;
-  final height = clip.height * scaleY;
-  const handleSize = 18.0;
+  Widget build(BuildContext context) {
+    final clip = widget.clip;
+    final scaleX = widget.scaleX;
+    final scaleY = widget.scaleY;
+    final isSelected = widget.isSelected;
+    final w = clip.width  * scaleX;
+    final h = clip.height * scaleY;
+    const hs = 14.0;
 
-  // SIN Positioned aquí — va en el padre
-  return Listener(
-    behavior: HitTestBehavior.opaque,
-    onPointerDown: (e) {
-      widget.onSelect();
-      _isDragging = true;
-    },
-    onPointerMove: (e) {
-      if (!_isDragging || !isSelected) return;
-      widget.onMove(e.delta.dx, e.delta.dy);
-    },
-    onPointerUp: (_) => _isDragging = false,
-    child: MouseRegion(
-      cursor: isSelected ? SystemMouseCursors.move : SystemMouseCursors.click,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                border: isSelected
-                  ? Border.all(color: _EC.primary, width: 2)
-                  : Border.all(color: Colors.white.withOpacity(0.06), width: 1),
-                boxShadow: isSelected
-                  ? [BoxShadow(color: _EC.primary.withOpacity(0.3), blurRadius: 10, spreadRadius: 1)]
-                  : [],
-              ),
-              child: Opacity(
-                opacity: clip.opacity,
-                child: _renderClip(clip, scaleX, scaleY),
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (e) {
+        debugPrint('🖱️ [Clip ${clip.label}] pointerDown @ ${e.position} '
+          'selected=$isSelected scaleX=$scaleX scaleY=$scaleY '
+          'clipX=${clip.x} clipY=${clip.y}');
+        widget.onSelect();
+        _isDragging = true;
+        _pointerStart = e.position;
+        _startX = clip.x;
+        _startY = clip.y;
+      },
+      onPointerMove: (e) {
+        if (!_isDragging) return;
+        final dx = (e.position.dx - _pointerStart.dx) / scaleX;
+        final dy = (e.position.dy - _pointerStart.dy) / scaleY;
+        debugPrint('🖱️ [Clip ${clip.label}] move '
+          'pos=${e.position} start=$_pointerStart '
+          'dx=${dx.toStringAsFixed(1)} dy=${dy.toStringAsFixed(1)} '
+          'newX=${(_startX + dx).clamp(0.0, 1280.0).toStringAsFixed(1)} '
+          'newY=${(_startY + dy).clamp(0.0, 720.0).toStringAsFixed(1)}');
+        ref.read(editorClipsProvider.notifier).update(clip.copyWith(
+          x: (_startX + dx).clamp(0.0, 1280.0),
+          y: (_startY + dy).clamp(0.0, 720.0),
+        ));
+      },
+      onPointerUp: (e) {
+        debugPrint('🖱️ [Clip ${clip.label}] pointerUp @ ${e.position}');
+        _isDragging = false;
+      },
+      onPointerCancel: (e) {
+        debugPrint('🖱️ [Clip ${clip.label}] pointerCancel');
+        _isDragging = false;
+      },
+      child: MouseRegion(
+        cursor: isSelected ? SystemMouseCursors.move : SystemMouseCursors.click,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: isSelected
+                    ? Border.all(color: _EC.primary, width: 2)
+                    : Border.all(color: Colors.white.withOpacity(0.06), width: 1),
+                  boxShadow: isSelected
+                    ? [BoxShadow(color: _EC.primary.withOpacity(0.3),
+                        blurRadius: 10, spreadRadius: 1)]
+                    : [],
+                ),
+                child: Opacity(
+                  opacity: clip.opacity,
+                  child: _renderClip(clip, scaleX, scaleY),
+                ),
               ),
             ),
-          ),
-          if (isSelected) ...[
-            Positioned(left: -handleSize/2, top: -handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpLeft,
-                onPan: (d) => widget.onResize(-d.delta.dx, -d.delta.dy))),
-            Positioned(right: -handleSize/2, top: -handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpRight,
-                onPan: (d) => widget.onResize(d.delta.dx, -d.delta.dy))),
-            Positioned(left: -handleSize/2, bottom: -handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownLeft,
-                onPan: (d) => widget.onResize(-d.delta.dx, d.delta.dy))),
-            Positioned(right: -handleSize/2, bottom: -handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownRight,
-                onPan: (d) => widget.onResize(d.delta.dx, d.delta.dy))),
-            Positioned(top: -handleSize/2, left: width * 0.5 - handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeUp,
-                onPan: (d) => widget.onResize(0, -d.delta.dy))),
-            Positioned(bottom: -handleSize/2, left: width * 0.5 - handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeDown,
-                onPan: (d) => widget.onResize(0, d.delta.dy))),
-            Positioned(left: -handleSize/2, top: height * 0.5 - handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeLeft,
-                onPan: (d) => widget.onResize(-d.delta.dx, 0))),
-            Positioned(right: -handleSize/2, top: height * 0.5 - handleSize/2,
-              child: _ResizeHandle(cursor: SystemMouseCursors.resizeRight,
-                onPan: (d) => widget.onResize(d.delta.dx, 0))),
+            // Overlay para capturar eventos sobre HtmlElementView
+            if (clip.type == EditorLayerType.image ||
+                clip.type == EditorLayerType.video ||
+                clip.type == EditorLayerType.audio)
+              Positioned.fill(
+                child: Container(color: Colors.transparent),
+              ),
+            if (isSelected) ...[
+              Positioned(left: -hs/2, top: -hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpLeft,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, -dw, -dh, dw, dh))),
+              Positioned(right: -hs/2, top: -hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeUpRight,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, 0, -dh, dw, dh))),
+              Positioned(left: -hs/2, bottom: -hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownLeft,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, -dw, 0, dw, dh))),
+              Positioned(right: -hs/2, bottom: -hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeDownRight,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, 0, 0, dw, dh))),
+              Positioned(top: -hs/2, left: w/2 - hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeUp,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, 0, -dh, 0, dh))),
+              Positioned(bottom: -hs/2, left: w/2 - hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeDown,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, 0, 0, 0, dh))),
+              Positioned(left: -hs/2, top: h/2 - hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeLeft,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, -dw, 0, dw, 0))),
+              Positioned(right: -hs/2, top: h/2 - hs/2,
+                child: _ResizeHandle(cursor: SystemMouseCursors.resizeRight,
+                  clip: clip, scaleX: scaleX, scaleY: scaleY,
+                  onResize: (dw, dh) => _doResize(clip, 0, 0, dw, 0))),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
- 
+  void _doResize(EditorClip clip, double dx, double dy, double dw, double dh) {
+    final newW = (clip.width  + dw / widget.scaleX).clamp(40.0, 1280.0);
+    final newH = (clip.height + dh / widget.scaleY).clamp(20.0, 720.0);
+    final newX = (clip.x + dx / widget.scaleX).clamp(0.0, 1280.0);
+    final newY = (clip.y + dy / widget.scaleY).clamp(0.0, 720.0);
+    debugPrint('📐 [Resize ${clip.label}] '
+      'dw=$dw dh=$dh → W=${newW.toStringAsFixed(0)} H=${newH.toStringAsFixed(0)} '
+      'X=${newX.toStringAsFixed(0)} Y=${newY.toStringAsFixed(0)}');
+    ref.read(editorClipsProvider.notifier).update(
+      clip.copyWith(x: newX, y: newY, width: newW, height: newH));
+  }
 
-Widget _renderClip(EditorClip clip, double sx, double sy) {
+  Widget _renderClip(EditorClip clip, double sx, double sy) {
     switch (clip.type) {
       case EditorLayerType.image:
         if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
           final viewId = 'img-${clip.id}';
-          try {
-            ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-              final img = html.ImageElement()
-                ..src = clip.url!
-                ..style.width = '100%'
-                ..style.height = '100%'
-                ..style.objectFit = 'cover'
-                ..style.display = 'block';
-              return img;
-            });
-          } catch (_) {}
+          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+            return html.ImageElement()
+              ..src = clip.url!
+              ..style.width = '100%'
+              ..style.height = '100%'
+              ..style.objectFit = 'cover'
+              ..style.display = 'block'
+              ..style.pointerEvents = 'none';
+          }); } catch (_) {}
+          return HtmlElementView(viewType: viewId);
+        }
+        return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
+          child: Center(child: Icon(Icons.image_rounded,
+            color: const Color(0xFF38BDF8), size: 22 * sx)));
+
+      case EditorLayerType.video:
+        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+          final viewId = 'vid-${clip.id}';
+          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+            return html.IFrameElement()
+              ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+              ..setAttribute('allow', 'autoplay')
+              ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+              ..srcdoc = '<!DOCTYPE html><html><head>'
+                  '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
+                  'video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style></head><body>'
+                  '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
+                  '</body></html>';
+          }); } catch (_) {}
           return HtmlElementView(viewType: viewId);
         }
         return Container(
-          color: const Color(0xFF38BDF8).withOpacity(0.1),
-          child: Center(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.image_rounded, color: const Color(0xFF38BDF8), size: 22 * sx),
-            ],
-          )),
-        );
-
-    case EditorLayerType.video:
-  if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-    final viewId = 'vid-${clip.id}';
-    try {
-      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-        final iframe = html.IFrameElement()
-          ..style.cssText = 'border:none;width:100%;height:100%;'
-          ..setAttribute('allow', 'autoplay')
-          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
-          ..srcdoc = '<!DOCTYPE html><html><head>'
-              '<meta http-equiv="Content-Security-Policy" content="default-src * data: blob: \'unsafe-inline\' \'unsafe-eval\'">'
-              '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
-              'video{width:100%;height:100%;object-fit:cover;}</style>'
-              '</head><body>'
-              '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
-              '</body></html>';
-        return iframe;
-      });
-    } catch (_) {}
-    return HtmlElementView(viewType: viewId);
-  }
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                 const Color(0xFFA855F7).withOpacity(0.1)],
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-      ),
-    ),
-    child: Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 36 * sx, height: 36 * sx,
-          decoration: BoxDecoration(
-            color: const Color(0xFFA855F7).withOpacity(0.85),
-            shape: BoxShape.circle),
-          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
-        ),
-        SizedBox(height: 5 * sy),
-        Text(clip.label,
-          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-            fontWeight: FontWeight.w600),
-          maxLines: 1, overflow: TextOverflow.ellipsis),
-      ],
-    )),
-  );
+          decoration: BoxDecoration(gradient: LinearGradient(
+            colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                     const Color(0xFFA855F7).withOpacity(0.1)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight)),
+          child: Center(child: Icon(Icons.play_arrow_rounded,
+            color: Colors.white, size: 22 * sx)));
 
       case EditorLayerType.text:
         final bgColor = clip.backgroundColor != null
@@ -2166,6 +2182,7 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
           child: Text(
             clip.text ?? '',
             textAlign: TextAlign.center,
+            overflow: TextOverflow.visible,
             style: TextStyle(
               color: clip.textColor ?? Colors.white,
               fontSize: (clip.fontSize ?? 48) * sx,
@@ -2179,50 +2196,49 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
         return Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF59E0B).withOpacity(0.15),
-            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4), width: 2 * sx),
-          ),
+            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4), width: 2 * sx)),
           child: Center(child: Icon(Icons.layers_rounded,
-            color: const Color(0xFFF59E0B), size: 20 * sx)),
-        );
+            color: const Color(0xFFF59E0B), size: 20 * sx)));
 
-    case EditorLayerType.audio:
-  if (clip.url != null && clip.url!.isNotEmpty) {
-    final viewId = 'audio-${clip.id}';
-    try {
-      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-        final iframe = html.IFrameElement()
-          ..style.cssText = 'border:none;width:100%;height:100%;'
-          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
-          ..srcdoc = '<!DOCTYPE html><html><head>'
-              '<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;'
-              'display:flex;align-items:center;justify-content:center;}'
-              'audio{width:90%;}</style></head><body>'
-              '<audio src="${clip.url}" controls autoplay loop>'
-              '</audio></body></html>';
-        return iframe;
-      });
-    } catch (_) {}
-    return HtmlElementView(viewType: viewId);
-  }
-  return Container(
-    color: const Color(0xFF22C55E).withOpacity(0.1),
-    child: Center(child: Icon(Icons.music_note_rounded,
-      color: const Color(0xFF22C55E), size: 20 * sx)),
-  );
+      case EditorLayerType.audio:
+        if (clip.url != null && clip.url!.isNotEmpty) {
+          final viewId = 'audio-${clip.id}';
+          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+            return html.IFrameElement()
+              ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+              ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+              ..srcdoc = '<!DOCTYPE html><html><head>'
+                  '<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;'
+                  'display:flex;align-items:center;justify-content:center;}'
+                  'audio{width:90%;pointer-events:none;}</style></head><body>'
+                  '<audio src="${clip.url}" autoplay loop></audio></body></html>';
+          }); } catch (_) {}
+          return HtmlElementView(viewType: viewId);
+        }
+        return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
+          child: Center(child: Icon(Icons.music_note_rounded,
+            color: const Color(0xFF22C55E), size: 20 * sx)));
     }
   }
 }
+
+// ── ResizeHandle con Listener absoluto ───────────────────────────────────────
 class _ResizeHandle extends StatefulWidget {
   final MouseCursor cursor;
-  final void Function(DragUpdateDetails) onPan;
+  final EditorClip clip;
+  final double scaleX, scaleY;
+  final void Function(double dw, double dh) onResize;
   final double width;
   final double height;
 
   const _ResizeHandle({
     required this.cursor,
-    required this.onPan,
-    this.width = 18,
-    this.height = 18,
+    required this.clip,
+    required this.scaleX,
+    required this.scaleY,
+    required this.onResize,
+    this.width = 14,
+    this.height = 14,
   });
 
   @override
@@ -2231,7 +2247,8 @@ class _ResizeHandle extends StatefulWidget {
 
 class _ResizeHandleState extends State<_ResizeHandle> {
   bool _active = false;
-  Offset _last = Offset.zero;
+  Offset _start = Offset.zero;
+  double _startW = 0, _startH = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -2242,19 +2259,15 @@ class _ResizeHandleState extends State<_ResizeHandle> {
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: (e) {
-          _last = e.position;
           setState(() => _active = true);
+          _start  = e.position;
+          _startW = widget.clip.width;
+          _startH = widget.clip.height;
         },
         onPointerMove: (e) {
-          final delta = e.position - _last;
-          _last = e.position;
-          // Simula DragUpdateDetails con el delta
-          widget.onPan(DragUpdateDetails(
-            globalPosition: e.position,
-            delta: delta,
-            primaryDelta: null,
-            sourceTimeStamp: e.timeStamp,
-          ));
+          final dw = (e.position.dx - _start.dx);
+          final dh = (e.position.dy - _start.dy);
+          widget.onResize(dw, dh);
         },
         onPointerUp: (_) => setState(() => _active = false),
         child: Container(
@@ -2263,16 +2276,18 @@ class _ResizeHandleState extends State<_ResizeHandle> {
           decoration: BoxDecoration(
             color: _active ? _EC.primary : Colors.white,
             border: Border.all(color: _EC.primary, width: 2),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(3),
             boxShadow: _active
-              ? [BoxShadow(color: _EC.primary.withOpacity(0.6), blurRadius: 8)]
-              : [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 3)],
+              ? [BoxShadow(color: _EC.primary.withOpacity(0.6), blurRadius: 6)]
+              : [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 2)],
           ),
         ),
       ),
     );
   }
 }
+
+
 class _SelectionHandles extends ConsumerWidget {
   final EditorClip clip;
   final double scaleX, scaleY;
@@ -4074,7 +4089,7 @@ class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
                   const Icon(Icons.video_library_rounded,
                       size: 18, color: _EC.primary),
                   const SizedBox(width: 10),
-                  const Text('Mis playlists guardadas',
+                  const Text('Listas de reproducción',
                       style: TextStyle(
                           color: _EC.textHi,
                           fontWeight: FontWeight.w700,
@@ -4554,84 +4569,55 @@ Widget build(BuildContext context) {
 }
 Widget _renderClip(EditorClip clip, double sx, double sy) {
   switch (clip.type) {
-    case EditorLayerType.image:
+   case EditorLayerType.image:
       if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
         final viewId = 'img-${clip.id}';
-        // ignore: undefined_prefixed_name
-        ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-          final img = html.ImageElement()
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          return html.ImageElement()
             ..src = clip.url!
             ..style.width = '100%'
             ..style.height = '100%'
             ..style.objectFit = 'cover'
-            ..style.display = 'block';
-          return img;
-        });
-        return HtmlElementView(viewType: viewId);
+            ..style.display = 'block'
+            ..style.pointerEvents = 'none';
+        }); } catch (_) {}
+        return Stack(children: [
+          Positioned.fill(child: HtmlElementView(viewType: viewId)),
+          Positioned.fill(child: Container(color: Colors.transparent)),
+        ]);
       }
       return Container(
         color: _EC.accent.withOpacity(0.1),
-        child: Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.image_rounded, color: _EC.accent, size: 22 * sx),
-            if (clip.url?.startsWith('file://') == true) ...[
-              const SizedBox(height: 4),
-              Text(clip.url!.replaceFirst('file://', ''),
-                style: TextStyle(color: _EC.accent.withOpacity(0.7), fontSize: 7 * sx),
-                maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-            ],
-          ],
-        )),
-      );
+        child: Center(child: Icon(Icons.image_rounded,
+          color: _EC.accent, size: 22 * sx)));
 
-   case EditorLayerType.video:
-  if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-    final viewId = 'vid-${clip.id}';
-    try {
-      ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-        final iframe = html.IFrameElement()
-          ..style.cssText = 'border:none;width:100%;height:100%;'
-          ..setAttribute('allow', 'autoplay')
-          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
-          ..srcdoc = '''
-<!DOCTYPE html><html><head>
-<meta http-equiv="Content-Security-Policy" content="default-src * data: blob: 'unsafe-inline' 'unsafe-eval'">
-<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}video{width:100%;height:100%;object-fit:cover;}</style>
+    case EditorLayerType.video:
+      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+        final viewId = 'vid-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          return html.IFrameElement()
+            ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+            ..setAttribute('allow', 'autoplay')
+            ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+            ..srcdoc = '''<!DOCTYPE html><html><head>
+<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}
+video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style>
 </head><body>
 <video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>
 </body></html>''';
-        return iframe;
-      });
-    } catch (_) {}
-    return HtmlElementView(viewType: viewId);
-  }
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                 const Color(0xFFA855F7).withOpacity(0.1)],
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-      ),
-    ),
-    child: Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 36 * sx, height: 36 * sx,
-          decoration: BoxDecoration(
-            color: const Color(0xFFA855F7).withOpacity(0.85),
-            shape: BoxShape.circle),
-          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx),
-        ),
-        SizedBox(height: 5 * sy),
-        Text(clip.label,
-          style: TextStyle(color: Colors.white70, fontSize: 9 * sx,
-            fontWeight: FontWeight.w600),
-          maxLines: 1, overflow: TextOverflow.ellipsis),
-      ],
-    )),
-  );
+        }); } catch (_) {}
+        return Stack(children: [
+          Positioned.fill(child: HtmlElementView(viewType: viewId)),
+          Positioned.fill(child: Container(color: Colors.transparent)),
+        ]);
+      }
+      return Container(
+        decoration: BoxDecoration(gradient: LinearGradient(
+          colors: [const Color(0xFFA855F7).withOpacity(0.3),
+                   const Color(0xFFA855F7).withOpacity(0.1)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight)),
+        child: Center(child: Icon(Icons.play_arrow_rounded,
+          color: Colors.white, size: 22 * sx)));
 
     case EditorLayerType.text:
       final bgColor = clip.backgroundColor != null
@@ -5093,7 +5079,7 @@ Future<void> _saveToLibrary(String name, String url) async {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: SizedBox(
-          width: 480,
+          width: 680,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -5137,7 +5123,7 @@ Future<void> _saveToLibrary(String name, String url) async {
 
               // Tab content
               SizedBox(
-                height: 340,
+             height: 520,
                 child: TabBarView(
                   controller: _tabs,
                   children: [
@@ -5249,6 +5235,52 @@ Future<void> _saveToLibrary(String name, String url) async {
                           // O URL
                           const Text('O pega una URL', style: TextStyle(
                             color: _EC.textMid, fontSize: 10)),
+
+                            // Preview de imagen o video
+                          if (_urlCtrl.text.isNotEmpty || _blobUrl != null) ...[
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 9,
+                                child: widget.type == EditorLayerType.image
+                                  ? Image.network(
+                                      _blobUrl ?? _urlCtrl.text,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: _EC.card,
+                                        child: Center(child: Icon(Icons.broken_image_rounded,
+                                          color: _color, size: 32))),
+                                    )
+                                  : widget.type == EditorLayerType.video
+                                    ? Builder(builder: (_) {
+                                        final viewId = 'preview-vid-${(_blobUrl ?? _urlCtrl.text).hashCode}';
+                                        try {
+                                          ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+                                            final iframe = html.IFrameElement()
+                                              ..style.cssText = 'border:none;width:100%;height:100%;'
+                                              ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+                                              ..srcdoc = '''<!DOCTYPE html><html><head>
+<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}
+video{width:100%;height:100%;object-fit:cover;}</style></head><body>
+<video src="${_blobUrl ?? _urlCtrl.text}" muted playsinline preload="metadata"
+  onloadedmetadata="this.currentTime=1"></video></body></html>''';
+                                            return iframe;
+                                          });
+                                        } catch (_) {}
+                                        return HtmlElementView(viewType: viewId);
+                                      })
+                                    : Container(
+                                        color: _EC.card,
+                                        child: Center(child: Icon(_icon, color: _color, size: 32))),
+                              ),
+                            ),
+                          ],
+
+                          const SizedBox(height: 8),
+
+                          // O URL
+                         
                           const SizedBox(height: 4),
                           TextField(
                             controller: _urlCtrl,
