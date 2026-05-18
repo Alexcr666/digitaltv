@@ -1717,8 +1717,8 @@ void _togglePlay() {
                       style: const TextStyle(color: _P.textMid, fontSize: 12)),
                   ],
                 ),
-                const Spacer(),
-                _ActionButton(
+               const Spacer(),
+               /* _ActionButton(
                   icon: Icons.tv_rounded,
                   label: 'Asignar a mi pantalla1',
                   color: _P.green,
@@ -1726,7 +1726,7 @@ void _togglePlay() {
                     
 
                   },
-                ),
+                ),*/
                 const SizedBox(width: 8),
                 _ActionButton(
                   icon: Icons.fullscreen_rounded,

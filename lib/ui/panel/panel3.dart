@@ -2388,7 +2388,7 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
             ..srcdoc = '<!DOCTYPE html><html><head>'
                 '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
                 'video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style></head><body>'
-                '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
+                '<video src="${clip.url}" autoplay loop playsinline preload="auto"></video>'
                 '</body></html>';
         }); } catch (_) {}
         return HtmlElementView(viewType: viewId);
@@ -4898,7 +4898,7 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
 <style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}
 video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style>
 </head><body>
-<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>
+<video src="${clip.url}" autoplay loop playsinline preload="auto"></video>
 </body></html>''';
         }); } catch (_) {}
         return Stack(children: [
@@ -7182,94 +7182,31 @@ static const _channels = [
     youtubeChannelId: 'UCY3WPKPVHM0xYsGqhGKkHcQ',
     description: 'Canal público cultural · RTVC',
   ),
-  _TVChannel(
+ _TVChannel(
     name: 'Canal Institucional',
     logo: '🏛',
     color: Color(0xFF064E8C),
-    embedUrl: 'https://streaming.rtvc.gov.co/TV_Senal_Institucional_live/smil:live.smil/playlist.m3u8',
+    embedUrl: 'https://streaming.rtvc.gov.co/TV_CanalInstitucional_live/smil:live.smil/playlist.m3u8',
     youtubeChannelId: 'UCLpRFLGJNzFMzrp0A2KHDOQ',
     description: 'Canal público del Estado · RTVC',
   ),
   _TVChannel(
-    name: 'Teleantioquia',
+    name: 'RT En Español',
     logo: '🏙',
     color: Color(0xFF6B21A8),
-    embedUrl: 'https://hdvideo2.cdn.net.co/live01/ta.m3u8',
+    embedUrl: 'https://rt-esp.rttv.com/live/rtesp/playlist.m3u8',
     youtubeChannelId: 'UCO2yELJy1kMImYJhbwZzJqQ',
-    description: 'Canal regional · Medellín · HLS',
+    description: 'RT En Español',
   ),
   _TVChannel(
-    name: 'Telecaribe',
+    name: 'RedBull',
     logo: '🌊',
     color: Color(0xFF0EA5E9),
-    embedUrl: 'https://telecaribe-ott.flumotion.com/telecaribe/live/tracks-v1a1/index.fmp4.m3u8',
+    embedUrl: 'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8',
     youtubeChannelId: '',
-    description: 'Canal regional · Costa Caribe',
+    description: 'RedBull TV Colombia',
   ),
-  _TVChannel(
-    name: 'Telepacífico',
-    logo: '🌅',
-    color: Color(0xFFD97706),
-    embedUrl: 'https://cdn.logicideas.media/telepacifico-live/smil:live.smil/chunklist_b4500000.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal regional · Pacífico · HLS',
-  ),
-  _TVChannel(
-    name: 'Canal Trece',
-    logo: '1️⃣3️⃣',
-    color: Color(0xFFEF4444),
-    embedUrl: 'https://play.cdn.enetres.net/091DB7AFBD77442B9BA2F141DCC182F5021/live.smil/playlist.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal cultural público · HLS',
-  ),
-  _TVChannel(
-    name: 'Canal TRO',
-    logo: '📺',
-    color: Color(0xFF22C55E),
-    embedUrl: 'https://live10.cdnmedia.tv/canaltro2live/smil:live.smil/playlist_p750000.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal regional · Oriente',
-  ),
-  _TVChannel(
-    name: 'Canal Capital',
-    logo: '🏙',
-    color: Color(0xFFA855F7),
-    embedUrl: 'https://mdstrm.com/live-stream-playlist/57d01d6c28b263eb73b59a5a.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal distrital · Bogotá · HLS',
-  ),
-  _TVChannel(
-    name: 'Telecafé',
-    logo: '☕',
-    color: Color(0xFF92400E),
-    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/TCAF/tu1_1.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal regional · Eje Cafetero',
-  ),
-  _TVChannel(
-    name: 'Telemedellín',
-    logo: '🌆',
-    color: Color(0xFF0369A1),
-    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/TMED/tu1_1.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal municipal · Medellín',
-  ),
-  _TVChannel(
-    name: 'Citytv',
-    logo: '🌃',
-    color: Color(0xFFEC4899),
-    embedUrl: 'https://citytvlive.flumotion.com/citytv/live/tracks-v1a1/index.fmp4.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal local · Bogotá',
-  ),
-  _TVChannel(
-    name: 'Canal U',
-    logo: '🎓',
-    color: Color(0xFF059669),
-    embedUrl: 'https://hlslive.lcdn.une.net.co/v1/AUTH_HLSLIVE/CANU/tu1_1.m3u8',
-    youtubeChannelId: '',
-    description: 'Canal universitario · HLS',
-  ),
+ 
 ];
   _TVChannel? _selected;
   double _start = 0;

@@ -4309,19 +4309,38 @@ class _PermBadge extends StatelessWidget {
   final AppPermission permission;
   const _PermBadge({required this.permission});
 
+  String get _label => switch (permission) {
+    AppPermission.companiesView   => '👁 Ver empresas',
+    AppPermission.companiesCreate => '➕ Crear empresas',
+    AppPermission.companiesEdit   => '✏️ Editar empresas',
+    AppPermission.companiesDelete => '🗑 Eliminar empresas',
+    AppPermission.usersView       => '👥 Ver usuarios',
+    AppPermission.usersCreate     => '➕ Crear usuarios',
+    AppPermission.usersEdit       => '✏️ Editar usuarios',
+    AppPermission.usersDelete     => '🗑 Eliminar usuarios',
+    AppPermission.rolesView       => '🛡 Ver roles',
+    AppPermission.rolesCreate     => '➕ Crear roles',
+    AppPermission.rolesEdit       => '✏️ Editar roles',
+    AppPermission.rolesDelete     => '🗑 Eliminar roles',
+    AppPermission.notificationsSend => '🔔 Enviar notificaciones',
+    AppPermission.reportsView     => '📊 Ver reportes',
+    AppPermission.dashboardCompany => '🏠 Ver panel empresa',
+    _ => permission.value,
+  };
+
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color:        _T.primaryLo,
-          borderRadius: BorderRadius.circular(4),
-          border:       Border.all(color: _T.primary.withOpacity(0.2)),
-        ),
-        child: Text(permission.value,
-          style: const TextStyle(
-            color: _T.primary, fontSize: 10,
-            fontWeight: FontWeight.w500)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: _T.primaryLo,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: _T.primary.withOpacity(0.2)),
+    ),
+    child: Text(_label,
+      style: const TextStyle(
+        color: _T.primary, fontSize: 11,
+        fontWeight: FontWeight.w500)),
+  );
 }
 
 class _CardContainer extends StatelessWidget {
