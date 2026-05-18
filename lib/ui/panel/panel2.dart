@@ -1540,7 +1540,7 @@ Widget build(BuildContext context) {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ScreenHeader(
-          title: 'Biblioteca de medios',
+          title: 'Biblioteca de medios1',
           subtitle: 'Gestiona todas tus imágenes, videos y recursos',
           action: _AddButton(
             label: '+ Agregar URL',
@@ -1724,18 +1724,19 @@ class _MediaCard extends StatefulWidget {
 class _MediaCardState extends State<_MediaCard> {
   bool _hovered = false;
 
-  String _fmtDate(dynamic raw) {
-    if (raw == null) return '—';
-    DateTime? dt;
-    if (raw is Timestamp) dt = raw.toDate();
-    else if (raw is String) dt = DateTime.tryParse(raw);
-    if (dt == null) return '—';
-    return '${dt.day.toString().padLeft(2,'0')}/'
-        '${dt.month.toString().padLeft(2,'0')}/'
-        '${dt.year}  '
-        '${dt.hour.toString().padLeft(2,'0')}:'
-        '${dt.minute.toString().padLeft(2,'0')}';
-  }
+String _fmtDate(dynamic raw) {
+  if (raw == null) return '—';
+  DateTime? dt;
+  if (raw is Timestamp) dt = raw.toDate();
+  else if (raw is String) dt = DateTime.tryParse(raw);
+  if (dt == null) return '—';
+  final hour   = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+  final minute = dt.minute.toString().padLeft(2, '0');
+  final ampm   = dt.hour >= 12 ? 'PM' : 'AM';
+  return '${dt.day.toString().padLeft(2,'0')}/'
+      '${dt.month.toString().padLeft(2,'0')}/'
+      '${dt.year}  $hour:$minute $ampm';
+}
 
 void _openVideo(BuildContext context, String url) {
   final viewId = 'vplay-${widget.id}-${DateTime.now().millisecondsSinceEpoch}';

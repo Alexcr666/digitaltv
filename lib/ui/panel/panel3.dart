@@ -48,6 +48,38 @@ abstract class _EC {
 
 const _uuid = Uuid();
 
+int _findOrCreateFreeTrack(
+  WidgetRef ref,
+  double startSec,
+  double durationSec,
+) {
+  final clips    = ref.read(editorClipsProvider);
+  final tracks   = ref.read(tracksProvider);
+  final notifier = ref.read(tracksProvider.notifier);
+
+  for (int i = 0; i < tracks.length; i++) {
+    final occupied = clips.any((c) =>
+      c.trackIndex == i &&
+      c.startSec < (startSec + durationSec) &&
+      (c.startSec + c.durationSec) > startSec
+    );
+    if (!occupied) return i;
+  }
+
+  // No hay track libre → crear uno nuevo
+  final newIdx = tracks.length;
+  final colors = [_EC.track1, _EC.track2, _EC.track3, _EC.track4,
+    _EC.track5, _EC.red, _EC.purple, const Color(0xFFEC4899),
+    _EC.accent, _EC.green];
+  notifier.add(TrackDef(
+    id: 't${DateTime.now().millisecondsSinceEpoch}',
+    label: 'Track ${newIdx + 1}',
+    color: colors[newIdx % colors.length],
+    defaultType: EditorLayerType.video,
+  ));
+  return newIdx;
+}
+
 // =============================================================================
 // MODELOS DEL EDITOR
 // =============================================================================
@@ -313,36 +345,50 @@ Future<void> _load() async {
     final userDoc = await _db.collection('users').doc(uid).get();
     final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
 
-    Query query = _db.collection(_collection);
+    QuerySnapshot snap;
     if (companyId != null) {
-      query = query.where('companyId', isEqualTo: companyId);
+      snap = await _db.collection(_collection)
+          .where('companyId', isEqualTo: companyId)
+          .get();
+    } else {
+      snap = await _db.collection(_collection)
+          .where('ownerId', isEqualTo: uid)
+          .get();
     }
 
-    final snap = await query.get();
-    final list = snap.docs
-        .map((d) => SavedPlaylist.fromFirestore(d.data() as Map<String, dynamic>))
-        .toList();
+    final list = snap.docs.map((d) {
+      try {
+        return SavedPlaylist.fromFirestore(d.data() as Map<String, dynamic>);
+      } catch (e) {
+        debugPrint('Error parseando playlist ${d.id}: $e');
+        return null;
+      }
+    }).whereType<SavedPlaylist>().toList();
+
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     state = list;
   } catch (e) {
+    debugPrint('Error cargando playlists: $e');
+    state = [];
   }
 }
 
- Future<void> add(SavedPlaylist p) async {
-  try {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    final userDoc = await _db.collection('users').doc(uid).get();
-    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+  Future<void> add(SavedPlaylist p) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
 
-    final data = p.toFirestore();
-    if (companyId != null) data['companyId'] = companyId;
+      final data = p.toFirestore();
+      if (companyId != null) data['companyId'] = companyId;
+      data['ownerId'] = uid;
 
-    await _db.collection(_collection).doc(p.id).set(data);
-    state = [p, ...state];
-  } catch (e) {
-    debugPrint('Error guardando playlist: $e');
+      await _db.collection(_collection).doc(p.id).set(data);
+      state = [p, ...state];
+    } catch (e) {
+      debugPrint('Error guardando playlist: $e');
+    }
   }
-}
 
   Future<void> remove(String id) async {
     try {
@@ -353,46 +399,92 @@ Future<void> _load() async {
     }
   }
 
-  Future<void> update(SavedPlaylist updated) async {
-    try {
-      await _db
-          .collection(_collection)
-          .doc(updated.id)
-          .set(updated.toFirestore());
-      state = state.map((p) => p.id == updated.id ? updated : p).toList();
-    } catch (e) {
-      debugPrint('Error actualizando playlist: $e');
-    }
+ Future<void> update(SavedPlaylist updated) async {
+  try {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+    final data = updated.toFirestore();
+    if (companyId != null) data['companyId'] = companyId;
+    data['ownerId'] = uid;
+
+    await _db.collection(_collection).doc(updated.id).set(data);
+    state = state.map((p) => p.id == updated.id ? updated : p).toList();
+  } catch (e) {
+    debugPrint('Error actualizando playlist: $e');
   }
+}
 }
 
 class EditorClipsNotifier extends StateNotifier<List<EditorClip>> {
   EditorClipsNotifier() : super([]);
-void setAll(List<EditorClip> clips) {
-  _pendingUpdate = null;
-  state = clips;
-}
+
   final _sw = Stopwatch()..start();
   EditorClip? _pendingUpdate;
 
-  void add(EditorClip clip) => state = [...state, clip];
+  // Historial para undo/redo
+  final List<List<EditorClip>> _history = [];
+  int _historyIndex = -1;
+  static const _maxHistory = 50;
 
- void update(EditorClip updated) {
-  // Si cambia el trackIndex, aplica inmediatamente sin throttle
-  final current = state.firstWhere((c) => c.id == updated.id, orElse: () => updated);
-  if (current.trackIndex != updated.trackIndex) {
-    state = state.map((c) => c.id == updated.id ? updated : c).toList();
-    return;
+  void _snapshot() {
+    // Elimina los estados "futuros" si estábamos en medio del historial
+    if (_historyIndex < _history.length - 1) {
+      _history.removeRange(_historyIndex + 1, _history.length);
+    }
+    _history.add(List.from(state));
+    if (_history.length > _maxHistory) _history.removeAt(0);
+    _historyIndex = _history.length - 1;
   }
-  _pendingUpdate = updated;
-  if (_sw.elapsedMilliseconds > 16) {
+
+  bool get canUndo => _historyIndex > 0;
+  bool get canRedo => _historyIndex < _history.length - 1;
+
+  void undo() {
     _flush();
+    if (!canUndo) return;
+    _historyIndex--;
+    state = List.from(_history[_historyIndex]);
   }
-}
+
+  void redo() {
+    _flush();
+    if (!canRedo) return;
+    _historyIndex++;
+    state = List.from(_history[_historyIndex]);
+  }
+
+  void setAll(List<EditorClip> clips) {
+    _pendingUpdate = null;
+    state = clips;
+    _snapshot();
+  }
+
+  void add(EditorClip clip) {
+    state = [...state, clip];
+    _snapshot();
+  }
+
+  void update(EditorClip updated) {
+    final current = state.firstWhere((c) => c.id == updated.id, orElse: () => updated);
+    if (current.trackIndex != updated.trackIndex) {
+      state = state.map((c) => c.id == updated.id ? updated : c).toList();
+      _snapshot();
+      return;
+    }
+    _pendingUpdate = updated;
+    if (_sw.elapsedMilliseconds > 16) {
+      _flush();
+    }
+  }
 
   void _flush() {
     if (_pendingUpdate == null) return;
+    final prev = state;
     state = state.map((c) => c.id == _pendingUpdate!.id ? _pendingUpdate! : c).toList();
+    // Solo snapshot si cambió algo relevante (posición final, no cada frame)
+    if (_sw.elapsedMilliseconds > 300) _snapshot();
     _pendingUpdate = null;
     _sw.reset();
   }
@@ -400,6 +492,7 @@ void setAll(List<EditorClip> clips) {
   void remove(String id) {
     _flush();
     state = state.where((c) => c.id != id).toList();
+    _snapshot();
   }
 
   void reorder(String id, double newStart, int newTrack) {
@@ -680,12 +773,37 @@ class _EditorTopBar extends ConsumerWidget {
   }
 
 void _showSaveDialog(BuildContext ctx, WidgetRef ref, List<EditorClip> clips) {
+  // Busca si hay una playlist cargada actualmente
+  final playlists = ref.read(savedPlaylistsProvider);
+  // Detecta si los clips actuales coinciden con alguna playlist guardada
+  // comparando los IDs de los clips
+  final clipIds = clips.map((c) => c.id).toSet();
+  SavedPlaylist? existing;
+  for (final pl in playlists) {
+    final plIds = pl.clips.map((c) => c.id).toSet();
+    if (plIds.isNotEmpty && clipIds.containsAll(plIds) && plIds.containsAll(clipIds)) {
+      existing = pl;
+      break;
+    }
+    // También detecta si la mayoría de IDs coinciden (>= 70%)
+    final intersection = plIds.intersection(clipIds).length;
+    if (plIds.isNotEmpty && intersection / plIds.length >= 0.7) {
+      existing = pl;
+      break;
+    }
+  }
+
   showDialog(
     context: ctx,
     builder: (_) => _SavePlaylistDialog(
       clips: clips,
+      existingPlaylist: existing,
       onSaved: (playlist) async {
-        await ref.read(savedPlaylistsProvider.notifier).add(playlist);
+        if (existing != null) {
+          await ref.read(savedPlaylistsProvider.notifier).update(playlist);
+        } else {
+          await ref.read(savedPlaylistsProvider.notifier).add(playlist);
+        }
       },
     ),
   );
@@ -746,9 +864,121 @@ final customTemplatesProvider =
 });
 
 class CustomTemplatesNotifier extends StateNotifier<List<TemplateItem>> {
-  CustomTemplatesNotifier() : super([]);
-  void add(TemplateItem t) => state = [...state, t];
-  void remove(String id) => state = state.where((t) => t.id != id).toList();
+  CustomTemplatesNotifier() : super([]) {
+    _load();
+  }
+
+  static const _collection = 'custom_templates';
+  final _db = FirebaseFirestore.instance;
+
+  Future<void> _load() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) { state = []; return; }
+
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+      QuerySnapshot snap;
+      if (companyId != null) {
+        snap = await _db.collection(_collection)
+            .where('companyId', isEqualTo: companyId)
+            .get();
+      } else {
+        snap = await _db.collection(_collection)
+            .where('ownerId', isEqualTo: uid)
+            .get();
+      }
+
+      final list = snap.docs.map((d) {
+        try {
+          return _templateFromFirestore(d.data() as Map<String, dynamic>);
+        } catch (e) {
+          debugPrint('Error parseando plantilla ${d.id}: $e');
+          return null;
+        }
+      }).whereType<TemplateItem>().toList();
+
+      state = list;
+    } catch (e) {
+      debugPrint('Error cargando plantillas: $e');
+      state = [];
+    }
+  }
+
+  Future<void> add(TemplateItem t) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final companyId = (userDoc.data() as Map<String, dynamic>?)?['companyId'] as String?;
+
+      final data = _templateToFirestore(t);
+      data['ownerId'] = uid;
+      if (companyId != null) data['companyId'] = companyId;
+
+      await _db.collection(_collection).doc(t.id).set(data);
+      state = [...state, t];
+    } catch (e) {
+      debugPrint('Error guardando plantilla: $e');
+    }
+  }
+
+  Future<void> remove(String id) async {
+    try {
+      await _db.collection(_collection).doc(id).delete();
+      state = state.where((t) => t.id != id).toList();
+    } catch (e) {
+      debugPrint('Error eliminando plantilla: $e');
+    }
+  }
+
+  Map<String, dynamic> _templateToFirestore(TemplateItem t) => {
+    'id': t.id,
+    'name': t.name,
+    'category': t.category,
+    'iconCodePoint': t.icon.codePoint,
+    'iconFontFamily': t.icon.fontFamily ?? 'MaterialIcons',
+    'colorValue': t.color.value,
+    'clips': t.clips.map((c) => {
+      'id': c.id,
+      'type': c.type.name,
+      'label': c.label,
+      if (c.url != null) 'url': c.url,
+      if (c.text != null) 'text': c.text,
+      'startSec': c.startSec,
+      'durationSec': c.durationSec,
+      'trackIndex': c.trackIndex,
+      'x': c.x, 'y': c.y,
+      'width': c.width, 'height': c.height,
+      'opacity': c.opacity,
+      'rotation': c.rotation,
+      if (c.textColor != null) 'textColor': c.textColor!.value,
+      'fontSize': c.fontSize ?? 48,
+      'bold': c.bold ?? false,
+      if (c.backgroundColor != null) 'backgroundColor': c.backgroundColor,
+      'volume': c.volume,
+      'trimStart': c.trimStart,
+      'trimEnd': c.trimEnd,
+    }).toList(),
+  };
+
+  TemplateItem _templateFromFirestore(Map<String, dynamic> data) {
+    final clips = (data['clips'] as List<dynamic>? ?? [])
+        .map((c) => EditorClip.fromMap(c as Map<String, dynamic>))
+        .toList();
+
+    return TemplateItem(
+      id:       data['id'] as String,
+      name:     data['name'] as String,
+      category: data['category'] as String,
+      icon: IconData(
+        data['iconCodePoint'] as int,
+        fontFamily: data['iconFontFamily'] as String? ?? 'MaterialIcons',
+      ),
+      color: Color(data['colorValue'] as int),
+      clips: clips,
+    );
+  }
 }
 
 // =============================================================================
@@ -1135,12 +1365,12 @@ _AnimatedMediaBtn(
   ];
 
   void _applyTemplate(WidgetRef ref, TemplateItem t) {
-    final notifier = ref.read(editorClipsProvider.notifier);
-    // Generar nuevos IDs para evitar conflictos
-    for (final c in t.clips) {
-      notifier.add(c.copyWith(id: _uuid.v4()));
-    }
+  final notifier = ref.read(editorClipsProvider.notifier);
+  for (final c in t.clips) {
+    final trackIdx = _findOrCreateFreeTrack(ref, c.startSec, c.durationSec);
+    notifier.add(c.copyWith(id: _uuid.v4(), trackIndex: trackIdx));
   }
+}
 
   void _showAddClipDialog(BuildContext ctx, WidgetRef ref, EditorLayerType type) {
     showDialog(
@@ -2128,98 +2358,164 @@ class _DraggableClipState extends ConsumerState<_DraggableClip> {
       clip.copyWith(x: newX, y: newY, width: newW, height: newH));
   }
 
-  Widget _renderClip(EditorClip clip, double sx, double sy) {
-    switch (clip.type) {
-      case EditorLayerType.image:
-        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-          final viewId = 'img-${clip.id}';
-          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-            return html.ImageElement()
-              ..src = clip.url!
-              ..style.width = '100%'
-              ..style.height = '100%'
-              ..style.objectFit = 'cover'
-              ..style.display = 'block'
-              ..style.pointerEvents = 'none';
-          }); } catch (_) {}
-          return HtmlElementView(viewType: viewId);
-        }
-        return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
-          child: Center(child: Icon(Icons.image_rounded,
-            color: const Color(0xFF38BDF8), size: 22 * sx)));
+Widget _renderClip(EditorClip clip, double sx, double sy) {
+  switch (clip.type) {
+    case EditorLayerType.image:
+      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+        final viewId = 'img-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          return html.ImageElement()
+            ..src = clip.url!
+            ..style.width = '100%'
+            ..style.height = '100%'
+            ..style.objectFit = 'cover'
+            ..style.display = 'block'
+            ..style.pointerEvents = 'none';
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(color: const Color(0xFF38BDF8).withOpacity(0.1),
+        child: Center(child: Icon(Icons.image_rounded, color: const Color(0xFF38BDF8), size: 22 * sx)));
 
-      case EditorLayerType.video:
-        if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
-          final viewId = 'vid-${clip.id}';
-          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-            return html.IFrameElement()
-              ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
-              ..setAttribute('allow', 'autoplay')
-              ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
-              ..srcdoc = '<!DOCTYPE html><html><head>'
-                  '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
-                  'video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style></head><body>'
-                  '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
-                  '</body></html>';
-          }); } catch (_) {}
-          return HtmlElementView(viewType: viewId);
-        }
-        return Container(
-          decoration: BoxDecoration(gradient: LinearGradient(
-            colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                     const Color(0xFFA855F7).withOpacity(0.1)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight)),
-          child: Center(child: Icon(Icons.play_arrow_rounded,
-            color: Colors.white, size: 22 * sx)));
+    case EditorLayerType.video:
+      if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
+        final viewId = 'vid-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          return html.IFrameElement()
+            ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+            ..setAttribute('allow', 'autoplay')
+            ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+            ..srcdoc = '<!DOCTYPE html><html><head>'
+                '<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}'
+                'video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style></head><body>'
+                '<video src="${clip.url}" autoplay muted loop playsinline preload="auto"></video>'
+                '</body></html>';
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(
+        decoration: BoxDecoration(gradient: LinearGradient(
+          colors: [const Color(0xFFA855F7).withOpacity(0.3), const Color(0xFFA855F7).withOpacity(0.1)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight)),
+        child: Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx)));
 
-      case EditorLayerType.text:
-        final bgColor = clip.backgroundColor != null
-          ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
-          : Colors.transparent;
-        return Container(
-          color: bgColor,
-          alignment: Alignment.center,
-          child: Text(
-            clip.text ?? '',
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.visible,
-            style: TextStyle(
-              color: clip.textColor ?? Colors.white,
-              fontSize: (clip.fontSize ?? 48) * sx,
-              fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
-              height: 1.2,
-            ),
+    case EditorLayerType.text:
+      final bgColor = clip.backgroundColor != null
+        ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
+        : Colors.transparent;
+
+      final isTypewriter = clip.label.toLowerCase().contains('máquina') || clip.label.toLowerCase().contains('typewriter');
+      final isMarquee    = clip.label.toLowerCase().contains('marquee') || clip.label.toLowerCase().contains('ticker');
+      final isFadeIn     = clip.label.toLowerCase().contains('fade in');
+      final isFadeOut    = clip.label.toLowerCase().contains('fade out');
+      final isSlideL     = clip.label.contains('←');
+      final isSlideR     = clip.label.contains('→');
+      final isSlideU     = clip.label.contains('↑');
+      final isSlideD     = clip.label.contains('↓');
+      final isZoomIn     = clip.label.contains('Zoom In');
+      final isZoomOut    = clip.label.contains('Zoom Out');
+      final isBounce     = clip.label.contains('Bounce');
+      final isPulse      = clip.label.contains('Pulse');
+      final isAnim       = isFadeIn || isFadeOut || isSlideL || isSlideR || isSlideU || isSlideD ||
+                           isZoomIn || isZoomOut || isBounce || isPulse;
+
+      Widget rawText() {
+        if (isTypewriter) {
+          return _TypewriterText(
+            text: clip.text ?? '',
+            color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            bold: clip.bold ?? false,
+          );
+        }
+        if (isMarquee) {
+          return _MarqueeText(
+            text: clip.text ?? '',
+            color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            bold: clip.bold ?? false,
+          );
+        }
+        return Text(
+          clip.text ?? '',
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.visible,
+          style: TextStyle(
+            color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
+            height: 1.2,
           ),
         );
+      }
 
-      case EditorLayerType.overlay:
-        return Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF59E0B).withOpacity(0.15),
-            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4), width: 2 * sx)),
-          child: Center(child: Icon(Icons.layers_rounded,
-            color: const Color(0xFFF59E0B), size: 20 * sx)));
+      final base = Container(color: bgColor, alignment: Alignment.center, child: rawText());
 
-      case EditorLayerType.audio:
-        if (clip.url != null && clip.url!.isNotEmpty) {
-          final viewId = 'audio-${clip.id}';
-          try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
-            return html.IFrameElement()
-              ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
-              ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
-              ..srcdoc = '<!DOCTYPE html><html><head>'
-                  '<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;'
-                  'display:flex;align-items:center;justify-content:center;}'
-                  'audio{width:90%;pointer-events:none;}</style></head><body>'
-                  '<audio src="${clip.url}" autoplay loop></audio></body></html>';
-          }); } catch (_) {}
-          return HtmlElementView(viewType: viewId);
+      if (!isAnim) return base;
+
+      return Consumer(builder: (context, ref, _) {
+        final playhead = ref.watch(playheadProvider);
+        final elapsed  = (playhead - clip.startSec).clamp(0.0, clip.durationSec);
+        final prog     = (elapsed / (clip.durationSec * 0.4)).clamp(0.0, 1.0);
+        final ease     = 1.0 - math.pow(1.0 - prog, 3).toDouble();
+
+        double opacity = 1.0;
+        double offX = 0, offY = 0, scale = 1.0;
+
+        if (isFadeIn)  opacity = (elapsed / (clip.durationSec * 0.4)).clamp(0.0, 1.0);
+        if (isFadeOut) opacity = (1.0 - elapsed / clip.durationSec).clamp(0.0, 1.0);
+        if (isSlideL)  offX    = (1.0 - ease) * -200;
+        if (isSlideR)  offX    = (1.0 - ease) *  200;
+        if (isSlideU)  offY    = (1.0 - ease) *  100;
+        if (isSlideD)  offY    = (1.0 - ease) * -100;
+        if (isZoomIn)  scale   = 0.2 + ease * 0.8;
+        if (isZoomOut) scale   = 2.0 - ease;
+        if (isBounce) {
+          double t = prog;
+          double b;
+          if (t < 1/2.75)      { b = 7.5625*t*t; }
+          else if (t < 2/2.75) { t -= 1.5/2.75;  b = 7.5625*t*t + 0.75; }
+          else if (t < 2.5/2.75){ t -= 2.25/2.75; b = 7.5625*t*t + 0.9375; }
+          else                  { t -= 2.625/2.75; b = 7.5625*t*t + 0.984375; }
+          offY = -(1.0 - b) * 50;
         }
-        return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
-          child: Center(child: Icon(Icons.music_note_rounded,
-            color: const Color(0xFF22C55E), size: 20 * sx)));
-    }
+        if (isPulse) scale = 0.95 + math.sin(elapsed * math.pi * 2).abs() * 0.1;
+
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(offX, offY),
+            child: Transform.scale(scale: scale, child: base),
+          ),
+        );
+      });
+
+    case EditorLayerType.overlay:
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B).withOpacity(0.15),
+          border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4), width: 2 * sx)),
+        child: Center(child: Icon(Icons.layers_rounded, color: const Color(0xFFF59E0B), size: 20 * sx)));
+
+    case EditorLayerType.audio:
+      if (clip.url != null && clip.url!.isNotEmpty) {
+        final viewId = 'audio-${clip.id}';
+        try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+          return html.IFrameElement()
+            ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+            ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+            ..srcdoc = '<!DOCTYPE html><html><head>'
+                '<style>*{margin:0;padding:0;}body{background:#0a0f1e;width:100vw;height:100vh;'
+                'display:flex;align-items:center;justify-content:center;}'
+                'audio{width:90%;pointer-events:none;}</style></head><body>'
+                '<audio src="${clip.url}" autoplay loop></audio></body></html>';
+        }); } catch (_) {}
+        return HtmlElementView(viewType: viewId);
+      }
+      return Container(color: const Color(0xFF22C55E).withOpacity(0.1),
+        child: Center(child: Icon(Icons.music_note_rounded, color: const Color(0xFF22C55E), size: 20 * sx)));
   }
+}
 }
 
 // ── ResizeHandle con Listener absoluto ───────────────────────────────────────
@@ -2830,9 +3126,13 @@ Widget build(BuildContext context) {
               _TLBtn(icon: Icons.add_rounded,
                 onTap: () => _showAddTrackDialog(context, ref)),
               const SizedBox(width: 4),
-              _TLBtn(icon: Icons.undo_rounded, onTap: () {}),
-              const SizedBox(width: 4),
-              _TLBtn(icon: Icons.redo_rounded, onTap: () {}),
+          _TLBtn(icon: Icons.undo_rounded, onTap: () {
+  ref.read(editorClipsProvider.notifier).undo();
+}),
+const SizedBox(width: 4),
+_TLBtn(icon: Icons.redo_rounded, onTap: () {
+  ref.read(editorClipsProvider.notifier).redo();
+}),
               const SizedBox(width: 4),
               _TLBtn(icon: Icons.delete_sweep_rounded, onTap: () {
                 for (final c in ref.read(editorClipsProvider).toList()) {
@@ -3018,122 +3318,99 @@ onReorder: (oldIdx, newIdx) {
   );
 }
 
-  void _showAddTrackDialog(BuildContext ctx, WidgetRef ref) {
-    final nameCtrl = TextEditingController();
-    EditorLayerType type = EditorLayerType.text;
-    Color color = _EC.primary;
-    final colors = [_EC.primary, _EC.accent, _EC.green, _EC.amber, _EC.red, _EC.purple,
-      const Color(0xFFEC4899)];
+void _showAddTrackDialog(BuildContext ctx, WidgetRef ref) {
+  final nameCtrl = TextEditingController();
+  Color color = _EC.primary;
+  final colors = [_EC.primary, _EC.accent, _EC.green, _EC.amber, _EC.red, _EC.purple,
+    const Color(0xFFEC4899)];
 
-    showDialog(context: ctx, builder: (dialogCtx) =>
-      StatefulBuilder(builder: (_, setState) =>
-        Dialog(
-          backgroundColor: _EC.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: _EC.border)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: SizedBox(width: 340, child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Nuevo track', style: TextStyle(color: _EC.textHi,
-                  fontWeight: FontWeight.w700, fontSize: 14)),
-                const SizedBox(height: 14),
-                const Text('Nombre', style: TextStyle(color: _EC.textMid, fontSize: 10)),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: nameCtrl, autofocus: true,
-                  style: const TextStyle(color: _EC.textHi, fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'Ej: Subtítulos',
-                    hintStyle: const TextStyle(color: _EC.textLo, fontSize: 11),
-                    filled: true, fillColor: _EC.card,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
-                      borderSide: const BorderSide(color: _EC.border)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
-                      borderSide: const BorderSide(color: _EC.border)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
-                      borderSide: const BorderSide(color: _EC.primary)),
-                  ),
+  showDialog(context: ctx, builder: (dialogCtx) =>
+    StatefulBuilder(builder: (_, setState) =>
+      Dialog(
+        backgroundColor: _EC.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: _EC.border)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(width: 300, child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Nuevo track', style: TextStyle(color: _EC.textHi,
+                fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 14),
+              const Text('Nombre', style: TextStyle(color: _EC.textMid, fontSize: 10)),
+              const SizedBox(height: 4),
+              TextField(
+                controller: nameCtrl, autofocus: true,
+                style: const TextStyle(color: _EC.textHi, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Ej: Subtítulos',
+                  hintStyle: const TextStyle(color: _EC.textLo, fontSize: 11),
+                  filled: true, fillColor: _EC.card,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
+                    borderSide: const BorderSide(color: _EC.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
+                    borderSide: const BorderSide(color: _EC.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(7),
+                    borderSide: const BorderSide(color: _EC.primary)),
                 ),
-                const SizedBox(height: 12),
-                const Text('Tipo por defecto', style: TextStyle(color: _EC.textMid, fontSize: 10)),
-                const SizedBox(height: 6),
-                Wrap(spacing: 6, runSpacing: 6,
-                  children: EditorLayerType.values.map((t) {
-                    final sel = t == type;
-                    return GestureDetector(
-                      onTap: () => setState(() => type = t),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 120),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: sel ? _EC.primary : _EC.card,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: sel ? _EC.primary : _EC.border)),
-                        child: Text(t.name, style: TextStyle(
-                          color: sel ? Colors.white : _EC.textMid,
-                          fontSize: 10, fontWeight: FontWeight.w600)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                const Text('Color', style: TextStyle(color: _EC.textMid, fontSize: 10)),
-                const SizedBox(height: 6),
-                Wrap(spacing: 8, children: colors.map((c) {
-                  final sel = c == color;
-                  return GestureDetector(
-                    onTap: () => setState(() => color = c),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      width: 24, height: 24,
-                      decoration: BoxDecoration(
-                        color: c, shape: BoxShape.circle,
-                        border: Border.all(
-                          color: sel ? Colors.white : Colors.transparent, width: 2.5),
-                        boxShadow: sel ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 6)] : [],
-                      ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Color', style: TextStyle(color: _EC.textMid, fontSize: 10)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: colors.map((c) {
+                final sel = c == color;
+                return GestureDetector(
+                  onTap: () => setState(() => color = c),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: 24, height: 24,
+                    decoration: BoxDecoration(
+                      color: c, shape: BoxShape.circle,
+                      border: Border.all(
+                        color: sel ? Colors.white : Colors.transparent, width: 2.5),
+                      boxShadow: sel ? [BoxShadow(color: c.withOpacity(0.5), blurRadius: 6)] : [],
                     ),
-                  );
-                }).toList()),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(child: OutlinedButton(
-                    onPressed: () => Navigator.pop(dialogCtx),
-                    style: OutlinedButton.styleFrom(foregroundColor: _EC.textMid,
-                      side: const BorderSide(color: _EC.border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    child: const Text('Cancelar'),
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: ElevatedButton(
-                    onPressed: () {
-                      final tracks = ref.read(tracksProvider);
-                      ref.read(tracksProvider.notifier).add(TrackDef(
-                        id: 't${DateTime.now().millisecondsSinceEpoch}',
-                        label: nameCtrl.text.trim().isEmpty
-                          ? 'Track ${tracks.length + 1}' : nameCtrl.text.trim(),
-                        color: color,
-                        defaultType: type,
-                      ));
-                      Navigator.pop(dialogCtx);
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: _EC.primary,
-                      foregroundColor: Colors.white, elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                    child: const Text('Crear', style: TextStyle(fontWeight: FontWeight.w700)),
-                  )),
-                ]),
-              ],
-            )),
-          ),
+                  ),
+                );
+              }).toList()),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  style: OutlinedButton.styleFrom(foregroundColor: _EC.textMid,
+                    side: const BorderSide(color: _EC.border),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Cancelar'),
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: ElevatedButton(
+                  onPressed: () {
+                    final tracks = ref.read(tracksProvider);
+                    ref.read(tracksProvider.notifier).add(TrackDef(
+                      id: 't${DateTime.now().millisecondsSinceEpoch}',
+                      label: nameCtrl.text.trim().isEmpty
+                        ? 'Track ${tracks.length + 1}' : nameCtrl.text.trim(),
+                      color: color,
+                      defaultType: EditorLayerType.video,
+                    ));
+                    Navigator.pop(dialogCtx);
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: _EC.primary,
+                    foregroundColor: Colors.white, elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: const Text('Crear', style: TextStyle(fontWeight: FontWeight.w700)),
+                )),
+              ]),
+            ],
+          )),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showExportVideoDialog(BuildContext ctx, WidgetRef ref, List<EditorClip> clips) {
     showDialog(context: ctx, builder: (_) => _ExportVideoDialog(clips: clips));
@@ -3662,25 +3939,8 @@ class _AddTextDialogState extends ConsumerState<_AddTextDialog> {
                       borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
-                 onPressed: () {
-  final allClips = ref.read(editorClipsProvider);
-  final tracks = ref.read(tracksProvider);
-  const preferredIdx = 3;
-  
-  int trackIdx = preferredIdx;
-  for (int i = 0; i < tracks.length; i++) {
-    final candidateIdx = (preferredIdx + i) % tracks.length;
-    final occupied = allClips.any((c) =>
-      c.trackIndex == candidateIdx &&
-      c.startSec < (_start + _duration) &&
-      (c.startSec + c.durationSec) > _start
-    );
-    if (!occupied) {
-      trackIdx = candidateIdx;
-      break;
-    }
-  }
-  
+                onPressed: () {
+  final trackIdx = _findOrCreateFreeTrack(ref, _start, _duration);
   widget.onAdd(EditorClip(
     id: _uuid.v4(),
     type: EditorLayerType.text,
@@ -3838,48 +4098,65 @@ class _ExportDialog extends StatelessWidget {
 }
 class _SavePlaylistDialog extends StatefulWidget {
   final List<EditorClip> clips;
-final Future<void> Function(SavedPlaylist) onSaved;
-  const _SavePlaylistDialog(
-      {required this.clips, required this.onSaved});
+  final SavedPlaylist? existingPlaylist;
+  final Future<void> Function(SavedPlaylist) onSaved;
+  const _SavePlaylistDialog({
+    required this.clips,
+    required this.onSaved,
+    this.existingPlaylist,
+  });
 
   @override
   State<_SavePlaylistDialog> createState() => _SavePlaylistDialogState();
 }
 
 class _SavePlaylistDialogState extends State<_SavePlaylistDialog> {
-  final _nameCtrl = TextEditingController();
-  bool _saved     = false;
-  bool _loading   = false;
+  late TextEditingController _nameCtrl;
+  bool _saved    = false;
+  bool _loading  = false;
   SavedPlaylist? _playlist;
 
   @override
-  void dispose() { _nameCtrl.dispose(); super.dispose(); }
-void _save() async {
-  if (_nameCtrl.text.trim().isEmpty) return;
-  setState(() => _loading = true);
-  final id = 'PL-${DateTime.now().millisecondsSinceEpoch}';
-  
-  final currentUri = Uri.base;
-  final baseUrl = '${currentUri.scheme}://${currentUri.host}${currentUri.hasPort ? ':${currentUri.port}' : ''}';
-  
-  // Quitamos el #/dashboard para que sea una ruta limpia
-  final viewLink = '$baseUrl/view/$id'; 
+  void initState() {
+    super.initState();
+    // Si es edición, pre-rellena el nombre
+    _nameCtrl = TextEditingController(
+      text: widget.existingPlaylist?.name ?? '',
+    );
+  }
 
-  final pl = SavedPlaylist(
-    id: id,
-    name: _nameCtrl.text.trim(),
-    clips: List.from(widget.clips),
-    createdAt: DateTime.now(),
-    viewLink: viewLink,
-  );
-  
-  await widget.onSaved(pl);
-  setState(() {
-    _playlist = pl;
-    _saved = true;
-    _loading = false;
-  });
-}
+  @override
+  void dispose() { _nameCtrl.dispose(); super.dispose(); }
+
+  bool get _isEditing => widget.existingPlaylist != null;
+
+  void _save() async {
+    if (_nameCtrl.text.trim().isEmpty) return;
+    setState(() => _loading = true);
+
+    final currentUri = Uri.base;
+    final baseUrl = '${currentUri.scheme}://${currentUri.host}${currentUri.hasPort ? ':${currentUri.port}' : ''}';
+
+    // Si es edición conserva el mismo ID y viewLink
+    final id       = widget.existingPlaylist?.id ?? 'PL-${DateTime.now().millisecondsSinceEpoch}';
+    final viewLink = widget.existingPlaylist?.viewLink ?? '$baseUrl/view/$id';
+
+    final pl = SavedPlaylist(
+      id:        id,
+      name:      _nameCtrl.text.trim(),
+      clips:     List.from(widget.clips),
+      createdAt: widget.existingPlaylist?.createdAt ?? DateTime.now(),
+      viewLink:  viewLink,
+    );
+
+    await widget.onSaved(pl);
+    setState(() {
+      _playlist = pl;
+      _saved    = true;
+      _loading  = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -3902,12 +4179,30 @@ void _save() async {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(children: [
-          Icon(Icons.save_rounded, size: 18, color: _EC.primary),
-          SizedBox(width: 10),
-          Text('Guardar playlist', style: TextStyle(
-            color: _EC.textHi, fontWeight: FontWeight.w700, fontSize: 15)),
+        Row(children: [
+          Icon(_isEditing ? Icons.edit_rounded : Icons.save_rounded,
+            size: 18, color: _EC.primary),
+          const SizedBox(width: 10),
+          Text(_isEditing ? 'Actualizar playlist' : 'Guardar playlist',
+            style: const TextStyle(color: _EC.textHi,
+              fontWeight: FontWeight.w700, fontSize: 15)),
         ]),
+        if (_isEditing) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _EC.amber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: _EC.amber.withOpacity(0.3))),
+            child: Row(children: [
+              const Icon(Icons.info_outline_rounded, size: 13, color: _EC.amber),
+              const SizedBox(width: 6),
+              const Expanded(child: Text('Se actualizará la playlist existente',
+                style: TextStyle(color: _EC.amber, fontSize: 11))),
+            ]),
+          ),
+        ],
         const SizedBox(height: 16),
         const Text('Nombre de la playlist',
           style: TextStyle(color: _EC.textMid, fontSize: 10)),
@@ -3963,9 +4258,9 @@ void _save() async {
             icon: _loading
               ? const SizedBox(width: 14, height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.save_rounded, size: 14),
-            label: const Text('Guardar',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+              : Icon(_isEditing ? Icons.update_rounded : Icons.save_rounded, size: 14),
+            label: Text(_isEditing ? 'Actualizar' : 'Guardar',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(backgroundColor: _EC.primary,
               foregroundColor: Colors.white, elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
@@ -3984,7 +4279,10 @@ void _save() async {
         Row(children: [
           const Icon(Icons.check_circle_rounded, size: 18, color: _EC.green),
           const SizedBox(width: 10),
-          Expanded(child: Text('"${pl.name}" guardada',
+          Expanded(child: Text(
+            _isEditing
+              ? '"${pl.name}" actualizada'
+              : '"${pl.name}" guardada',
             style: const TextStyle(color: _EC.textHi,
               fontWeight: FontWeight.w700, fontSize: 15))),
         ]),
@@ -4012,8 +4310,7 @@ void _save() async {
                   content: const Text('Link copiado'),
                   backgroundColor: _EC.card,
                   behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   duration: const Duration(seconds: 2),
                 ));
               },
@@ -4022,14 +4319,11 @@ void _save() async {
           ]),
         ),
         const SizedBox(height: 20),
-        const Text('Acciones', style: TextStyle(color: _EC.textMid,
-          fontSize: 10, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
         _ActionBtn(icon: Icons.edit_rounded, label: 'Seguir editando',
           color: _EC.primary, onTap: () => Navigator.pop(context)),
         const SizedBox(height: 8),
         _ActionBtn(
-          icon: Icons.public_rounded, label: 'Publicar con link',
+          icon: Icons.public_rounded, label: 'Copiar link público',
           color: _EC.amber,
           onTap: () {
             Clipboard.setData(ClipboardData(text: pl.viewLink));
@@ -4037,8 +4331,7 @@ void _save() async {
               content: const Text('Link público copiado'),
               backgroundColor: _EC.card,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ));
           },
         ),
@@ -4274,14 +4567,16 @@ class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
       ),
     );
   }
-
-  String _fmtDate(DateTime d) {
-    return '${d.day.toString().padLeft(2, '0')}/'
-        '${d.month.toString().padLeft(2, '0')}/'
-        '${d.year}  '
-        '${d.hour.toString().padLeft(2, '0')}:'
-        '${d.minute.toString().padLeft(2, '0')}';
-  }
+String _fmtDateAmPm(DateTime d) {
+  final hour   = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
+  final minute = d.minute.toString().padLeft(2, '0');
+  final ampm   = d.hour >= 12 ? 'PM' : 'AM';
+  final day    = d.day.toString().padLeft(2, '0');
+  final month  = d.month.toString().padLeft(2, '0');
+  return '${day}/${month}/${d.year}  $hour:$minute $ampm';
+}
+String _fmtDate(DateTime d) => _fmtDateAmPm(d);
+  
 
   void _visualize(BuildContext context, SavedPlaylist pl) {
     Navigator.pop(context);
@@ -4291,22 +4586,24 @@ class _PlaylistsListDialogState extends ConsumerState<_PlaylistsListDialog> {
     );
   }
 
-  void _loadInEditor(BuildContext context, SavedPlaylist pl) {
-    final notifier = ref.read(editorClipsProvider.notifier);
-    for (final c in notifier.state.toList()) {
-      notifier.remove(c.id);
-    }
-    for (final c in pl.clips) {
-      notifier.add(c);
-    }
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('"${pl.name}" cargada en el editor'),
-      backgroundColor: _EC.card,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ));
+ void _loadInEditor(BuildContext context, SavedPlaylist pl) {
+  final notifier = ref.read(editorClipsProvider.notifier);
+  // Limpia primero
+  for (final c in notifier.state.toList()) {
+    notifier.remove(c.id);
   }
+  // Carga los clips con sus IDs originales (no genera nuevos IDs)
+  for (final c in pl.clips) {
+    notifier.add(c);
+  }
+  Navigator.pop(context);
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text('"${pl.name}" cargada en el editor'),
+    backgroundColor: _EC.card,
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ));
+}
 }
 
 class _IconAction extends StatefulWidget {
@@ -4569,7 +4866,7 @@ Widget build(BuildContext context) {
 }
 Widget _renderClip(EditorClip clip, double sx, double sy) {
   switch (clip.type) {
-   case EditorLayerType.image:
+    case EditorLayerType.image:
       if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
         final viewId = 'img-${clip.id}';
         try { ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
@@ -4586,10 +4883,8 @@ Widget _renderClip(EditorClip clip, double sx, double sy) {
           Positioned.fill(child: Container(color: Colors.transparent)),
         ]);
       }
-      return Container(
-        color: _EC.accent.withOpacity(0.1),
-        child: Center(child: Icon(Icons.image_rounded,
-          color: _EC.accent, size: 22 * sx)));
+      return Container(color: _EC.accent.withOpacity(0.1),
+        child: Center(child: Icon(Icons.image_rounded, color: _EC.accent, size: 22 * sx)));
 
     case EditorLayerType.video:
       if (clip.url != null && clip.url!.isNotEmpty && !clip.url!.startsWith('file://')) {
@@ -4613,28 +4908,96 @@ video{width:100%;height:100%;object-fit:cover;pointer-events:none;}</style>
       }
       return Container(
         decoration: BoxDecoration(gradient: LinearGradient(
-          colors: [const Color(0xFFA855F7).withOpacity(0.3),
-                   const Color(0xFFA855F7).withOpacity(0.1)],
+          colors: [const Color(0xFFA855F7).withOpacity(0.3), const Color(0xFFA855F7).withOpacity(0.1)],
           begin: Alignment.topLeft, end: Alignment.bottomRight)),
-        child: Center(child: Icon(Icons.play_arrow_rounded,
-          color: Colors.white, size: 22 * sx)));
+        child: Center(child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22 * sx)));
 
     case EditorLayerType.text:
       final bgColor = clip.backgroundColor != null
         ? Color(int.parse(clip.backgroundColor!.replaceFirst('#', '0xFF')))
         : Colors.transparent;
-      return Container(
-        color: bgColor,
-        alignment: Alignment.center,
-        child: Text(
+
+      final isTypewriter = clip.label.toLowerCase().contains('máquina') || clip.label.toLowerCase().contains('typewriter');
+      final isMarquee    = clip.label.toLowerCase().contains('marquee') || clip.label.toLowerCase().contains('ticker');
+      final isFadeIn     = clip.label.toLowerCase().contains('fade in');
+      final isFadeOut    = clip.label.toLowerCase().contains('fade out');
+      final isSlideL     = clip.label.contains('←');
+      final isSlideR     = clip.label.contains('→');
+      final isSlideU     = clip.label.contains('↑');
+      final isSlideD     = clip.label.contains('↓');
+      final isZoomIn     = clip.label.contains('Zoom In');
+      final isZoomOut    = clip.label.contains('Zoom Out');
+      final isBounce     = clip.label.contains('Bounce');
+      final isPulse      = clip.label.contains('Pulse');
+      final isAnim       = isFadeIn || isFadeOut || isSlideL || isSlideR || isSlideU ||
+                           isSlideD || isZoomIn || isZoomOut || isBounce || isPulse;
+
+      Widget rawText() {
+        if (isTypewriter) {
+          return _TypewriterText(
+            text: clip.text ?? '',
+            color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            bold: clip.bold ?? false,
+          );
+        }
+        if (isMarquee) {
+          return _MarqueeText(
+            text: clip.text ?? '',
+            color: clip.textColor ?? Colors.white,
+            fontSize: (clip.fontSize ?? 48) * sx,
+            bold: clip.bold ?? false,
+          );
+        }
+        return Text(
           clip.text ?? '',
           textAlign: TextAlign.center,
+          overflow: TextOverflow.visible,
           style: TextStyle(
             color: clip.textColor ?? Colors.white,
             fontSize: (clip.fontSize ?? 48) * sx,
             fontWeight: (clip.bold ?? false) ? FontWeight.w900 : FontWeight.w400,
             height: 1.2,
           ),
+        );
+      }
+
+      final base = Container(color: bgColor, alignment: Alignment.center, child: rawText());
+
+      if (!isAnim) return base;
+
+      // Usa _playhead que es el estado local del visualizador
+      final elapsed = (_playhead - clip.startSec).clamp(0.0, clip.durationSec);
+      final prog    = (elapsed / (clip.durationSec * 0.4)).clamp(0.0, 1.0);
+      final ease    = 1.0 - math.pow(1.0 - prog, 3).toDouble();
+
+      double opacity = 1.0;
+      double offX = 0, offY = 0, scale = 1.0;
+
+      if (isFadeIn)  opacity = (elapsed / (clip.durationSec * 0.4)).clamp(0.0, 1.0);
+      if (isFadeOut) opacity = (1.0 - elapsed / clip.durationSec).clamp(0.0, 1.0);
+      if (isSlideL)  offX    = (1.0 - ease) * -200;
+      if (isSlideR)  offX    = (1.0 - ease) *  200;
+      if (isSlideU)  offY    = (1.0 - ease) *  100;
+      if (isSlideD)  offY    = (1.0 - ease) * -100;
+      if (isZoomIn)  scale   = 0.2 + ease * 0.8;
+      if (isZoomOut) scale   = 2.0 - ease;
+      if (isBounce) {
+        double t = prog;
+        double b;
+        if (t < 1/2.75)       { b = 7.5625*t*t; }
+        else if (t < 2/2.75)  { t -= 1.5/2.75;  b = 7.5625*t*t + 0.75; }
+        else if (t < 2.5/2.75){ t -= 2.25/2.75; b = 7.5625*t*t + 0.9375; }
+        else                   { t -= 2.625/2.75; b = 7.5625*t*t + 0.984375; }
+        offY = -(1.0 - b) * 50;
+      }
+      if (isPulse) scale = 0.95 + math.sin(elapsed * math.pi * 2).abs() * 0.1;
+
+      return Opacity(
+        opacity: opacity,
+        child: Transform.translate(
+          offset: Offset(offX, offY),
+          child: Transform.scale(scale: scale, child: base),
         ),
       );
 
@@ -5270,9 +5633,15 @@ video{width:100%;height:100%;object-fit:cover;}</style></head><body>
                                         } catch (_) {}
                                         return HtmlElementView(viewType: viewId);
                                       })
-                                    : Container(
-                                        color: _EC.card,
-                                        child: Center(child: Icon(_icon, color: _color, size: 32))),
+                                    :  widget.type == EditorLayerType.audio
+  ? _AudioLibraryCard(
+      url: _blobUrl ?? _urlCtrl.text,
+      color: _color,
+      name: _labelCtrl.text.trim().isEmpty ? 'Audio' : _labelCtrl.text.trim(),
+    )
+  : Container(
+      color: _EC.card,
+      child: Center(child: Icon(_icon, color: _color, size: 32))),
                               ),
                             ),
                           ],
@@ -5388,62 +5757,78 @@ video{width:100%;height:100%;object-fit:cover;}</style></head><body>
                             final type = item['type'] ?? '';
                             final isSelected = _urlCtrl.text == url;
 
-                            return GestureDetector(
-                              onTap: () => _useFromLibrary(item),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 120),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                    ? _color.withOpacity(0.15) : _EC.card,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected
-                                      ? _color : _EC.border,
-                                    width: isSelected ? 2 : 1)),
-                                child: Column(children: [
-                                  Expanded(child: ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(7)),
-                                    child: type == 'image' && url.isNotEmpty &&
-                                        !url.startsWith('blob:')
-                                      ? Image.network(url,
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          errorBuilder: (_, __, ___) =>
-                                            Container(color: _EC.surface,
-                                              child: Icon(_icon,
-                                                color: _color, size: 24)))
-                                      : Container(color: _EC.surface,
-                                          child: Center(child: Icon(_icon,
-                                            color: _color, size: 24))),
-                                  )),
-                                  Padding(
-                                    padding: const EdgeInsets.all(6),
-                                    child: Text(name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: isSelected
-                                          ? _color : _EC.textMid,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w600)),
-                                  ),
-                                  if (isSelected)
-                                    Container(
-                                      margin: const EdgeInsets.only(bottom: 4),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: _color.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4)),
-                                      child: Text('Seleccionado',
-                                        style: TextStyle(
-                                          color: _color, fontSize: 8,
-                                          fontWeight: FontWeight.w700)),
-                                    ),
-                                ]),
-                              ),
-                            );
+                      return GestureDetector(
+  onTap: () => _useFromLibrary(item),
+  child: AnimatedContainer(
+    duration: const Duration(milliseconds: 120),
+    decoration: BoxDecoration(
+      color: isSelected ? _color.withOpacity(0.15) : _EC.card,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: isSelected ? _color : _EC.border,
+        width: isSelected ? 2 : 1)),
+    child: Column(children: [
+      Expanded(child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+        child: type == 'image' && url.isNotEmpty && !url.startsWith('blob:')
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (_, __, ___) => Container(
+                color: _EC.surface,
+                child: Icon(_icon, color: _color, size: 24)))
+          : type == 'video' && url.isNotEmpty
+            ? Builder(builder: (_) {
+                final viewId = 'lib-vid-${url.hashCode}';
+                try {
+                  ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
+                    return html.IFrameElement()
+                      ..style.cssText = 'border:none;width:100%;height:100%;pointer-events:none;'
+                      ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+                      ..srcdoc = '''<!DOCTYPE html><html><head>
+<style>*{margin:0;padding:0;}body{background:#000;width:100vw;height:100vh;overflow:hidden;}
+video{width:100%;height:100%;object-fit:cover;}</style></head><body>
+<video src="$url" muted playsinline preload="metadata"
+  onloadedmetadata="this.currentTime=2"></video></body></html>''';
+                  });
+                } catch (_) {}
+                return Stack(children: [
+                  Positioned.fill(child: HtmlElementView(viewType: viewId)),
+                  Positioned.fill(child: Container(color: Colors.transparent)),
+                ]);
+              })
+            : type == 'audio' && url.isNotEmpty
+              ? _AudioLibraryCard(url: url, color: _color, name: name)
+              : Container(
+                  color: _EC.surface,
+                  child: Center(child: Icon(_icon, color: _color, size: 24))),
+      )),
+      Padding(
+        padding: const EdgeInsets.all(6),
+        child: Text(name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: isSelected ? _color : _EC.textMid,
+            fontSize: 9,
+            fontWeight: FontWeight.w600)),
+      ),
+      if (isSelected)
+        Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _color.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(4)),
+          child: Text('Seleccionado',
+            style: TextStyle(
+              color: _color, fontSize: 8,
+              fontWeight: FontWeight.w700)),
+        ),
+    ]),
+  ),
+);
                           },
                         );
                       },
@@ -5464,36 +5849,9 @@ video{width:100%;height:100%;object-fit:cover;}</style></head><body>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                     elevation: 0),
-              onPressed: () {
+           onPressed: () {
   final url = _blobUrl ?? _urlCtrl.text.trim();
-  
-  // Busca el primer track libre para este tipo
-  final allClips = ref.read(editorClipsProvider);
-  final tracks = ref.read(tracksProvider);
-  
-  int preferredIdx;
-  switch (widget.type) {
-    case EditorLayerType.image: preferredIdx = 2; break;
-    case EditorLayerType.video: preferredIdx = 0; break;
-    case EditorLayerType.audio: preferredIdx = 4; break;
-    default: preferredIdx = 2;
-  }
-  
-  // Encuentra un track que no tenga clips en el tiempo _start.._start+_duration
-  int trackIdx = preferredIdx;
-  for (int i = 0; i < tracks.length; i++) {
-    final candidateIdx = (preferredIdx + i) % tracks.length;
-    final occupied = allClips.any((c) =>
-      c.trackIndex == candidateIdx &&
-      c.startSec < (_start + _duration) &&
-      (c.startSec + c.durationSec) > _start
-    );
-    if (!occupied) {
-      trackIdx = candidateIdx;
-      break;
-    }
-  }
-  
+  final trackIdx = _findOrCreateFreeTrack(ref, _start, _duration);
   widget.onAdd(EditorClip(
     id: _uuid.v4(),
     type: widget.type,
@@ -5600,14 +5958,14 @@ extension ClipAnimationExt on ClipAnimation {
   }
 }
 
-class _AnimationLibraryDialog extends StatefulWidget {
+class _AnimationLibraryDialog extends ConsumerStatefulWidget {
   final void Function(EditorClip) onAdd;
   const _AnimationLibraryDialog({required this.onAdd});
   @override
-  State<_AnimationLibraryDialog> createState() => _AnimationLibraryDialogState();
+  ConsumerState<_AnimationLibraryDialog> createState() => _AnimationLibraryDialogState();
 }
 
-class _AnimationLibraryDialogState extends State<_AnimationLibraryDialog> {
+class _AnimationLibraryDialogState extends ConsumerState<_AnimationLibraryDialog> {
   ClipAnimation? _selected;
   String _filterCat = 'Todos';
   final _textCtrl = TextEditingController(text: '¡Tu texto aquí!');
@@ -5816,34 +6174,35 @@ class _AnimationLibraryDialogState extends State<_AnimationLibraryDialog> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-          onPressed: _selected == null
-    ? null
-    : () {
-        final anim = _selected!;
-        widget.onAdd(EditorClip(
-          id: _uuid.v4(),
-          type: EditorLayerType.text,
-          label: '${anim.label}: ${_textCtrl.text}',
-          text: _textCtrl.text,
-          startSec: _start,
-          durationSec: _duration,
-          trackIndex: 3,
-          textColor: Colors.white,
-          fontSize: 48,
-          bold: false,
-          x: 640, y: 360,
-          width: 1000, height: 120,
-          backgroundColor: anim == ClipAnimation.marquee ? '#000000' : null,
-        ));
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Animación "${anim.label}" agregada al timeline'),
-          backgroundColor: anim.color.withOpacity(0.9),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          duration: const Duration(seconds: 2),
-        ));
-      },
+         onPressed: _selected == null
+  ? null
+  : () {
+      final anim = _selected!;
+      final trackIdx = _findOrCreateFreeTrack(ref, _start, _duration);
+      widget.onAdd(EditorClip(
+        id: _uuid.v4(),
+        type: EditorLayerType.text,
+        label: '${anim.label}: ${_textCtrl.text}',
+        text: _textCtrl.text,
+        startSec: _start,
+        durationSec: _duration,
+        trackIndex: trackIdx,
+        textColor: Colors.white,
+        fontSize: 48,
+        bold: false,
+        x: 640, y: 360,
+        width: 1000, height: 120,
+        backgroundColor: anim == ClipAnimation.marquee ? '#000000' : null,
+      ));
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Animación "${anim.label}" agregada al timeline'),
+        backgroundColor: anim.color.withOpacity(0.9),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 2),
+      ));
+    },
                       icon: const Icon(Icons.add_rounded, size: 14),
                       label: const Text('Agregar al timeline',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
@@ -6803,16 +7162,15 @@ class _TVChannel {
     required this.description,
   });
 }
-
-class _TVColombiaDialog extends StatefulWidget {
+class _TVColombiaDialog extends ConsumerStatefulWidget {
   final void Function(EditorClip) onAdd;
   const _TVColombiaDialog({required this.onAdd});
 
   @override
-  State<_TVColombiaDialog> createState() => _TVColombiaDialogState();
+  ConsumerState<_TVColombiaDialog> createState() => _TVColombiaDialogState();
 }
 
-class _TVColombiaDialogState extends State<_TVColombiaDialog> {
+class _TVColombiaDialogState extends ConsumerState<_TVColombiaDialog> {
 
   double _previewScale = 1.0; // nuevo campo de estado
 static const _channels = [
@@ -7125,33 +7483,31 @@ String _getViewId(_TVChannel ch) {
                   const SizedBox(width: 10),
                   Expanded(child: ElevatedButton.icon(
                     // ← AQUÍ ESTÁ EL FIX PRINCIPAL
-                   onPressed: _selected == null
-    ? null
-    : () {
-        final ch = _selected!;
-        widget.onAdd(EditorClip(
-          id:          _uuid.v4(),
-          type:        EditorLayerType.video,
-          label:       ch.name,
-          url:         ch.embedUrl, // ← URL HLS directa
-          startSec:    _start,
-          durationSec: _duration,
-          trackIndex:  0,
-          x: 640, y: 360,
-          width: 1280, height: 720,
-        ));
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('📺 ${ch.name} agregado al timeline'),
-            backgroundColor: ch.color.withOpacity(0.9),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      },
+               onPressed: _selected == null
+  ? null
+  : () {
+      final ch = _selected!;
+      final trackIdx = _findOrCreateFreeTrack(ref, _start, _duration);
+      widget.onAdd(EditorClip(
+        id: _uuid.v4(),
+        type: EditorLayerType.video,
+        label: ch.name,
+        url: ch.embedUrl,
+        startSec: _start,
+        durationSec: _duration,
+        trackIndex: trackIdx,
+        x: 640, y: 360,
+        width: 1280, height: 720,
+      ));
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('📺 ${ch.name} agregado al timeline'),
+        backgroundColor: ch.color.withOpacity(0.9),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 2),
+      ));
+    },
                     icon: const Icon(Icons.add_rounded, size: 14),
                     label: const Text('Agregar al timeline',
                         style: TextStyle(
@@ -7391,6 +7747,74 @@ class _ThumbnailViewState extends State<_ThumbnailView> {
           ),
         ),
         HtmlElementView(viewType: widget.viewId),
+      ],
+    );
+  }
+}
+
+class _AudioLibraryCard extends StatefulWidget {
+  final String url;
+  final Color color;
+  final String name;
+  const _AudioLibraryCard({required this.url, required this.color, required this.name});
+  @override
+  State<_AudioLibraryCard> createState() => _AudioLibraryCardState();
+}
+
+class _AudioLibraryCardState extends State<_AudioLibraryCard> {
+  bool _playing = false;
+  late String _viewId;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'audio-lib-${widget.url.hashCode}';
+    try {
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (int id) {
+        return html.IFrameElement()
+          ..style.cssText = 'border:none;width:100%;height:100%;'
+          ..setAttribute('sandbox', 'allow-scripts allow-same-origin')
+          ..srcdoc = '''<!DOCTYPE html><html><head>
+<style>
+  *{margin:0;padding:0;}
+  body{background:#0a0f1e;width:100vw;height:100vh;display:flex;
+       align-items:center;justify-content:center;overflow:hidden;}
+  audio{width:90%;outline:none;}
+</style></head><body>
+<audio id="a" src="${widget.url}" preload="metadata" controls></audio>
+</body></html>''';
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.color.withOpacity(0.25),
+                const Color(0xFF0A0F1E),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.music_note_rounded, color: widget.color, size: 28),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: HtmlElementView(viewType: _viewId),
+            ),
+          ],
+        ),
       ],
     );
   }

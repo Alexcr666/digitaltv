@@ -686,25 +686,26 @@ class DashboardScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ──────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Panel de control',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    DateFormat('EEEE, MMMM d').format(DateTime.now()),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ],
-          ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.05, end: 0),
-
+        Row(
+  children: [
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Panel de control',
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          DateFormat(
+            'EEEE d \'de\' MMMM',
+            'es_CO',
+          ).format(DateTime.now()),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    ),
+  ],),
           const SizedBox(height: 24),
 
           // ── Stat Cards ───────────────────────────────────────────────────────
@@ -1096,7 +1097,7 @@ class _DevicesQuickList extends ConsumerWidget {
                 decoration: BoxDecoration(
                   border: Border(bottom: BorderSide(color: divColor)),
                 ),
-                children: ['Device', 'Status', 'Group', 'Last Seen']
+                children: ['Dispositivo', 'Estado', 'Grupo', 'Ultima conexión']
                     .map(
                       (h) => Padding(
                         padding: const EdgeInsets.symmetric(

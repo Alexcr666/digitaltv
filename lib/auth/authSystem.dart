@@ -2209,7 +2209,7 @@ GestureDetector(
   ),
 ),
 SizedBox(height: 20),
-            _ToggleLink(
+            /*_ToggleLink(
               prompt: '¿No tienes cuenta?',
               action: 'Crear cuenta',
               onTap:  () { 
@@ -2220,7 +2220,7 @@ SizedBox(height: 20),
                // context.go(AppRoutes.register);
                 
                 },
-            ),
+            ),*/
           ],
         ),
       ),
