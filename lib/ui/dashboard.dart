@@ -17,6 +17,8 @@
 // ignore_for_file: library_private_types_in_public_api
 import 'package:digitaltv/auth/auth.dart' as current2;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:digitaltv/chatbot/chatbot.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -691,10 +693,22 @@ class DashboardScreen extends ConsumerWidget {
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+   GestureDetector(onTap: (){
+
+      Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) =>WhatsappChatbotPage(
+  userId: 'G1R2jhY2dQa1TNg1Lg2kQJB6BDp1'
+  
+//  FirebaseAuth.instance.currentUser?.uid ?? '',
+),
+  ),
+);
+   },child:     Text(
           'Panel de control',
           style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        )),
         const SizedBox(height: 2),
         Text(
           DateFormat(

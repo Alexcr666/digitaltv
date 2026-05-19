@@ -19,6 +19,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/auth/auth.dart' as current2;
+import 'package:digitaltv/chatbot/chatbot.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:digitaltv/route/route.dart';
@@ -31,6 +32,7 @@ import 'package:digitaltv/ui/dashboard.dart';
 import 'package:digitaltv/auth/auth.dart';
 import 'package:digitaltv/notification/notification.dart';
 import 'package:digitaltv/ui/panel/programing.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -2082,10 +2084,13 @@ Future<void> _submit() async {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _AuthHeader(
+          GestureDetector(onTap: (){
+
+          
+          },child:  _AuthHeader(
               title:    'Bienvenido de vuelta',
               subtitle: 'Accede a tu panel de administración',
-            ),
+            )),
             const SizedBox(height: 32),
             if (_error != null) _ErrorBanner(message: _error!),
 
