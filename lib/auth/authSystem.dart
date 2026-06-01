@@ -20,6 +20,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/auth/auth.dart' as current2;
 import 'package:digitaltv/chatbot/chatbot.dart';
+import 'package:digitaltv/logo.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:digitaltv/route/route.dart';
@@ -73,9 +74,9 @@ abstract class _T {
   static const divider   = Color(0xFF1A2540);
 
   // Brand
-  static const primary    = Color(0xFF6366F1);
-  static const primaryLo  = Color(0x1A6366F1);
-  static const primaryMid = Color(0x336366F1);
+  static const primary    = Color(0xFF45c4c4);
+  static const primaryLo  = Color(0x1A45c4c4);
+  static const primaryMid = Color(0x3345c4c4);
   static const accent     = Color(0xFF38BDF8);
 
   // Text
@@ -238,6 +239,7 @@ redirect: (context, state) {
 if (isLoading) return null;
 if (path.startsWith('/view/')) return null;
 if (path.startsWith('/portal')) return null;
+if (path.startsWith('/wa/')) return null;
 
   const publicRoutes = [
     AppRoutes.login,
@@ -344,6 +346,49 @@ ShellRoute(
     GoRoute(path: AppRoutes.roles,          builder: (_, __) => const RolesManagementPage()),
     GoRoute(path: AppRoutes.notifications2, builder: (_, __) => const NotificationsPage22()),
     GoRoute(path: AppRoutes.profile,        builder: (_, __) => const ProfilePage()),
+    // ── WA Chatbot routes ──
+    GoRoute(
+      path: '/wa/dashboard',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'dashboard',
+      ),
+    ),
+    GoRoute(
+      path: '/wa/bots',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'bots',
+      ),
+    ),
+    GoRoute(
+      path: '/wa/chat',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'chat',
+      ),
+    ),
+    GoRoute(
+      path: '/wa/connection',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'connection',
+      ),
+    ),
+    GoRoute(
+      path: '/wa/analytics',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'analyticsGlobal',
+      ),
+    ),
+    GoRoute(
+      path: '/wa/kanban',
+      builder: (_, __) => WhatsappChatbotPage(
+        userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        initialView: 'kanban',
+      ),
+    ),
   ],
 ),
 
@@ -432,10 +477,25 @@ class _DashboardShell extends ConsumerWidget {
         children: [
           if (!isMobile) _Sidebar(user: userAsync.valueOrNull),
           Expanded(
-            child: Column(
+            child: Stack(
               children: [
-                _TopBar(user: userAsync.valueOrNull, isMobile: isMobile),
-                Expanded(child: child),
+                // Contenido ocupa todo el espacio
+                Positioned.fill(
+                  child: child,
+                ),
+                // TopBar flotante encima
+                Positioned(
+                  top: 12,
+                  right: 16,
+                  child: _TopBar(user: userAsync.valueOrNull, isMobile: isMobile),
+                ),
+                // Botón hamburguesa flotante (mobile)
+                if (isMobile)
+                  Positioned(
+                    top: 12,
+                    left: 16,
+                    child: _FloatingMenuButton(),
+                  ),
               ],
             ),
           ),
@@ -450,105 +510,115 @@ class _DashboardShell extends ConsumerWidget {
         child: _Sidebar(user: user),
       );
 }
-
 class _TopBar extends ConsumerWidget {
   final AppUser? user;
   final bool isMobile;
   const _TopBar({this.user, required this.isMobile});
 
   @override
-Widget build(BuildContext context, WidgetRef ref) {
-  final userId     = user?.uid ?? '';
-  final unreadAsync = userId.isNotEmpty
-      ? ref.watch(unreadCountProvider(userId))
-      : const AsyncData(0);
-  final unread = unreadAsync.valueOrNull ?? 0;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userId      = user?.uid ?? '';
+    final unreadAsync = userId.isNotEmpty
+        ? ref.watch(unreadCountProvider(userId))
+        : const AsyncData(0);
+    final unread = unreadAsync.valueOrNull ?? 0;
 
-  return Container(
-    height: 60,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    decoration: const BoxDecoration(
-      color:  _T.surface,
-      border: Border(bottom: BorderSide(color: _T.divider)),
-    ),
-    child: Row(
-      children: [
-        if (isMobile) ...[
-          IconButton(
-            icon: const Icon(Icons.menu_rounded, color: _T.textMid),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _T.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: _T.border.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
-          const SizedBox(width: 8),
+          BoxShadow(
+            color: _T.primary.withOpacity(0.08),
+            blurRadius: 12,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
         ],
-        Row(children: [
-          Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(
-              color: _T.primary,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.grid_view_rounded,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 8),
-          const Text('SignageOS',
-            style: TextStyle(
-              color: _T.textHi, fontSize: 15,
-              fontWeight: FontWeight.w700)),
-        ]),
-        const Spacer(),
-
-        // ── Notifications icon con badge ──
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: _T.textMid, size: 20),
-              tooltip: 'Notificaciones',
-              onPressed: () => context.go(AppRoutes.notifications),
-            ),
-            if (unread > 0)
-              Positioned(
-                top: 6, right: 6,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 16, height: 16,
-                    decoration: const BoxDecoration(
-                      color:  _T.error,
-                      shape:  BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        unread > 9 ? '9+' : '$unread',
-                        style: const TextStyle(
-                          color: Colors.white, fontSize: 9,
-                          fontWeight: FontWeight.w700),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Notificaciones con badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => context.go(AppRoutes.notifications),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(Icons.notifications_outlined,
+                        color: _T.textMid, size: 20),
+                  ),
+                ),
+              ),
+              if (unread > 0)
+                Positioned(
+                  top: 2, right: 2,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 16, height: 16,
+                      decoration: const BoxDecoration(
+                        color: _T.error,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          unread > 9 ? '9+' : '$unread',
+                          style: const TextStyle(
+                            color: Colors.white, fontSize: 9,
+                            fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-
-        const SizedBox(width: 4),
-
-        // ── Avatar → perfil ──
-        GestureDetector(
-          onTap: () => context.go(AppRoutes.profile),
-          child: _Avatar(user: user, size: 34),
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+          const SizedBox(width: 6),
+          // Avatar → perfil
+          GestureDetector(
+            onTap: () => context.go(AppRoutes.profile),
+            child: _Avatar(user: user, size: 34),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Sidebar extends ConsumerWidget {
   final AppUser? user;
   const _Sidebar({this.user});
+List<_NavItemData> _buildConfigItems(AppUser? user) {
+  if (user == null) return [];
+  final isCompanyAdmin = user.isCompanyAdmin;
+  final canViewUsers   = user.hasPermission(AppPermission.usersView);
+  final canViewRoles   = user.hasPermission(AppPermission.rolesView);
+  final canSendNotifs  = user.hasPermission(AppPermission.notificationsSend);
 
+  return [
+    if (canViewUsers || isCompanyAdmin)
+      _NavItemData(route: AppRoutes.users,          icon: Icons.people_rounded,            label: 'Usuarios'),
+    if (canViewRoles || isCompanyAdmin)
+      _NavItemData(route: AppRoutes.roles,          icon: Icons.shield_rounded,             label: 'Roles'),
+    if (canSendNotifs || isCompanyAdmin)
+      _NavItemData(route: AppRoutes.notifications2, icon: Icons.notifications_outlined,     label: 'Notificaciones'),
+    _NavItemData(route: AppRoutes.profile,          icon: Icons.person_outline_rounded,     label: 'Mi Perfil'),
+  ];
+}
  @override
 Widget build(BuildContext context, WidgetRef ref) {
   final location      = GoRouterState.of(context).matchedLocation;
@@ -565,7 +635,10 @@ Widget build(BuildContext context, WidgetRef ref) {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+          SizedBox(height: 15),
+           const AppLogo(height: 170, showBadge: true),
         // Badge de empresa (solo para no-superAdmin)
+      SizedBox(height: 15),
         if (company != null)
           Container(
             width: double.infinity,
@@ -610,7 +683,7 @@ Widget build(BuildContext context, WidgetRef ref) {
           ),
 
         const SizedBox(height: 8),
-        Expanded(
+      /*  Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: items.length,
@@ -630,7 +703,50 @@ Widget build(BuildContext context, WidgetRef ref) {
               );
             },
           ),
-        ),
+        ),*/
+
+    Expanded(
+  child: ListView(
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    children: [
+      ...items.map((item) {
+        if (item == null) {
+          return const Divider(color: _T.divider, height: 24, indent: 4);
+        }
+        final selected = location == item.route;
+        return _NavItem(
+          item: item,
+          selected: selected,
+          onTap: () {
+            Scaffold.of(context).closeDrawer();
+            context.go(item.route);
+          },
+        );
+      }),
+      const Divider(color: _T.divider, height: 24, indent: 4),
+      // Acordeón CONFIGURACIÓN
+      _NavGroupItem(
+        label: 'Configuración',
+        icon: Icons.settings_outlined,
+        isAnyChildSelected: [
+          AppRoutes.users,
+          AppRoutes.roles,
+          AppRoutes.notifications2,
+          AppRoutes.profile,
+        ].contains(location),
+        children: _buildConfigItems(user),
+      ),
+      const Divider(color: _T.divider, height: 24, indent: 4),
+      // Acordeón CHATBOT WHATSAPP (igual que antes)
+      _NavGroupItem(
+        label: 'Chatbot WhatsApp',
+        icon: Icons.chat,
+        children: _waItems,
+        isAnyChildSelected: _waItems.any((i) => i.route == location),
+      ),
+    ],
+  ),
+),
         const Divider(color: _T.divider, height: 1),
         // User info + logout
         Padding(
@@ -810,10 +926,6 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
   if (user == null) return [];
   final isSuperAdmin   = user.isSuperAdmin;
   final isCompanyAdmin = user.isCompanyAdmin;
-  final canViewUsers   = user.hasPermission(AppPermission.usersView);
-  final canViewRoles   = user.hasPermission(AppPermission.rolesView);
-  final canViewReports = user.hasPermission(AppPermission.reportsView);
-  final canSendNotifs  = user.hasPermission(AppPermission.notificationsSend);
   final canViewDash    = user.hasPermission(AppPermission.dashboardCompany);
 
   return [
@@ -829,17 +941,17 @@ List<_NavItemData?> _buildNavItems(AppUser? user) {
       _NavItemData(route: '/media', icon: Icons.photo_library_outlined, label: 'Biblioteca de medios'),
     if (isCompanyAdmin || isSuperAdmin)
       _NavItemData(route: '/editor', icon: Icons.edit_outlined, label: 'Editor Playlists'),
-    null,
-    if (canViewUsers || isCompanyAdmin)
-      _NavItemData(route: AppRoutes.users, icon: Icons.people_rounded, label: 'Usuarios'),
-    if (canViewRoles || isCompanyAdmin)
-      _NavItemData(route: AppRoutes.roles, icon: Icons.shield_rounded, label: 'Roles'),
-    null,
-    if (canSendNotifs || isCompanyAdmin)
-      _NavItemData(route: AppRoutes.notifications2, icon: Icons.notifications_outlined, label: 'Notificaciones'),
-    _NavItemData(route: AppRoutes.profile, icon: Icons.person_outline_rounded, label: 'Mi Perfil'),
   ];
 }
+
+static const List<_NavItemData> _waItems = [
+  _NavItemData(route: '/wa/dashboard',  icon: Icons.dashboard_rounded,     label: 'WA Dashboard'),
+  _NavItemData(route: '/wa/bots',       icon: Icons.smart_toy_rounded,      label: 'Mis Bots'),
+  _NavItemData(route: '/wa/chat',       icon: Icons.chat_bubble_rounded,    label: 'Conversaciones'),
+  _NavItemData(route: '/wa/connection', icon: Icons.link_rounded,           label: 'Conexión WA'),
+  _NavItemData(route: '/wa/analytics',  icon: Icons.analytics_rounded,      label: 'Analytics WA'),
+  _NavItemData(route: '/wa/kanban',     icon: Icons.view_kanban_rounded,    label: 'Kanban Ventas'),
+];
 }
 
 class _NavItemData {
@@ -3982,38 +4094,8 @@ class _AuthHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: _T.primary,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.grid_view_rounded,
-                color: Colors.white, size: 18),
-          ),
-          const SizedBox(width: 10),
-          const Text('SignageOS',
-            style: TextStyle(
-              color: _T.textHi, fontSize: 16,
-              fontWeight: FontWeight.w700)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _T.primaryLo,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                  color: _T.primary.withOpacity(0.3)),
-            ),
-            child: const Text('ENTERPRISE',
-              style: TextStyle(
-                color: _T.primary, fontSize: 9,
-                fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-          ),
-        ]),
-        const SizedBox(height: 24),
+       const AppLogo(height: 250, showBadge: false),
+      
         Text(title,
           style: const TextStyle(
             color: _T.textHi, fontSize: 24,
@@ -6825,4 +6907,169 @@ String _permLabel(AppPermission p) => switch (p) {
     AppRole.editor       => const Color(0xFF22C55E),
     AppRole.user         => const Color(0xFFF59E0B),
   };
+}
+
+class _NavGroupItem extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final List<_NavItemData> children;
+  final bool isAnyChildSelected;
+
+  const _NavGroupItem({
+    required this.label,
+    required this.icon,
+    required this.children,
+    required this.isAnyChildSelected,
+  });
+
+  @override
+  State<_NavGroupItem> createState() => _NavGroupItemState();
+}
+
+class _NavGroupItemState extends State<_NavGroupItem>
+    with SingleTickerProviderStateMixin {
+  late bool _expanded;
+  late AnimationController _ctrl;
+  late Animation<double> _rotate;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.isAnyChildSelected;
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      value: _expanded ? 1.0 : 0.0,
+    );
+    _rotate = Tween<double>(begin: 0, end: 0.5).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    _expanded ? _ctrl.forward() : _ctrl.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          child: Material(
+            color: widget.isAnyChildSelected ? _T.primaryLo : Colors.transparent,
+            borderRadius: _T.r8,
+            child: InkWell(
+              borderRadius: _T.r8,
+              onTap: _toggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                child: Row(
+                  children: [
+                    Icon(widget.icon,
+                        size: 16,
+                        color: widget.isAnyChildSelected
+                            ? _T.primary
+                            : _T.textMid),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: widget.isAnyChildSelected
+                              ? _T.primary
+                              : _T.textMid,
+                          fontWeight: widget.isAnyChildSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    RotationTransition(
+                      turns: _rotate,
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        size: 16,
+                        color: widget.isAnyChildSelected
+                            ? _T.primary
+                            : _T.textMid,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: _expanded
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: widget.children.map((item) {
+                      final selected = location == item.route;
+                      return _NavItem(
+                        item: item,
+                        selected: selected,
+                        onTap: () {
+                          Scaffold.of(context).closeDrawer();
+                          context.go(item.route);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+class _FloatingMenuButton extends StatelessWidget {
+  const _FloatingMenuButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _T.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: _T.border.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(40),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(40),
+          onTap: () => Scaffold.of(context).openDrawer(),
+          child: const Padding(
+            padding: EdgeInsets.all(10),
+            child: Icon(Icons.menu_rounded, color: _T.textMid, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
 }

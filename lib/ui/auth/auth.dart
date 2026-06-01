@@ -13,6 +13,7 @@
 // ignore_for_file: library_private_types_in_public_api
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:digitaltv/logo.dart';
 import 'package:digitaltv/ui/panel/panel.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -409,38 +410,7 @@ class _BrandPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Logo
-          Row(children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: _C.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.grid_view_rounded,
-                  color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 12),
-            const Text('SignageOS',
-              style: TextStyle(
-                color: _C.textHi, fontSize: 20,
-                fontWeight: FontWeight.w700, letterSpacing: -0.5,
-              )),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _C.primaryLo,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: _C.primary.withOpacity(0.3)),
-              ),
-              child: const Text('ENTERPRISE',
-                style: TextStyle(
-                  color: _C.primary, fontSize: 9,
-                  fontWeight: FontWeight.w700, letterSpacing: 1.2,
-                )),
-            ),
-          ]).animate().fadeIn(delay: 100.ms).slideX(begin: -0.05),
-
+   const AppLogo(height: 32, showBadge: true),
           const Spacer(),
 
           // Headline
@@ -930,19 +900,7 @@ class _FormHeader extends StatelessWidget {
       children: [
         // Logo pequeño en mobile
         if (MediaQuery.of(context).size.width <= 900) ...[
-          Row(children: [
-            Container(
-              width: 34, height: 34,
-              decoration: BoxDecoration(
-                color: _C.primary, borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.grid_view_rounded,
-                  color: Colors.white, size: 18),
-            ),
-            const SizedBox(width: 10),
-            const Text('SignageOS',
-              style: TextStyle(color: _C.textHi, fontSize: 16,
-                  fontWeight: FontWeight.w700)),
-          ]),
+          const AppLogo(height: 32, showBadge: true),
           const SizedBox(height: 28),
         ],
       GestureDetector(onTap: (){
