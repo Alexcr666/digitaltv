@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 // Current authesnticated user state
 final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
@@ -86,16 +85,23 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserEntity?>> {
 
   String _mapAuthError(FirebaseAuthException e) {
     switch (e.code) {
-      case 'user-not-found':    return 'No account found for this email.';
-      case 'wrong-password':    return 'Incorrect password.';
-      case 'invalid-email':     return 'Invalid email address.';
-      case 'user-disabled':     return 'This account has been disabled.';
-      case 'too-many-requests': return 'Too many attempts. Try again later.';
-      default: return e.message ?? 'Authentication failed.';
+      case 'user-not-found':
+        return 'No account found for this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'invalid-email':
+        return 'Invalid email address.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again later.';
+      default:
+        return e.message ?? 'Authentication failed.';
     }
   }
 }
 
-final authNotifierProvider = StateNotifierProvider<AuthNotifier, AsyncValue<UserEntity?>>(
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AsyncValue<UserEntity?>>(
   (_) => AuthNotifier(),
 );

@@ -7,12 +7,14 @@ import 'package:digitaltv/route/mainshell.dart';
 import 'package:digitaltv/ui/auth/auth.dart';
 import 'package:digitaltv/ui/dashboard.dart';
 import 'package:digitaltv/ui/panel/panel.dart';
+import 'package:digitaltv/ui/panel/panel/page/pageDevice.dart';
 import 'package:digitaltv/ui/panel/panel2.dart';
 import 'package:digitaltv/ui/panel/panel3.dart';
 import 'package:digitaltv/ui/panel/playlist2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 class PlaylistsListScreen extends ConsumerWidget {
   const PlaylistsListScreen({super.key});
 
@@ -26,7 +28,6 @@ class PlaylistsListScreen extends ConsumerWidget {
     );
   }
 }
-
 
 class _ViewPlaylistScreen extends ConsumerWidget {
   final String playlistId;
@@ -53,32 +54,35 @@ class _ViewPlaylistScreen extends ConsumerWidget {
     );
   }
 }
+
 // Route names
 class AppRoutes {
-  static const login        = '/login';
-  static const dashboard    = '/dashboard';
-  static const devices      = '/devices';
+  static const login = '/login';
+  static const dashboard = '/dashboard';
+  static const devices = '/devices';
   static const deviceDetail = '/devices/:id';
-  static const content      = '/content';
-  static const assignments  = '/assignments';
-  static const roles        = '/roles';
-  static const display      = '/display/:token';   // ← NUEVO
+  static const content = '/content';
+  static const assignments = '/assignments';
+  static const roles = '/roles';
+  static const display = '/display/:token'; // ← NUEVO
 }
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authNotifierProvider);
   return GoRouter(
     initialLocation: AppRoutes.dashboard,
     redirect: (context, state) {
       final isLoggedIn = authState.valueOrNull != null;
-      final isLoading  = authState.isLoading;
-      final path       = state.matchedLocation;
+      final isLoading = authState.isLoading;
+      final path = state.matchedLocation;
 
       debugPrint("--- RUTA: $path | Logueado: $isLoggedIn ---");
 
       if (isLoading) return null;
 
       // 1. Permitir rutas públicas de autenticación
-      final isPublic = [AppRoutes.login, '/register', '/forgot-password'].contains(path);
+      final isPublic =
+          [AppRoutes.login, '/register', '/forgot-password'].contains(path);
       if (isPublic) {
         return isLoggedIn ? AppRoutes.dashboard : null;
       }
@@ -101,32 +105,49 @@ final routerProvider = Provider<GoRouter>((ref) {
       // RUTAS FUERA DEL SHELL (Full Screen)
       GoRoute(
         path: '/view/:id',
-        builder: (_, state) => _ViewPlaylistScreen(playlistId: state.pathParameters['id']!),
+        builder: (_, state) =>
+            _ViewPlaylistScreen(playlistId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/display/:token',
-        builder: (_, state) => DisplayViewerScreen(token: state.pathParameters['token']!),
+        builder: (_, state) =>
+            DisplayViewerScreen(token: state.pathParameters['token']!),
       ),
       GoRoute(path: '/register', builder: (_, __) => const RegisterPage()),
-      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordPage()),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (_, __) => const ForgotPasswordPage()),
       GoRoute(path: '/login', builder: (_, __) => const AuthScreen()),
 
       // SHELL ROUTE
       ShellRoute(
         builder: (_, __, child) => MainShell(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
+          GoRoute(
+              path: '/dashboard', builder: (_, __) => const DashboardScreen()),
           GoRoute(path: '/devices', builder: (_, __) => const DevicesScreen()),
-          GoRoute(path: '/content', builder: (_, __) => const PlaylistsScreen()),
-          GoRoute(path: '/playlist2', builder: (_, __) => const PlaylistsListScreen()),
-          GoRoute(path: '/schedules', builder: (_, __) => const SchedulesScreen()),
-          GoRoute(path: '/analytics', builder: (_, __) => const AnalyticsScreen()),
-          GoRoute(path: '/media', builder: (_, __) => const MediaLibraryScreen()),
-          GoRoute(path: '/editor', builder: (_, __) => const ScreenEditorScreen()),
+          GoRoute(
+              path: '/content', builder: (_, __) => const PlaylistsScreen()),
+          GoRoute(
+              path: '/playlist2',
+              builder: (_, __) => const PlaylistsListScreen()),
+          GoRoute(
+              path: '/schedules', builder: (_, __) => const SchedulesScreen()),
+          GoRoute(
+              path: '/analytics', builder: (_, __) => const AnalyticsScreen()),
+          GoRoute(
+              path: '/media', builder: (_, __) => const MediaLibraryScreen()),
+          GoRoute(
+              path: '/editor', builder: (_, __) => const ScreenEditorScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
-          GoRoute(path: '/notifications', builder: (_, __) => const NotificationsPage()),
-          GoRoute(path: '/notifications2', builder: (_, __) => const NotificationsPage22()),
-          GoRoute(path: '/users', builder: (_, __) => const UsersManagementPage()),
+          GoRoute(
+              path: '/notifications',
+              builder: (_, __) => const NotificationsPage()),
+          GoRoute(
+              path: '/notifications2',
+              builder: (_, __) => const NotificationsPage22()),
+          GoRoute(
+              path: '/users', builder: (_, __) => const UsersManagementPage()),
           GoRoute(path: '/roles', builder: (_, __) => const AuthScreen()),
         ],
       ),

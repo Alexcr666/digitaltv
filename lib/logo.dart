@@ -13,8 +13,7 @@ class AppLogo extends StatefulWidget {
   State<AppLogo> createState() => _AppLogoState();
 }
 
-class _AppLogoState extends State<AppLogo>
-    with SingleTickerProviderStateMixin {
+class _AppLogoState extends State<AppLogo> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<double> _scale;
@@ -51,33 +50,30 @@ class _AppLogoState extends State<AppLogo>
       child: SlideTransition(
         position: _slide,
         child: ScaleTransition(
-          scale: _scale,
-          child:
-             Row(children: [
-  Expanded(child: SizedBox()),
-               Image.asset(
-                'logo_positivo.png',
-              width: widget.height,
-             //   fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Container(
-                  height: widget.height,
+            scale: _scale,
+            child: Row(
+              children: [
+                Expanded(child: SizedBox()),
+                Image.asset(
+                  'logo_positivo.png',
                   width: widget.height,
-                  decoration: BoxDecoration(
-                 
-                    borderRadius: BorderRadius.circular(8),
+                  //   fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: widget.height,
+                    width: widget.height,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.grid_view_rounded,
+                        color: Colors.white, size: 16),
                   ),
-                  child: const Icon(Icons.grid_view_rounded,
-                      color: Colors.white, size: 16),
                 ),
-              ),
-              Expanded(child: SizedBox()),
-              SizedBox(width: 20,),
-            
-             ],)
-              
-            
-          
-        ),
+                Expanded(child: SizedBox()),
+                SizedBox(
+                  width: 20,
+                ),
+              ],
+            )),
       ),
     );
   }

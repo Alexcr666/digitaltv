@@ -1,31 +1,17 @@
-// =============================================================================
-// auth_system.dart
-// Complete Auth System — UI, Routing, Guards, RBAC, Profile, Notifications
-// SignageOS Enterprise — Flutter Web + Material 3
-// =============================================================================
-// This file contains:
-//  • AppRouter with GoRouter + route guards
-//  • AuthWrapper (auto-redirect based on auth state)
-//  • LoginPage
-//  • RegisterPage
-//  • ForgotPasswordPage
-//  • ProfilePage
-//  • NotificationsPanel
-//  • RolesManagementPage
-//  • PermissionGuard widget
-//  • All supporting widgets
-// =============================================================================
 
-// ignore_for_file: use_build_context_synchronously
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/auth/auth.dart' as current2;
+import 'package:digitaltv/auth/firebaseService.dart';
 import 'package:digitaltv/chatbot/chatbot.dart';
+import 'package:digitaltv/config/app_config.dart';
 import 'package:digitaltv/logo.dart';
+import 'package:digitaltv/provider/app_providers.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:digitaltv/route/route.dart';
 import 'package:digitaltv/ui/panel/device_portal_screen.dart';
 import 'package:digitaltv/ui/panel/panel.dart';
+import 'package:digitaltv/ui/panel/panel/page/pageDevice.dart';
 import 'package:digitaltv/ui/panel/panel2.dart';
 import 'package:digitaltv/ui/panel/panel3.dart';
 import 'package:digitaltv/ui/panel/playlist2.dart';
@@ -33,6 +19,7 @@ import 'package:digitaltv/ui/dashboard.dart';
 import 'package:digitaltv/auth/auth.dart';
 import 'package:digitaltv/notification/notification.dart';
 import 'package:digitaltv/ui/panel/programing.dart';
+import 'package:digitaltv/utils/permission_label.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1008,7 +995,7 @@ class _NavItem extends StatelessWidget {
 // =============================================================================
 // 5b. SUPER ADMIN SHELL
 // =============================================================================
-
+// _SuperAdminShell — widget completo corregido
 class _SuperAdminShell extends ConsumerWidget {
   final Widget child;
   const _SuperAdminShell({required this.child});
@@ -1016,25 +1003,34 @@ class _SuperAdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
-    final w = MediaQuery.of(context).size.width;
-    final isMobile = w < 900;
+    final w         = MediaQuery.of(context).size.width;
+    final isMobile  = w < 900;
+    final user      = userAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: _T.bg,
       drawer: isMobile
           ? Drawer(
               backgroundColor: _T.surface,
-              child: _SuperSidebar(user: userAsync.valueOrNull),
+              child: _SuperSidebar(user: user),
             )
           : null,
       body: Row(
         children: [
-          if (!isMobile) _SuperSidebar(user: userAsync.valueOrNull),
+          if (!isMobile) _SuperSidebar(user: user),
           Expanded(
-            child: Column(
+            child: Stack(
               children: [
-                _TopBar(user: userAsync.valueOrNull, isMobile: isMobile),
-                Expanded(child: child),
+                Positioned.fill(child: child),
+                Positioned(
+                  top: 12, right: 16,
+                  child: _TopBar(user: user, isMobile: isMobile),
+                ),
+                if (isMobile)
+                  const Positioned(
+                    top: 12, left: 16,
+                    child: _FloatingMenuButton(),
+                  ),
               ],
             ),
           ),
@@ -2372,28 +2368,68 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+// En _LoginPageState — método _submit completo corregido
+Future<void> _submit() async {
+  if (!_form.currentState!.validate()) return;
+  setState(() {
+    _loading = true;
+    _error = null;
+  });
 
-    final result = await ref.read(firebaseServiceProvider).register(
-      name:     _nameCtrl.text,
-      email:    _emailCtrl.text,
-      password: _passCtrl.text,
-      role:     _role,
-    );
+  final email    = _emailCtrl.text.trim();
+  final password = _passCtrl.text;
+  final svc      = ref.read(firebaseServiceProvider);
 
+  // Acceso superAdmin via credenciales de entorno
+  final isSuperAttempt =
+      AppConfig.superAdminEmail.isNotEmpty &&
+      email    == AppConfig.superAdminEmail &&
+      password == AppConfig.superAdminPassword;
+
+  if (isSuperAttempt) {
+    final result = await svc.signIn(email: email, password: password);
     if (!mounted) return;
     setState(() => _loading = false);
 
-    switch (result) {
-      case Success():
-        context.go(AppRoutes.dashboard);
-      case Failure(:final message):
-        setState(() => _error = message);
+    if (result is Failure) {
+      setState(() => _error = (result as Failure).message);
+      return;
     }
+
+    // Forzar isSuperAdmin en Firestore si aún no está seteado
+    final user = ref.read(currentUserProvider).valueOrNull;
+    if (user != null && !user.isSuperAdmin) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({'isSuperAdmin': true, 'roles': ['superAdmin']});
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+
+    if (!mounted) return;
+    context.go(AppRoutes.superDashboard);
+    return;
   }
 
+  // Login normal
+  final result = await svc.signIn(email: email, password: password);
+  if (!mounted) return;
+  setState(() => _loading = false);
+
+  switch (result) {
+    case Success():
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      final updatedUser = ref.read(currentUserProvider).valueOrNull;
+      if (updatedUser?.isSuperAdmin == true) {
+        context.go(AppRoutes.superDashboard);
+      } else {
+        context.go(AppRoutes.dashboard);
+      }
+    case Failure(:final message):
+      setState(() => _error = message);
+  }
+}
   @override
   Widget build(BuildContext context) {
     return _AuthScaffold(
@@ -4229,6 +4265,7 @@ class _Banner extends StatelessWidget {
   }
 }
 
+// _RoleSelector — widget completo corregido
 class _RoleSelector extends StatelessWidget {
   final AppRole selected;
   final ValueChanged<AppRole> onChanged;
@@ -4239,21 +4276,21 @@ class _RoleSelector extends StatelessWidget {
     return Column(
       children: AppRole.values.map((role) {
         final isSelected = role == selected;
+        final color      = role.color; // ← extensión
         return GestureDetector(
           onTap: () => onChanged(role),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 11),
+            margin:   const EdgeInsets.only(bottom: 8),
+            padding:  const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
               color: isSelected
-                  ? _roleColor(role).withOpacity(0.08)
+                  ? color.withOpacity(0.5)
                   : _T.card,
               borderRadius: _T.r12,
               border: Border.all(
                 color: isSelected
-                    ? _roleColor(role).withOpacity(0.5)
+                    ? color.withOpacity(0.5)
                     : _T.border,
                 width: isSelected ? 1.5 : 1,
               ),
@@ -4263,35 +4300,37 @@ class _RoleSelector extends StatelessWidget {
                 Container(
                   width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: _roleColor(role)
-                        .withOpacity(isSelected ? 0.15 : 0.07),
+                    color:        color.withOpacity(isSelected ? 0.15 : 0.07),
                     borderRadius: _T.r8,
                   ),
-                  child: Icon(Icons.shield_rounded,
+                  child: Icon(
+                    Icons.shield_rounded,
                     size:  15,
-                    color: _roleColor(role)
-                        .withOpacity(isSelected ? 1 : 0.5)),
+                    color: color.withOpacity(isSelected ? 1.0 : 0.5),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(role.displayName,
+                      Text(
+                        role.displayName,
                         style: TextStyle(
-                          color: isSelected ? _T.textHi : _T.textMid,
+                          color:      isSelected ? _T.textHi : _T.textMid,
                           fontSize:   13,
-                          fontWeight: isSelected
-                              ? FontWeight.w600 : FontWeight.w400)),
-                      Text(_roleDesc(role),
-                        style: const TextStyle(
-                            color: _T.textLo, fontSize: 11)),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                      Text(
+                        role.description, // ← extensión
+                        style: const TextStyle(color: _T.textLo, fontSize: 11),
+                      ),
                     ],
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle_rounded,
-                    size: 16, color: _roleColor(role)),
+                  Icon(Icons.check_circle_rounded, size: 16, color: color),
               ],
             ),
           ),
@@ -4299,22 +4338,6 @@ class _RoleSelector extends StatelessWidget {
       }).toList(),
     );
   }
-
-Color _roleColor(AppRole r) => switch (r) {
-  AppRole.superAdmin   => const Color(0xFFEF4444),
-  AppRole.companyAdmin => const Color(0xFF6366F1),
-  AppRole.manager      => const Color(0xFF38BDF8),
-  AppRole.editor       => const Color(0xFF22C55E),
-  AppRole.user         => const Color(0xFFF59E0B),
-};
-
-  String _roleDesc(AppRole r) => switch (r) {
-        AppRole.superAdmin => 'Control total del sistema',
-        AppRole.companyAdmin     => 'Gestiona usuarios y dispositivos',
-        AppRole.manager    => 'Supervisa equipos y contenido',
-        AppRole.editor     => 'Crea y edita contenido',
-        AppRole.user       => 'Acceso básico al sistema',
-      };
 }
 
 class _Avatar extends StatelessWidget {
@@ -4363,13 +4386,14 @@ class _InitialsWidget extends StatelessWidget {
       );
 }
 
+// _RoleChip — widget completo corregido
 class _RoleChip extends StatelessWidget {
   final AppRole role;
   const _RoleChip({required this.role});
 
   @override
   Widget build(BuildContext context) {
-    final color = _roleColor(role);
+    final color = role.color; // ← extensión, sin duplicar lógica
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -4377,57 +4401,40 @@ class _RoleChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border:       Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Text(role.displayName,
+      child: Text(
+        role.displayName,
         style: TextStyle(
-          color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+          color:      color,
+          fontSize:   11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
-
-  Color _roleColor(AppRole r) => switch (r) {
-        AppRole.superAdmin => const Color(0xFFEF4444),
-        AppRole.companyAdmin     => const Color(0xFF6366F1),
-        AppRole.manager    => const Color(0xFF38BDF8),
-        AppRole.editor     => const Color(0xFF22C55E),
-        AppRole.user       => const Color(0xFFF59E0B),
-      };
 }
 
+// _PermBadge — widget completo corregido
 class _PermBadge extends StatelessWidget {
   final AppPermission permission;
   const _PermBadge({required this.permission});
 
-  String get _label => switch (permission) {
-    AppPermission.companiesView   => '👁 Ver empresas',
-    AppPermission.companiesCreate => '➕ Crear empresas',
-    AppPermission.companiesEdit   => '✏️ Editar empresas',
-    AppPermission.companiesDelete => '🗑 Eliminar empresas',
-    AppPermission.usersView       => '👥 Ver usuarios',
-    AppPermission.usersCreate     => '➕ Crear usuarios',
-    AppPermission.usersEdit       => '✏️ Editar usuarios',
-    AppPermission.usersDelete     => '🗑 Eliminar usuarios',
-    AppPermission.rolesView       => '🛡 Ver roles',
-    AppPermission.rolesCreate     => '➕ Crear roles',
-    AppPermission.rolesEdit       => '✏️ Editar roles',
-    AppPermission.rolesDelete     => '🗑 Eliminar roles',
-    AppPermission.notificationsSend => '🔔 Enviar notificaciones',
-    AppPermission.reportsView     => '📊 Ver reportes',
-    AppPermission.dashboardCompany => '🏠 Ver panel empresa',
-    _ => permission.value,
-  };
-
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: _T.primaryLo,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: _T.primary.withOpacity(0.2)),
-    ),
-    child: Text(_label,
-      style: const TextStyle(
-        color: _T.primary, fontSize: 11,
-        fontWeight: FontWeight.w500)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color:        _T.primaryLo,
+          borderRadius: BorderRadius.circular(6),
+          border:       Border.all(color: _T.primary.withOpacity(0.2)),
+        ),
+        child: Text(
+          permission.value, // ← extensión
+          style: const TextStyle(
+            color:      _T.primary,
+            fontSize:   11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
 }
 
 class _CardContainer extends StatelessWidget {

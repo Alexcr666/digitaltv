@@ -4,7 +4,6 @@ import 'package:digitaltv/repositories/failure.dart';
 import '../entities/entities.dart';
 import '../repositories/repositories.dart';
 
-
 // ── AUTH USE CASES ────────────────────────────────────────────────────────────
 
 class SignInUseCase {
@@ -43,11 +42,12 @@ class RegisterDeviceUseCase {
     required String name,
     required String uniqueDeviceId,
     String? groupId,
-  }) => _repo.registerDevice(
-    name: name,
-    uniqueDeviceId: uniqueDeviceId,
-    groupId: groupId,
-  );
+  }) =>
+      _repo.registerDevice(
+        name: name,
+        uniqueDeviceId: uniqueDeviceId,
+        groupId: groupId,
+      );
 }
 
 class PushContentToDeviceUseCase {
@@ -58,16 +58,17 @@ class PushContentToDeviceUseCase {
     required String deviceId,
     required String contentId,
     required String contentName,
-  }) => _assignRepo.createAssignment(AssignmentEntity(
-    id: '',
-    targetType: AssignmentTarget.device,
-    tvId: deviceId,
-    contentId: contentId,
-    contentName: contentName,
-    priority: 1,
-    active: true,
-    createdAt: DateTime.now(),
-  ));
+  }) =>
+      _assignRepo.createAssignment(AssignmentEntity(
+        id: '',
+        targetType: AssignmentTarget.device,
+        tvId: deviceId,
+        contentId: contentId,
+        contentName: contentName,
+        priority: 1,
+        active: true,
+        createdAt: DateTime.now(),
+      ));
 }
 
 // ── CONTENT USE CASES ────────────────────────────────────────────────────────
@@ -110,17 +111,18 @@ class AssignContentUseCase {
     required String contentId,
     required String contentName,
     int priority = 2,
-  }) => _repo.createAssignment(AssignmentEntity(
-    id: '',
-    targetType: target,
-    tvId: tvId,
-    groupId: groupId,
-    contentId: contentId,
-    contentName: contentName,
-    priority: priority,
-    active: true,
-    createdAt: DateTime.now(),
-  ));
+  }) =>
+      _repo.createAssignment(AssignmentEntity(
+        id: '',
+        targetType: target,
+        tvId: tvId,
+        groupId: groupId,
+        contentId: contentId,
+        contentName: contentName,
+        priority: priority,
+        active: true,
+        createdAt: DateTime.now(),
+      ));
 }
 
 /// Resolves which content a TV should show.

@@ -2,7 +2,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/entities/entities.dart';
 
-
 // ── USER MODEL ────────────────────────────────────────────────────────────────
 
 class UserModel {
@@ -35,21 +34,21 @@ class UserModel {
   }
 
   Map<String, dynamic> toFirestore() => {
-    'email': email,
-    'displayName': displayName,
-    'role': role,
-    'createdAt': createdAt,
-    'lastLogin': lastLogin,
-  };
+        'email': email,
+        'displayName': displayName,
+        'role': role,
+        'createdAt': createdAt,
+        'lastLogin': lastLogin,
+      };
 
   UserEntity toEntity() => UserEntity(
-    id: id,
-    email: email,
-    displayName: displayName,
-    role: UserRoleExt.fromString(role),
-    createdAt: createdAt.toDate(),
-    lastLogin: lastLogin?.toDate(),
-  );
+        id: id,
+        email: email,
+        displayName: displayName,
+        role: UserRoleExt.fromString(role),
+        createdAt: createdAt.toDate(),
+        lastLogin: lastLogin?.toDate(),
+      );
 }
 
 // ── DEVICE MODEL ─────────────────────────────────────────────────────────────
@@ -90,36 +89,39 @@ class DeviceModel {
   }
 
   Map<String, dynamic> toFirestore() => {
-    'name': name,
-    'uniqueDeviceId': uniqueDeviceId,
-    'status': status,
-    'groupId': groupId,
-    'lastSeen': lastSeen,
-    'currentContentId': currentContentId,
-    'metadata': metadata,
-  };
+        'name': name,
+        'uniqueDeviceId': uniqueDeviceId,
+        'status': status,
+        'groupId': groupId,
+        'lastSeen': lastSeen,
+        'currentContentId': currentContentId,
+        'metadata': metadata,
+      };
 
   DeviceEntity toEntity() => DeviceEntity(
-    id: id,
-    name: name,
-    uniqueDeviceId: uniqueDeviceId,
-    status: _parseStatus(status),
-    groupId: groupId,
-    lastSeen: lastSeen.toDate(),
-    currentContentId: currentContentId,
-    metadata: DeviceMetadata(
-      ipAddress: metadata['ipAddress'],
-      androidVersion: metadata['androidVersion'],
-      appVersion: metadata['appVersion'],
-      resolution: metadata['resolution'],
-    ),
-  );
+        id: id,
+        name: name,
+        uniqueDeviceId: uniqueDeviceId,
+        status: _parseStatus(status),
+        groupId: groupId,
+        lastSeen: lastSeen.toDate(),
+        currentContentId: currentContentId,
+        metadata: DeviceMetadata(
+          ipAddress: metadata['ipAddress'],
+          androidVersion: metadata['androidVersion'],
+          appVersion: metadata['appVersion'],
+          resolution: metadata['resolution'],
+        ),
+      );
 
   static DeviceStatus _parseStatus(String s) {
     switch (s) {
-      case 'online':  return DeviceStatus.online;
-      case 'warning': return DeviceStatus.warning;
-      default:        return DeviceStatus.offline;
+      case 'online':
+        return DeviceStatus.online;
+      case 'warning':
+        return DeviceStatus.warning;
+      default:
+        return DeviceStatus.offline;
     }
   }
 }
@@ -170,36 +172,40 @@ class ContentModel {
   }
 
   Map<String, dynamic> toFirestore() => {
-    'name': name,
-    'type': type,
-    'url': url,
-    'textContent': textContent,
-    'durationSeconds': durationSeconds,
-    'createdAt': createdAt,
-    'ownerId': ownerId,
-    'tags': tags,
-    'playlistItemIds': playlistItemIds,
-  };
+        'name': name,
+        'type': type,
+        'url': url,
+        'textContent': textContent,
+        'durationSeconds': durationSeconds,
+        'createdAt': createdAt,
+        'ownerId': ownerId,
+        'tags': tags,
+        'playlistItemIds': playlistItemIds,
+      };
 
   ContentEntity toEntity() => ContentEntity(
-    id: id,
-    name: name,
-    type: _parseType(type),
-    url: url,
-    textContent: textContent,
-    duration: Duration(seconds: durationSeconds),
-    createdAt: createdAt.toDate(),
-    ownerId: ownerId,
-    tags: tags,
-    playlistItemIds: playlistItemIds,
-  );
+        id: id,
+        name: name,
+        type: _parseType(type),
+        url: url,
+        textContent: textContent,
+        duration: Duration(seconds: durationSeconds),
+        createdAt: createdAt.toDate(),
+        ownerId: ownerId,
+        tags: tags,
+        playlistItemIds: playlistItemIds,
+      );
 
   static ContentType _parseType(String t) {
     switch (t) {
-      case 'video':    return ContentType.video;
-      case 'text':     return ContentType.text;
-      case 'playlist': return ContentType.playlist;
-      default:         return ContentType.image;
+      case 'video':
+        return ContentType.video;
+      case 'text':
+        return ContentType.text;
+      case 'playlist':
+        return ContentType.playlist;
+      default:
+        return ContentType.image;
     }
   }
 }
@@ -245,33 +251,36 @@ class AssignmentModel {
   }
 
   Map<String, dynamic> toFirestore() => {
-    'targetType': targetType,
-    'tvId': tvId,
-    'groupId': groupId,
-    'contentId': contentId,
-    'contentName': contentName,
-    'priority': priority,
-    'active': active,
-    'createdAt': createdAt,
-  };
+        'targetType': targetType,
+        'tvId': tvId,
+        'groupId': groupId,
+        'contentId': contentId,
+        'contentName': contentName,
+        'priority': priority,
+        'active': active,
+        'createdAt': createdAt,
+      };
 
   AssignmentEntity toEntity() => AssignmentEntity(
-    id: id,
-    targetType: _parseTarget(targetType),
-    tvId: tvId,
-    groupId: groupId,
-    contentId: contentId,
-    contentName: contentName,
-    priority: priority,
-    active: active,
-    createdAt: createdAt.toDate(),
-  );
+        id: id,
+        targetType: _parseTarget(targetType),
+        tvId: tvId,
+        groupId: groupId,
+        contentId: contentId,
+        contentName: contentName,
+        priority: priority,
+        active: active,
+        createdAt: createdAt.toDate(),
+      );
 
   static AssignmentTarget _parseTarget(String t) {
     switch (t) {
-      case 'device': return AssignmentTarget.device;
-      case 'group':  return AssignmentTarget.group;
-      default:       return AssignmentTarget.global;
+      case 'device':
+        return AssignmentTarget.device;
+      case 'group':
+        return AssignmentTarget.group;
+      default:
+        return AssignmentTarget.global;
     }
   }
 }

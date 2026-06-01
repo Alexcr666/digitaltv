@@ -3,7 +3,6 @@ import 'package:dartz/dartz.dart';
 import 'package:digitaltv/repositories/failure.dart';
 import '../entities/entities.dart';
 
-
 abstract class AuthRepository {
   Stream<UserEntity?> get authStateChanges;
   Future<Either<Failure, UserEntity>> signIn(String email, String password);
@@ -64,9 +63,11 @@ abstract class AssignmentRepository {
 
   /// Get the resolved assignment for a specific device
   /// Priority: device-specific > group > global
-  Stream<ContentEntity?> watchResolvedContentForDevice(String deviceId, String? groupId);
+  Stream<ContentEntity?> watchResolvedContentForDevice(
+      String deviceId, String? groupId);
 
-  Future<Either<Failure, AssignmentEntity>> createAssignment(AssignmentEntity assignment);
+  Future<Either<Failure, AssignmentEntity>> createAssignment(
+      AssignmentEntity assignment);
   Future<Either<Failure, void>> updateAssignment(AssignmentEntity assignment);
   Future<Either<Failure, void>> deleteAssignment(String assignmentId);
 }
@@ -76,7 +77,8 @@ abstract class AssignmentRepository {
 
 abstract class GroupRepository {
   Stream<List<GroupEntity>> watchGroups();
-  Future<Either<Failure, GroupEntity>> createGroup({required String name, String? description});
+  Future<Either<Failure, GroupEntity>> createGroup(
+      {required String name, String? description});
   Future<Either<Failure, void>> updateGroup(GroupEntity group);
   Future<Either<Failure, void>> deleteGroup(String groupId);
 }

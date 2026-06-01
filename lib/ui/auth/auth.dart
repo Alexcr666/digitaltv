@@ -15,6 +15,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/logo.dart';
 import 'package:digitaltv/ui/panel/panel.dart';
+import 'package:digitaltv/ui/panel/panel/page/pageDevice.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -33,37 +34,53 @@ enum UserRole {
 
   String get displayName {
     switch (this) {
-      case UserRole.superAdmin: return 'Super Admin';
-      case UserRole.admin:      return 'Admin';
-      case UserRole.editor:     return 'Editor';
-      case UserRole.viewer:     return 'Viewer';
+      case UserRole.superAdmin:
+        return 'Super Admin';
+      case UserRole.admin:
+        return 'Admin';
+      case UserRole.editor:
+        return 'Editor';
+      case UserRole.viewer:
+        return 'Viewer';
     }
   }
 
   String get description {
     switch (this) {
-      case UserRole.superAdmin: return 'Control total del sistema SaaS';
-      case UserRole.admin:      return 'Gestiona dispositivos y contenido';
-      case UserRole.editor:     return 'Crea y edita contenido';
-      case UserRole.viewer:     return 'Solo lectura del sistema';
+      case UserRole.superAdmin:
+        return 'Control total del sistema SaaS';
+      case UserRole.admin:
+        return 'Gestiona dispositivos y contenido';
+      case UserRole.editor:
+        return 'Crea y edita contenido';
+      case UserRole.viewer:
+        return 'Solo lectura del sistema';
     }
   }
 
   IconData get icon {
     switch (this) {
-      case UserRole.superAdmin: return Icons.shield_rounded;
-      case UserRole.admin:      return Icons.manage_accounts_rounded;
-      case UserRole.editor:     return Icons.edit_rounded;
-      case UserRole.viewer:     return Icons.visibility_rounded;
+      case UserRole.superAdmin:
+        return Icons.shield_rounded;
+      case UserRole.admin:
+        return Icons.manage_accounts_rounded;
+      case UserRole.editor:
+        return Icons.edit_rounded;
+      case UserRole.viewer:
+        return Icons.visibility_rounded;
     }
   }
 
   Color get color {
     switch (this) {
-      case UserRole.superAdmin: return const Color(0xFFEF4444);
-      case UserRole.admin:      return const Color(0xFF6366F1);
-      case UserRole.editor:     return const Color(0xFF22C55E);
-      case UserRole.viewer:     return const Color(0xFFF59E0B);
+      case UserRole.superAdmin:
+        return const Color(0xFFEF4444);
+      case UserRole.admin:
+        return const Color(0xFF6366F1);
+      case UserRole.editor:
+        return const Color(0xFF22C55E);
+      case UserRole.viewer:
+        return const Color(0xFFF59E0B);
     }
   }
 }
@@ -73,7 +90,7 @@ enum UserRole {
 // =============================================================================
 
 class AuthService {
-  final FirebaseAuth      _auth      = FirebaseAuth.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // ── Login ─────────────────────────────────────────────────────────────────
@@ -88,10 +105,8 @@ class AuthService {
       );
 
       // Verifica que el usuario esté en Firestore
-      final doc = await _firestore
-          .collection('users')
-          .doc(cred.user!.uid)
-          .get();
+      final doc =
+          await _firestore.collection('users').doc(cred.user!.uid).get();
 
       if (!doc.exists) {
         await _auth.signOut();
@@ -125,13 +140,13 @@ class AuthService {
 
       // Guarda el perfil en Firestore
       await _firestore.collection('users').doc(cred.user!.uid).set({
-        'uid':         cred.user!.uid,
-        'email':       email.trim(),
+        'uid': cred.user!.uid,
+        'email': email.trim(),
         'displayName': name.trim(),
-        'role':        role.name,
+        'role': role.name,
         'permissions': _defaultPermissions(role),
-        'active':      true,
-        'createdAt':   FieldValue.serverTimestamp(),
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
       return AuthResult.success(cred.user!);
@@ -147,27 +162,39 @@ class AuthService {
     switch (role) {
       case UserRole.superAdmin:
         return {
-          'manageUsers': true,  'manageDevices': true,
-          'manageContent': true,'viewAnalytics': true,
-          'manageRoles': true,  'systemConfig': true,
+          'manageUsers': true,
+          'manageDevices': true,
+          'manageContent': true,
+          'viewAnalytics': true,
+          'manageRoles': true,
+          'systemConfig': true,
         };
       case UserRole.admin:
         return {
-          'manageUsers': false, 'manageDevices': true,
-          'manageContent': true,'viewAnalytics': true,
-          'manageRoles': false, 'systemConfig': false,
+          'manageUsers': false,
+          'manageDevices': true,
+          'manageContent': true,
+          'viewAnalytics': true,
+          'manageRoles': false,
+          'systemConfig': false,
         };
       case UserRole.editor:
         return {
-          'manageUsers': false, 'manageDevices': false,
-          'manageContent': true,'viewAnalytics': false,
-          'manageRoles': false, 'systemConfig': false,
+          'manageUsers': false,
+          'manageDevices': false,
+          'manageContent': true,
+          'viewAnalytics': false,
+          'manageRoles': false,
+          'systemConfig': false,
         };
       case UserRole.viewer:
         return {
-          'manageUsers': false, 'manageDevices': false,
-          'manageContent': false,'viewAnalytics': true,
-          'manageRoles': false,  'systemConfig': false,
+          'manageUsers': false,
+          'manageDevices': false,
+          'manageContent': false,
+          'viewAnalytics': true,
+          'manageRoles': false,
+          'systemConfig': false,
         };
     }
   }
@@ -175,14 +202,22 @@ class AuthService {
   // ── Parse de errores ──────────────────────────────────────────────────────
   String _parseAuthError(String code) {
     switch (code) {
-      case 'user-not-found':       return 'No existe una cuenta con ese email.';
-      case 'wrong-password':       return 'Contraseña incorrecta.';
-      case 'email-already-in-use': return 'Este email ya está registrado.';
-      case 'weak-password':        return 'La contraseña debe tener al menos 6 caracteres.';
-      case 'invalid-email':        return 'El formato del email no es válido.';
-      case 'too-many-requests':    return 'Demasiados intentos. Espera un momento.';
-      case 'user-disabled':        return 'Esta cuenta ha sido desactivada.';
-      default:                     return 'Error de autenticación ($code).';
+      case 'user-not-found':
+        return 'No existe una cuenta con ese email.';
+      case 'wrong-password':
+        return 'Contraseña incorrecta.';
+      case 'email-already-in-use':
+        return 'Este email ya está registrado.';
+      case 'weak-password':
+        return 'La contraseña debe tener al menos 6 caracteres.';
+      case 'invalid-email':
+        return 'El formato del email no es válido.';
+      case 'too-many-requests':
+        return 'Demasiados intentos. Espera un momento.';
+      case 'user-disabled':
+        return 'Esta cuenta ha sido desactivada.';
+      default:
+        return 'Error de autenticación ($code).';
     }
   }
 }
@@ -194,8 +229,16 @@ sealed class AuthResult {
   factory AuthResult.success(User u) => AuthSuccess(u);
   factory AuthResult.failure(String m) => AuthFailure(m);
 }
-class AuthSuccess extends AuthResult { final User user; AuthSuccess(this.user); }
-class AuthFailure extends AuthResult { final String message; AuthFailure(this.message); }
+
+class AuthSuccess extends AuthResult {
+  final User user;
+  AuthSuccess(this.user);
+}
+
+class AuthFailure extends AuthResult {
+  final String message;
+  AuthFailure(this.message);
+}
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
@@ -206,19 +249,19 @@ final authServiceProvider = Provider<AuthService>((_) => AuthService());
 // =============================================================================
 
 abstract class _C {
-  static const bg        = Color(0xFF080C14);
-  static const surface   = Color(0xFF0E1420);
-  static const card      = Color(0xFF131B2B);
-  static const cardBorder= Color(0xFF1E2D47);
-  static const primary   = Color(0xFF6366F1);
+  static const bg = Color(0xFF080C14);
+  static const surface = Color(0xFF0E1420);
+  static const card = Color(0xFF131B2B);
+  static const cardBorder = Color(0xFF1E2D47);
+  static const primary = Color(0xFF6366F1);
   static const primaryLo = Color(0x1A6366F1);
-  static const accent    = Color(0xFF38BDF8);
-  static const textHi    = Color(0xFFF0F4FF);
-  static const textMid   = Color(0xFF8B9CC8);
-  static const textLo    = Color(0xFF3D4F72);
-  static const success   = Color(0xFF22C55E);
-  static const error     = Color(0xFFEF4444);
-  static const divider   = Color(0xFF1A2540);
+  static const accent = Color(0xFF38BDF8);
+  static const textHi = Color(0xFFF0F4FF);
+  static const textMid = Color(0xFF8B9CC8);
+  static const textLo = Color(0xFF3D4F72);
+  static const success = Color(0xFF22C55E);
+  static const error = Color(0xFFEF4444);
+  static const divider = Color(0xFF1A2540);
 }
 
 // =============================================================================
@@ -326,7 +369,10 @@ class _AnimatedBackgroundState extends State<_AnimatedBackground>
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -410,25 +456,26 @@ class _BrandPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Logo
-   const AppLogo(height: 32, showBadge: true),
+          const AppLogo(height: 32, showBadge: true),
           const Spacer(),
 
           // Headline
-       GestureDetector(onTap: (){
-
-
-        Navigator.of(context).push(MaterialPageRoute(
-  builder: (_) => DevicesScreen(),
-));
-       },child: Text('Gestión de\npantallas en\ntiempo real.',
-            style: TextStyle(
-              color: _C.textHi,
-              fontSize: 44,
-              fontWeight: FontWeight.w800,
-              height: 1.15,
-              letterSpacing: -1.5,
-            ),
-          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1)),
+          GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => DevicesScreen(),
+                ));
+              },
+              child: Text(
+                'Gestión de\npantallas en\ntiempo real.',
+                style: TextStyle(
+                  color: _C.textHi,
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                  letterSpacing: -1.5,
+                ),
+              ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1)),
 
           const SizedBox(height: 16),
           const Text(
@@ -445,23 +492,28 @@ class _BrandPanel extends StatelessWidget {
             ('Control de roles granular', Icons.shield_rounded),
             ('10.000+ dispositivos simultáneos', Icons.tv_rounded),
           ].asMap().entries.map((e) => Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Row(children: [
-              Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: _C.primaryLo,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(e.value.$2, color: _C.primary, size: 15),
-              ),
-              const SizedBox(width: 12),
-              Text(e.value.$1,
-                style: const TextStyle(
-                    color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w500)),
-            ]).animate().fadeIn(delay: Duration(milliseconds: 350 + e.key * 60))
-                .slideX(begin: -0.04),
-          )),
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _C.primaryLo,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(e.value.$2, color: _C.primary, size: 15),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(e.value.$1,
+                      style: const TextStyle(
+                          color: _C.textMid,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500)),
+                ])
+                    .animate()
+                    .fadeIn(delay: Duration(milliseconds: 350 + e.key * 60))
+                    .slideX(begin: -0.04),
+              )),
 
           const Spacer(),
 
@@ -496,13 +548,16 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    children: [
-      Text(val, style: const TextStyle(
-        color: _C.textHi, fontSize: 18,
-        fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-      Text(label, style: const TextStyle(color: _C.textMid, fontSize: 11)),
-    ],
-  );
+        children: [
+          Text(val,
+              style: const TextStyle(
+                  color: _C.textHi,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5)),
+          Text(label, style: const TextStyle(color: _C.textMid, fontSize: 11)),
+        ],
+      );
 }
 
 class _Vdivider extends StatelessWidget {
@@ -524,11 +579,11 @@ class _LoginForm extends ConsumerStatefulWidget {
 }
 
 class _LoginFormState extends ConsumerState<_LoginForm> {
-  final _formKey   = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
-  final _passCtrl  = TextEditingController();
-  bool _loading    = false;
-  bool _showPass   = false;
+  final _passCtrl = TextEditingController();
+  bool _loading = false;
+  bool _showPass = false;
   String? _error;
 
   @override
@@ -540,7 +595,10 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     final svc = ref.read(authServiceProvider);
     final result = await svc.signIn(
@@ -600,8 +658,11 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
             obscure: !_showPass,
             suffix: IconButton(
               icon: Icon(
-                _showPass ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                size: 18, color: _C.textMid,
+                _showPass
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                size: 18,
+                color: _C.textMid,
               ),
               onPressed: () => setState(() => _showPass = !_showPass),
             ),
@@ -631,10 +692,11 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
                 GestureDetector(
                   onTap: widget.onToggle,
                   child: const Text('Crear cuenta',
-                    style: TextStyle(
-                      color: _C.primary, fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    )),
+                      style: TextStyle(
+                        color: _C.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      )),
                 ),
               ],
             ),
@@ -659,33 +721,38 @@ class _RegisterForm extends ConsumerStatefulWidget {
 }
 
 class _RegisterFormState extends ConsumerState<_RegisterForm> {
-  final _formKey    = GlobalKey<FormState>();
-  final _nameCtrl   = TextEditingController();
-  final _emailCtrl  = TextEditingController();
-  final _passCtrl   = TextEditingController();
-  final _pass2Ctrl  = TextEditingController();
-  UserRole _role    = UserRole.editor;
-  bool _loading     = false;
-  bool _showPass    = false;
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _pass2Ctrl = TextEditingController();
+  UserRole _role = UserRole.editor;
+  bool _loading = false;
+  bool _showPass = false;
   String? _error;
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _emailCtrl.dispose();
-    _passCtrl.dispose(); _pass2Ctrl.dispose();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _pass2Ctrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     final svc = ref.read(authServiceProvider);
     final result = await svc.register(
-      name:     _nameCtrl.text,
-      email:    _emailCtrl.text,
+      name: _nameCtrl.text,
+      email: _emailCtrl.text,
       password: _passCtrl.text,
-      role:     _role,
+      role: _role,
     );
 
     if (!mounted) return;
@@ -720,8 +787,8 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             controller: _nameCtrl,
             hint: 'Juan García',
             icon: Icons.person_outline_rounded,
-            validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Ingresa tu nombre' : null,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
           ),
           const SizedBox(height: 14),
 
@@ -749,8 +816,11 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             obscure: !_showPass,
             suffix: IconButton(
               icon: Icon(
-                _showPass ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                size: 18, color: _C.textMid,
+                _showPass
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                size: 18,
+                color: _C.textMid,
               ),
               onPressed: () => setState(() => _showPass = !_showPass),
             ),
@@ -801,10 +871,11 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
                 GestureDetector(
                   onTap: widget.onToggle,
                   child: const Text('Iniciar sesión',
-                    style: TextStyle(
-                      color: _C.primary, fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    )),
+                      style: TextStyle(
+                        color: _C.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      )),
                 ),
               ],
             ),
@@ -846,14 +917,15 @@ class _RoleSelector extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 32, height: 32,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: role.color.withOpacity(isSelected ? 0.15 : 0.07),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(role.icon,
-                    size: 15,
-                    color: role.color.withOpacity(isSelected ? 1 : 0.5)),
+                      size: 15,
+                      color: role.color.withOpacity(isSelected ? 1 : 0.5)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -861,21 +933,20 @@ class _RoleSelector extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(role.displayName,
-                        style: TextStyle(
-                          color: isSelected ? _C.textHi : _C.textMid,
-                          fontSize: 13,
-                          fontWeight: isSelected
-                              ? FontWeight.w600 : FontWeight.w400,
-                        )),
+                          style: TextStyle(
+                            color: isSelected ? _C.textHi : _C.textMid,
+                            fontSize: 13,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w400,
+                          )),
                       Text(role.description,
-                        style: const TextStyle(
-                            color: _C.textLo, fontSize: 11)),
+                          style:
+                              const TextStyle(color: _C.textLo, fontSize: 11)),
                     ],
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle_rounded,
-                    size: 16, color: role.color),
+                  Icon(Icons.check_circle_rounded, size: 16, color: role.color),
               ],
             ),
           ),
@@ -903,22 +974,25 @@ class _FormHeader extends StatelessWidget {
           const AppLogo(height: 32, showBadge: true),
           const SizedBox(height: 28),
         ],
-      GestureDetector(onTap: (){
-
-          GoRoute(path: '/devices',     builder: (_, __) => const DevicesScreen());
+        GestureDetector(
+            onTap: () {
+              GoRoute(
+                  path: '/devices', builder: (_, __) => const DevicesScreen());
 //   GoRoute(path: '/playlists',   builder: (_, __) => const PlaylistsScreen()),
 //   GoRoute(
 //     path: '/display/:token',
 //     builder: (_, s) => DisplayViewerScreen(token: s.pathParameters['token']!),
 //   ),
-      },child:  Text(title,
-          style: const TextStyle(
-            color: _C.textHi, fontSize: 26,
-            fontWeight: FontWeight.w800, letterSpacing: -0.8,
-          ))),
+            },
+            child: Text(title,
+                style: const TextStyle(
+                  color: _C.textHi,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.8,
+                ))),
         const SizedBox(height: 6),
-        Text(subtitle,
-          style: const TextStyle(color: _C.textMid, fontSize: 14)),
+        Text(subtitle, style: const TextStyle(color: _C.textMid, fontSize: 14)),
       ],
     );
   }
@@ -930,13 +1004,15 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Text(text,
-      style: const TextStyle(
-        color: _C.textMid, fontSize: 12, fontWeight: FontWeight.w500,
-        letterSpacing: 0.3,
-      )),
-  );
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(text,
+            style: const TextStyle(
+              color: _C.textMid,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+            )),
+      );
 }
 
 class _AuthField extends StatelessWidget {
@@ -961,19 +1037,20 @@ class _AuthField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      controller:   controller,
-      obscureText:  obscure,
+      controller: controller,
+      obscureText: obscure,
       keyboardType: keyboardType,
-      validator:    validator,
+      validator: validator,
       style: const TextStyle(color: _C.textHi, fontSize: 14),
       decoration: InputDecoration(
-        hintText:        hint,
-        hintStyle:       const TextStyle(color: _C.textLo, fontSize: 14),
-        prefixIcon:      Icon(icon, size: 18, color: _C.textMid),
-        suffixIcon:      suffix,
-        filled:          true,
-        fillColor:       _C.card,
-        contentPadding:  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintText: hint,
+        hintStyle: const TextStyle(color: _C.textLo, fontSize: 14),
+        prefixIcon: Icon(icon, size: 18, color: _C.textMid),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: _C.card,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _C.cardBorder),
@@ -1029,9 +1106,10 @@ class _SubmitButton extends StatelessWidget {
         ),
         child: loading
             ? const SizedBox(
-                width: 20, height: 20,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
+                    strokeWidth: 2, color: Colors.white),
               )
             : Text(label,
                 style: const TextStyle(
@@ -1060,13 +1138,14 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 16, color: _C.error),
+          const Icon(Icons.error_outline_rounded, size: 16, color: _C.error),
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,
-              style: const TextStyle(
-                  color: _C.error, fontSize: 12, fontWeight: FontWeight.w500)),
+                style: const TextStyle(
+                    color: _C.error,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500)),
           ),
         ],
       ),

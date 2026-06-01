@@ -12,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Reutiliza los providers y entidades ya definidos en dashboard_complete.dart
 // (o donde los tengas). Ajusta el import según tu estructura real:
-import 'package:digitaltv/entities/entities.dart';       // DeviceEntity, DeviceStatus
+import 'package:digitaltv/entities/entities.dart'; // DeviceEntity, DeviceStatus
 // import 'package:digitaltv/presentation/providers/stream_providers.dart'; // devicesStreamProvider
 
 // =============================================================================

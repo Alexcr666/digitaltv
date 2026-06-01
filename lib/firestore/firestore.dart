@@ -6,7 +6,6 @@ import 'package:digitaltv/model/models.dart';
 import 'package:digitaltv/repositories/failure.dart';
 import 'package:digitaltv/repositories/repositories.dart';
 
-
 class FirestoreDeviceRepository implements DeviceRepository {
   final FirebaseFirestore _db;
   FirestoreDeviceRepository(this._db);
@@ -15,18 +14,14 @@ class FirestoreDeviceRepository implements DeviceRepository {
 
   @override
   Stream<List<DeviceEntity>> watchDevices() {
-    return _col
-        .orderBy('lastSeen', descending: true)
-        .snapshots()
-        .map((s) => s.docs.map((d) => DeviceModel.fromFirestore(d).toEntity()).toList());
+    return _col.orderBy('lastSeen', descending: true).snapshots().map((s) =>
+        s.docs.map((d) => DeviceModel.fromFirestore(d).toEntity()).toList());
   }
 
   @override
   Stream<List<DeviceEntity>> watchDevicesByGroup(String groupId) {
-    return _col
-        .where('groupId', isEqualTo: groupId)
-        .snapshots()
-        .map((s) => s.docs.map((d) => DeviceModel.fromFirestore(d).toEntity()).toList());
+    return _col.where('groupId', isEqualTo: groupId).snapshots().map((s) =>
+        s.docs.map((d) => DeviceModel.fromFirestore(d).toEntity()).toList());
   }
 
   @override
@@ -117,10 +112,9 @@ class FirestoreAssignmentRepository implements AssignmentRepository {
 
   @override
   Stream<List<AssignmentEntity>> watchAssignments() {
-    return _col
-        .orderBy('priority')
-        .snapshots()
-        .map((s) => s.docs.map((d) => AssignmentModel.fromFirestore(d).toEntity()).toList());
+    return _col.orderBy('priority').snapshots().map((s) => s.docs
+        .map((d) => AssignmentModel.fromFirestore(d).toEntity())
+        .toList());
   }
 
   /// The core resolution logic:
@@ -136,53 +130,55 @@ class FirestoreAssignmentRepository implements AssignmentRepository {
         .where('active', isEqualTo: true)
         .snapshots()
         .asyncMap((snapshot) async {
-          final assignments = snapshot.docs
-              .map((d) => AssignmentModel.fromFirestore(d).toEntity())
-              .toList();
+      final assignments = snapshot.docs
+          .map((d) => AssignmentModel.fromFirestore(d).toEntity())
+          .toList();
 
-          // Sort by priority ascending (1 = highest)
-          assignments.sort((a, b) => a.priority.compareTo(b.priority));
+      // Sort by priority ascending (1 = highest)
+      assignments.sort((a, b) => a.priority.compareTo(b.priority));
 
-          AssignmentEntity? resolved;
+      AssignmentEntity? resolved;
 
-          for (final a in assignments) {
-            if (a.targetType == AssignmentTarget.device && a.tvId == deviceId) {
-              resolved = a;
-              break;
-            }
+      for (final a in assignments) {
+        if (a.targetType == AssignmentTarget.device && a.tvId == deviceId) {
+          resolved = a;
+          break;
+        }
+      }
+      if (resolved == null && groupId != null) {
+        for (final a in assignments) {
+          if (a.targetType == AssignmentTarget.group && a.groupId == groupId) {
+            resolved = a;
+            break;
           }
-          if (resolved == null && groupId != null) {
-            for (final a in assignments) {
-              if (a.targetType == AssignmentTarget.group && a.groupId == groupId) {
-                resolved = a;
-                break;
-              }
-            }
+        }
+      }
+      if (resolved == null) {
+        for (final a in assignments) {
+          if (a.targetType == AssignmentTarget.global) {
+            resolved = a;
+            break;
           }
-          if (resolved == null) {
-            for (final a in assignments) {
-              if (a.targetType == AssignmentTarget.global) {
-                resolved = a;
-                break;
-              }
-            }
-          }
+        }
+      }
 
-          if (resolved == null) return null;
+      if (resolved == null) return null;
 
-          // Fetch the actual content
-          try {
-            final doc = await _db.collection('content').doc(resolved.contentId).get();
-            if (!doc.exists) return null;
-            return ContentModel.fromFirestore(doc).toEntity();
-          } catch (_) {
-            return null;
-          }
-        });
+      // Fetch the actual content
+      try {
+        final doc =
+            await _db.collection('content').doc(resolved.contentId).get();
+        if (!doc.exists) return null;
+        return ContentModel.fromFirestore(doc).toEntity();
+      } catch (_) {
+        return null;
+      }
+    });
   }
 
   @override
-  Future<Either<Failure, AssignmentEntity>> createAssignment(AssignmentEntity a) async {
+  Future<Either<Failure, AssignmentEntity>> createAssignment(
+      AssignmentEntity a) async {
     try {
       final ref = _col.doc();
       final model = AssignmentModel(
@@ -235,10 +231,8 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Stream<List<ContentEntity>> watchContent() {
-    return _col
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((s) => s.docs.map((d) => ContentModel.fromFirestore(d).toEntity()).toList());
+    return _col.orderBy('createdAt', descending: true).snapshots().map((s) =>
+        s.docs.map((d) => ContentModel.fromFirestore(d).toEntity()).toList());
   }
 
   @override

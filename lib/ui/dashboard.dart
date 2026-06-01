@@ -1,21 +1,4 @@
-// =============================================================================
-// dashboard_complete.dart  —  UN SOLO ARCHIVO 100% FUNCIONAL
-// =============================================================================
-// pubspec.yaml (dependencias necesarias):
-//
-//   dependencies:
-//     flutter:
-//       sdk: flutter
-//     flutter_riverpod: ^2.5.1
-//     riverpod_annotation: ^2.3.5
-//     cloud_firestore: ^4.17.0
-//     firebase_core: ^2.30.0
-//     flutter_animate: ^4.5.0
-//     intl: ^0.19.0
-// =============================================================================
-
-// ignore_for_file: library_private_types_in_public_api
-import 'package:digitaltv/auth/auth.dart' as current2;
+import 'package:digitaltv/provider/app_providers.dart' as current2;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/chatbot/chatbot.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -68,34 +51,34 @@ class DeviceEntity {
     }
   }
 
-factory DeviceEntity.fromFirestore(DocumentSnapshot doc) {
-  final d = doc.data() as Map<String, dynamic>;
-  
-  final lastSeen = (d['lastSeen'] as Timestamp?)?.toDate() ?? DateTime.now();
-  final diffMinutes = DateTime.now().difference(lastSeen).inMinutes;
-  
-  // Si visto hace menos de 3 minutos → online, independientemente del campo status
-  DeviceStatus computedStatus;
-  if (diffMinutes < 3) {
-    computedStatus = DeviceStatus.online;
-  } else if (diffMinutes < 10) {
-    computedStatus = DeviceStatus.warning;
-  } else {
-    computedStatus = DeviceStatus.offline;
-  }
+  factory DeviceEntity.fromFirestore(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
 
-  return DeviceEntity(
-    id: doc.id,
-    name: d['name'] as String? ?? 'Unknown Device',
-    uniqueDeviceId: d['uniqueDeviceId'] as String? ?? doc.id,
-    status: computedStatus,          // <-- usa el computado, no el campo
-    groupId: d['groupId'] as String?,
-    groupName: d['groupName'] as String?,
-    lastSeen: lastSeen,
-    currentContentId: d['currentContentId'] as String?,
-    metadata: (d['metadata'] as Map<String, dynamic>?) ?? {},
-  );
-}
+    final lastSeen = (d['lastSeen'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final diffMinutes = DateTime.now().difference(lastSeen).inMinutes;
+
+    // Si visto hace menos de 3 minutos → online, independientemente del campo status
+    DeviceStatus computedStatus;
+    if (diffMinutes < 3) {
+      computedStatus = DeviceStatus.online;
+    } else if (diffMinutes < 10) {
+      computedStatus = DeviceStatus.warning;
+    } else {
+      computedStatus = DeviceStatus.offline;
+    }
+
+    return DeviceEntity(
+      id: doc.id,
+      name: d['name'] as String? ?? 'Unknown Device',
+      uniqueDeviceId: d['uniqueDeviceId'] as String? ?? doc.id,
+      status: computedStatus, // <-- usa el computado, no el campo
+      groupId: d['groupId'] as String?,
+      groupName: d['groupName'] as String?,
+      lastSeen: lastSeen,
+      currentContentId: d['currentContentId'] as String?,
+      metadata: (d['metadata'] as Map<String, dynamic>?) ?? {},
+    );
+  }
 
   Map<String, dynamic> toFirestore() => {
         'name': name,
@@ -166,27 +149,27 @@ class ContentEntity {
 
 abstract class AppColors {
   // Primaries
-  static const Color primary = Color(0xFF6366F1);   // Indigo
+  static const Color primary = Color(0xFF6366F1); // Indigo
   static const Color primaryDim = Color(0xFF4F46E5);
 
   // Status
-  static const Color online  = Color(0xFF22C55E);   // Green
-  static const Color offline = Color(0xFFEF4444);   // Red
-  static const Color warning = Color(0xFFF59E0B);   // Amber
+  static const Color online = Color(0xFF22C55E); // Green
+  static const Color offline = Color(0xFFEF4444); // Red
+  static const Color warning = Color(0xFFF59E0B); // Amber
 
   // Neutrals
   static const Color surfaceLight = Color(0xFFF8FAFC);
-  static const Color surfaceDark  = Color(0xFF0F172A);
-  static const Color cardLight    = Color(0xFFFFFFFF);
-  static const Color cardDark     = Color(0xFF1E293B);
-  static const Color borderLight  = Color(0xFFE2E8F0);
-  static const Color borderDark   = Color(0xFF334155);
+  static const Color surfaceDark = Color(0xFF0F172A);
+  static const Color cardLight = Color(0xFFFFFFFF);
+  static const Color cardDark = Color(0xFF1E293B);
+  static const Color borderLight = Color(0xFFE2E8F0);
+  static const Color borderDark = Color(0xFF334155);
 
   // Text
-  static const Color textPrimaryLight   = Color(0xFF0F172A);
+  static const Color textPrimaryLight = Color(0xFF0F172A);
   static const Color textSecondaryLight = Color(0xFF64748B);
-  static const Color textPrimaryDark    = Color(0xFFF1F5F9);
-  static const Color textSecondaryDark  = Color(0xFF94A3B8);
+  static const Color textPrimaryDark = Color(0xFFF1F5F9);
+  static const Color textSecondaryDark = Color(0xFF94A3B8);
 }
 
 // =============================================================================
@@ -311,9 +294,7 @@ final devicesStreamProvider = StreamProvider<List<DeviceEntity>>((ref) {
         .where('companyId', isEqualTo: companyId)
         .snapshots();
   } else {
-    stream = FirebaseFirestore.instance
-        .collection('devices')
-        .snapshots();
+    stream = FirebaseFirestore.instance.collection('devices').snapshots();
   }
 
   return stream.map((snap) {
@@ -335,9 +316,7 @@ final contentStreamProvider = StreamProvider<List<ContentEntity>>((ref) {
         .where('companyId', isEqualTo: companyId)
         .snapshots();
   } else {
-    stream = FirebaseFirestore.instance
-        .collection('content')
-        .snapshots();
+    stream = FirebaseFirestore.instance.collection('content').snapshots();
   }
 
   return stream.map((snap) {
@@ -346,6 +325,7 @@ final contentStreamProvider = StreamProvider<List<ContentEntity>>((ref) {
     return list;
   });
 });
+
 /// Stream de un dispositivo individual (para detail screens)
 final singleDeviceProvider =
     StreamProvider.family<DeviceEntity?, String>((ref, id) {
@@ -415,8 +395,8 @@ class _SkeletonCardState extends State<SkeletonCard>
           color: isDark
               ? Color.lerp(
                   const Color(0xFF1E293B), const Color(0xFF334155), _anim.value)
-              : Color.lerp(
-                  const Color(0xFFE2E8F0), const Color(0xFFF1F5F9), _anim.value),
+              : Color.lerp(const Color(0xFFE2E8F0), const Color(0xFFF1F5F9),
+                  _anim.value),
         ),
       ),
     );
@@ -500,8 +480,8 @@ class _StatCardState extends State<StatCard>
                         color: widget.iconColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(widget.icon,
-                          size: 18, color: widget.iconColor),
+                      child:
+                          Icon(widget.icon, size: 18, color: widget.iconColor),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -605,9 +585,17 @@ class _DeviceStatusChipState extends State<DeviceStatusChip>
   @override
   Widget build(BuildContext context) {
     final (color, label, icon) = switch (widget.device.status) {
-      DeviceStatus.online  => (AppColors.online, 'Online', Icons.tv_rounded),
-      DeviceStatus.offline => (AppColors.offline, 'Offline', Icons.tv_off_rounded),
-      DeviceStatus.warning => (AppColors.warning, 'Warning', Icons.warning_amber_rounded),
+      DeviceStatus.online => (AppColors.online, 'Online', Icons.tv_rounded),
+      DeviceStatus.offline => (
+          AppColors.offline,
+          'Offline',
+          Icons.tv_off_rounded
+        ),
+      DeviceStatus.warning => (
+          AppColors.warning,
+          'Warning',
+          Icons.warning_amber_rounded
+        ),
     };
 
     if (widget.showLabel) {
@@ -688,38 +676,40 @@ class DashboardScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Header ──────────────────────────────────────────────────────────
-        Row(
-  children: [
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-   GestureDetector(onTap: (){
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WhatsappChatbotPage(
+                                userId: 'G1R2jhY2dQa1TNg1Lg2kQJB6BDp1'
 
-      Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) =>WhatsappChatbotPage(
-  userId: 'G1R2jhY2dQa1TNg1Lg2kQJB6BDp1'
-  
 //  FirebaseAuth.instance.currentUser?.uid ?? '',
-),
-  ),
-);
-   },child:     Text(
-          'Panel de control',
-          style: Theme.of(context).textTheme.headlineMedium,
-        )),
-        const SizedBox(height: 2),
-        Text(
-          DateFormat(
-            'EEEE d \'de\' MMMM',
-            'es_CO',
-          ).format(DateTime.now()),
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ],
-    ),
-  ],),
+                                ),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'Panel de control',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(
+                    DateFormat(
+                      'EEEE d \'de\' MMMM',
+                      'es_CO',
+                    ).format(DateTime.now()),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
 
           // ── Stat Cards ───────────────────────────────────────────────────────
@@ -733,9 +723,8 @@ class DashboardScreen extends ConsumerWidget {
                   devices.where((d) => d.status == DeviceStatus.offline).length;
               final warning =
                   devices.where((d) => d.status == DeviceStatus.warning).length;
-              final uptimePct = devices.isEmpty
-                  ? 0.0
-                  : online / devices.length * 100;
+              final uptimePct =
+                  devices.isEmpty ? 0.0 : online / devices.length * 100;
 
               return Row(
                 children: [
@@ -891,8 +880,7 @@ class _ErrorBox extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,
-                style: const TextStyle(
-                    color: AppColors.offline, fontSize: 12)),
+                style: const TextStyle(color: AppColors.offline, fontSize: 12)),
           ),
         ],
       ),
@@ -997,10 +985,8 @@ class _ActivityFeed extends ConsumerWidget {
             final sorted = [...devices]
               ..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
             return Column(
-              children: sorted
-                  .take(6)
-                  .map((d) => _ActivityItem(device: d))
-                  .toList(),
+              children:
+                  sorted.take(6).map((d) => _ActivityItem(device: d)).toList(),
             );
           },
         ),
@@ -1026,9 +1012,17 @@ class _ActivityItem extends StatelessWidget {
             : '${diff.inHours}h ago';
 
     final (icon, color, label) = switch (device.status) {
-      DeviceStatus.online  => (Icons.tv_rounded, AppColors.online, 'Online'),
-      DeviceStatus.offline => (Icons.power_off_outlined, AppColors.offline, 'Offline'),
-      DeviceStatus.warning => (Icons.warning_amber_rounded, AppColors.warning, 'Warning'),
+      DeviceStatus.online => (Icons.tv_rounded, AppColors.online, 'Online'),
+      DeviceStatus.offline => (
+          Icons.power_off_outlined,
+          AppColors.offline,
+          'Offline'
+        ),
+      DeviceStatus.warning => (
+          Icons.warning_amber_rounded,
+          AppColors.warning,
+          'Warning'
+        ),
     };
 
     return Padding(
@@ -1051,13 +1045,12 @@ class _ActivityItem extends StatelessWidget {
               children: [
                 Text(
                   device.name,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500, fontSize: 12),
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(fontWeight: FontWeight.w500, fontSize: 12),
                 ),
                 Text(
                   '$label · $timeStr',
-                  style:
-                      theme.textTheme.bodyMedium?.copyWith(fontSize: 11),
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11),
                 ),
               ],
             ),
@@ -1093,7 +1086,8 @@ class _DevicesQuickList extends ConsumerWidget {
               padding: EdgeInsets.all(32),
               child: _EmptyState(
                 icon: Icons.devices_rounded,
-                label: 'No devices registered yet.\nAdd your first TV to get started.',
+                label:
+                    'No devices registered yet.\nAdd your first TV to get started.',
               ),
             );
           }
@@ -1134,8 +1128,7 @@ class _DevicesQuickList extends ConsumerWidget {
                 return TableRow(
                   decoration: BoxDecoration(
                     border: Border(
-                        bottom:
-                            BorderSide(color: divColor.withOpacity(0.5))),
+                        bottom: BorderSide(color: divColor.withOpacity(0.5))),
                   ),
                   children: [
                     Padding(
@@ -1169,8 +1162,7 @@ class _DevicesQuickList extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
-                      child: Text(timeStr,
-                          style: theme.textTheme.bodyMedium),
+                      child: Text(timeStr, style: theme.textTheme.bodyMedium),
                     ),
                   ],
                 );
@@ -1211,35 +1203,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-
-// =============================================================================
-// SECTION 8 — MAIN ENTRY POINT (para prueba standalone)
-// =============================================================================
-//
-// Para usar este archivo como pantalla dentro de tu app existente,
-// simplemente importa este archivo y usa DashboardScreen() como widget.
-//
-// Si quieres probarlo standalone, descomenta el main() de abajo y asegúrate
-// de haber inicializado Firebase en tu main real:
-//
-//   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-//
-// void main() async {
-//   WidgetsFlutterBinding.ensureInitialized();
-//   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-//   runApp(const ProviderScope(child: _AppRoot()));
-// }
-//
-// class _AppRoot extends ConsumerWidget {
-//   const _AppRoot();
-//   @override
-//   Widget build(BuildContext context, WidgetRef ref) {
-//     return MaterialApp(
-//       debugShowCheckedModeBanner: false,
-//       theme: buildLightTheme(),
-//       darkTheme: buildDarkTheme(),
-//       themeMode: ThemeMode.system,
-//       home: const Scaffold(body: DashboardScreen()),
-//     );
-//   }
-// }

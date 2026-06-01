@@ -6,26 +6,37 @@ enum UserRole { superAdmin, admin, editor, viewer }
 extension UserRoleExt on UserRole {
   String get name {
     switch (this) {
-      case UserRole.superAdmin: return 'SUPER_ADMIN';
-      case UserRole.admin:      return 'ADMIN';
-      case UserRole.editor:     return 'EDITOR';
-      case UserRole.viewer:     return 'VIEWER';
+      case UserRole.superAdmin:
+        return 'SUPER_ADMIN';
+      case UserRole.admin:
+        return 'ADMIN';
+      case UserRole.editor:
+        return 'EDITOR';
+      case UserRole.viewer:
+        return 'VIEWER';
     }
   }
 
-  bool get canManageDevices  => this == UserRole.superAdmin || this == UserRole.admin;
-  bool get canManageContent  => this != UserRole.viewer;
-  bool get canAssignContent  => this == UserRole.superAdmin || this == UserRole.admin;
-  bool get canManageUsers    => this == UserRole.superAdmin;
-  bool get canViewAnalytics  => this == UserRole.superAdmin || this == UserRole.admin;
+  bool get canManageDevices =>
+      this == UserRole.superAdmin || this == UserRole.admin;
+  bool get canManageContent => this != UserRole.viewer;
+  bool get canAssignContent =>
+      this == UserRole.superAdmin || this == UserRole.admin;
+  bool get canManageUsers => this == UserRole.superAdmin;
+  bool get canViewAnalytics =>
+      this == UserRole.superAdmin || this == UserRole.admin;
   bool get canDeleteResources => this == UserRole.superAdmin;
 
   static UserRole fromString(String s) {
     switch (s) {
-      case 'SUPER_ADMIN': return UserRole.superAdmin;
-      case 'ADMIN':       return UserRole.admin;
-      case 'EDITOR':      return UserRole.editor;
-      default:            return UserRole.viewer;
+      case 'SUPER_ADMIN':
+        return UserRole.superAdmin;
+      case 'ADMIN':
+        return UserRole.admin;
+      case 'EDITOR':
+        return UserRole.editor;
+      default:
+        return UserRole.viewer;
     }
   }
 }
