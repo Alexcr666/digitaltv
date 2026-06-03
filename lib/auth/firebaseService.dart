@@ -295,10 +295,18 @@ class FirebaseService {
   // ── COMPANIES ─────────────────────────────────────────────────────────────
 
   Stream<List<Company>> companiesStream() {
-    return _companies
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(Company.fromFirestore).toList());
+   return _companies
+    .snapshots()
+    .map((snap) {
+      final companies =
+          snap.docs.map(Company.fromFirestore).toList();
+
+      companies.sort(
+        (a, b) => b.createdAt.compareTo(a.createdAt),
+      );
+
+      return companies;
+    });
   }
 
   /// Stream de una empresa por ID.
@@ -418,17 +426,24 @@ class FirebaseService {
 
   // ── USERS (admin) ─────────────────────────────────────────────────────────
 
-  Stream<List<AppUser>> allUsersStream({String? companyId}) {
-    final Query query = companyId != null
-        ? _users
-            .where('companyId', isEqualTo: companyId)
-            .orderBy('createdAt', descending: true)
-        : _users.orderBy('createdAt', descending: true);
+ Stream<List<AppUser>> allUsersStream({String? companyId}) {
+  Query query = _users;
 
-    return query.snapshots().map(
-        (snap) => snap.docs.map(AppUser.fromFirestore).toList());
+  if (companyId != null) {
+    query = query.where('companyId', isEqualTo: companyId);
   }
 
+  return query.snapshots().map((snap) {
+    final users =
+        snap.docs.map(AppUser.fromFirestore).toList();
+
+    users.sort(
+      (a, b) => b.createdAt.compareTo(a.createdAt),
+    );
+
+    return users;
+  });
+}
   Future<Result<AppUser>> createUserAsAdmin({
     required String name,
     required String email,
@@ -576,14 +591,22 @@ class FirebaseService {
 
   // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
 
-  Stream<List<AppNotification>> notificationsStream(String userId) {
-    return _notifications
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map((s) => s.docs.map(AppNotification.fromFirestore).toList());
-  }
+Stream<List<AppNotification>> notificationsStream(String userId) {
+  return _notifications
+      .where('userId', isEqualTo: userId)
+      .limit(50)
+      .snapshots()
+      .map((s) {
+        final list =
+            s.docs.map(AppNotification.fromFirestore).toList();
+
+        list.sort(
+          (a, b) => b.createdAt.compareTo(a.createdAt),
+        );
+
+        return list;
+      });
+}
 
   Stream<int> unreadCountStream(String userId) {
     return _notifications

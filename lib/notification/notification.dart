@@ -11,25 +11,7 @@ import 'package:digitaltv/provider/app_providers.dart';
 import 'package:digitaltv/utils/permission_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// =============================================================================
-// auth_system.dart
-// Complete Auth System — UI, Routing, Guards, RBAC, Profile, Notifications
-// SignageOS Enterprise — Flutter Web + Material 3
-// =============================================================================
-// This file contains:
-//  • AppRouter with GoRouter + route guards
-//  • AuthWrapper (auto-redirect based on auth state)
-//  • LoginPage
-//  • RegisterPage
-//  • ForgotPasswordPage
-//  • ProfilePage
-//  • NotificationsPanel
-//  • RolesManagementPage
-//  • PermissionGuard widget
-//  • All supporting widgets
-// =============================================================================
 
-// ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:typed_data';
