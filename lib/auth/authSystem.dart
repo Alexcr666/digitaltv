@@ -342,6 +342,20 @@ ShellRoute(
       ),
     ),
     GoRoute(
+  path: '/wa/massSend',
+  builder: (_, __) => WhatsappChatbotPage(
+    userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+    initialView: 'massSend',
+  ),
+),
+GoRoute(
+  path: '/wa/tokens',
+  builder: (_, __) => WhatsappChatbotPage(
+    userId: FirebaseAuth.instance.currentUser?.uid ?? '',
+    initialView: 'tokenUsage',
+  ),
+),
+    GoRoute(
       path: '/wa/bots',
       builder: (_, __) => WhatsappChatbotPage(
         userId: FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -938,6 +952,8 @@ static const List<_NavItemData> _waItems = [
   _NavItemData(route: '/wa/connection', icon: Icons.link_rounded,           label: 'Conexión WA'),
   _NavItemData(route: '/wa/analytics',  icon: Icons.analytics_rounded,      label: 'Analytics WA'),
   _NavItemData(route: '/wa/kanban',     icon: Icons.view_kanban_rounded,    label: 'Kanban Ventas'),
+  _NavItemData(route: '/wa/massSend',   icon: Icons.send_rounded,           label: 'Envíos Masivos'),
+  _NavItemData(route: '/wa/tokens',     icon: Icons.token_rounded,          label: 'Tokens IA'),
 ];
 }
 

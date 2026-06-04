@@ -11,7 +11,9 @@ import 'package:digitaltv/chatbot/page/connectView.dart';
 import 'package:digitaltv/chatbot/page/createChatbot.dart';
 import 'package:digitaltv/chatbot/page/globalAnalytics.dart';
 import 'package:digitaltv/chatbot/page/kanva.dart';
+import 'package:digitaltv/chatbot/page/massSend.dart';
 import 'package:digitaltv/chatbot/page/page.dart';
+import 'package:digitaltv/chatbot/page/tokenUsage.dart';
 import 'package:digitaltv/chatbot/page/widget.dart';
 import 'package:digitaltv/chatbot/service/service.dart';
 import 'package:digitaltv/chatbot/widget/widget.dart';
@@ -74,7 +76,7 @@ Widget build(BuildContext context) {
             child: CircularProgressIndicator(color: WAColors.green))
         : Row(
             children: [
-              _buildSidebar(),
+             // _buildSidebar(),
               Expanded(child: _buildContent()),
             ],
           ),
@@ -87,11 +89,11 @@ final items = [
   {'icon': Icons.smart_toy_rounded, 'label': 'Mis Bots', 'view': 'bots'},
   {'icon': Icons.chat_bubble_rounded, 'label': 'Conversaciones', 'view': 'chat'},
   {'icon': Icons.link_rounded, 'label': 'Conexión', 'view': 'connection'},
-  {'icon': Icons.analytics_rounded, 'label': 'Analytics', 'view': 'analyticsGlobal'}, // NUEVO
-
+  {'icon': Icons.analytics_rounded, 'label': 'Analytics', 'view': 'analyticsGlobal'},
   {'icon': Icons.view_kanban_rounded, 'label': 'Kanban Ventas', 'view': 'kanban'},
+  {'icon': Icons.send_rounded, 'label': 'Envíos Masivos', 'view': 'massSend'},       // NUEVO
+  {'icon': Icons.token_rounded, 'label': 'Tokens IA', 'view': 'tokenUsage'},         // NUEVO
 ];
-
     return Container(
       width: 220,
       color: WAColors.surface,
@@ -225,6 +227,10 @@ final items = [
                 _currentView = 'botDetail';
               }),
         );
+        case 'massSend':
+        return MassSendView(service: _service, bots: _bots);
+      case 'tokenUsage':
+        return TokenUsageView(service: _service, bots: _bots);
         case 'analyticsGlobal':
   return GlobalAnalyticsView(
     service: _service,

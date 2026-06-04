@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 class WAColors {
+    static const white = Colors.white;
   static const bg = Color(0xFF0B0E14);
   static const surface = Color(0xFF131720);
   static const card = Color(0xFF1A1F2E);

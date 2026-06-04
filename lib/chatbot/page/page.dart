@@ -78,9 +78,8 @@ class BotCard extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: bot.statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.chat, size: 18, color: WAColors.green),
+                  child: const Icon(Icons.chat, size: 18, color: WAColors.white),
                 ),
                 const Spacer(),
                 Container(
@@ -165,7 +164,7 @@ class BotListTile extends StatelessWidget {
                 color: bot.statusColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.chat, color: WAColors.green, size: 24),
+              child: const Icon(Icons.chat, color: WAColors.white, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(

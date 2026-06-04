@@ -8,6 +8,7 @@ import 'dart:developer';
 
 import 'package:digitaltv/chatbot/chatbot.dart';
 import 'package:digitaltv/chatbot/models/waConversations.dart';
+import 'package:digitaltv/chatbot/page/massSend.dart';
 import 'package:http/http.dart' as http;
 class WAService {
   final String userId;
@@ -140,5 +141,130 @@ class WAService {
     return res['success'] == true
         ? res['data'] as Map<String, dynamic>
         : null;
+  }
+  // ── TOKEN USAGE ──
+  Future<Map<String, dynamic>> getTokenUsage({String period = '7d'}) async {
+    final res = await _get('/api/wa/tokens/$userId?period=$period');
+    return res['success'] == true
+        ? res['data'] as Map<String, dynamic>
+        : {'totalTokens': 0, 'promptTokens': 0, 'completionTokens': 0, 'estimatedCost': 0.0, 'daily': [], 'byBot': []};
+  }
+
+  // ── MASS SEND ──
+  Future<Map<String, dynamic>> sendMassMessage({
+    required String botId,
+    required List<String> contactIds,
+    required String message,
+    String? templateId,
+  }) async {
+    final res = await _post('/api/wa/chatbots/$userId/$botId/mass-send', {
+      'contactIds': contactIds,
+      'message': message,
+      if (templateId != null) 'templateId': templateId,
+    });
+    return res;
+  }
+
+  Future<List<Map<String, dynamic>>> getMassSendHistory(String botId) async {
+    final res = await _get('/api/wa/chatbots/$userId/$botId/mass-send/history');
+    if (res['success'] == true) {
+      return List<Map<String, dynamic>>.from(res['data']['history'] ?? []);
+    }
+    return [];
+  }
+
+  // ── TEMPLATES ──
+  Future<List<Map<String, dynamic>>> getTemplates(String botId) async {
+    final res = await _get('/api/wa/chatbots/$userId/$botId/templates');
+    if (res['success'] == true) {
+      return List<Map<String, dynamic>>.from(res['data']['templates'] ?? []);
+    }
+    return [];
+  }
+
+  Future<bool> saveTemplate(
+      {required String botId,
+      required String name,
+      required String body,
+      required String category}) async {
+    final res = await _post('/api/wa/chatbots/$userId/$botId/templates', {
+      'name': name,
+      'body': body,
+      'category': category,
+    });
+    return res['success'] == true;
+  }
+
+  Future<bool> deleteTemplate(String botId, String templateId) async {
+    final res =
+        await _delete('/api/wa/chatbots/$userId/$botId/templates/$templateId');
+    return res['success'] == true;
+  }
+
+  // ── PHONE VERIFICATION ──
+  Future<Map<String, dynamic>> verifyPhoneNumber(
+      String botId, String displayName) async {
+    final res = await _post(
+        '/api/wa/chatbots/$userId/$botId/verify-phone', {'displayName': displayName});
+    return res;
+  }
+
+  Future<Map<String, dynamic>> getPhoneStatus(String botId) async {
+    final res = await _get('/api/wa/chatbots/$userId/$botId/phone-status');
+    return res['success'] == true ? res['data'] as Map<String, dynamic> : {};
+  }
+
+
+  // ── TEMPLATES RICH ──
+  Future<List<WATemplate>> getTemplatesRich(String botId) async {
+    final res = await _get('/api/wa/chatbots/$userId/$botId/templates/rich');
+    if (res['success'] == true) {
+      return (res['data']['templates'] as List)
+          .map((e) => WATemplate.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<bool> saveTemplateRich({
+    required String botId,
+    required String name,
+    required String category,
+    required String headerType,
+    required String headerText,
+    required String body,
+    required String footer,
+    required List<Map<String, dynamic>> buttons,
+    required List<String> bodyVariables,
+  }) async {
+    final res = await _post('/api/wa/chatbots/$userId/$botId/templates/rich', {
+      'name': name,
+      'category': category,
+      'headerType': headerType,
+      'headerText': headerText,
+      'body': body,
+      'footer': footer,
+      'buttons': buttons,
+      'bodyVariables': bodyVariables,
+      'status': 'PENDING',
+    });
+    return res['success'] == true;
+  }
+
+  Future<bool> syncMetaTemplates(String botId) async {
+    final res = await _post('/api/wa/chatbots/$userId/$botId/templates/sync-meta', {});
+    return res['success'] == true;
+  }
+
+  // ── TOKEN USAGE ADVANCED ──
+  Future<Map<String, dynamic>> getTokenUsageAdvanced(Map<String, String> params) async {
+    final query = params.entries.map((e) => '${e.key}=${e.value}').join('&');
+    final res = await _get('/api/wa/tokens/$userId?$query');
+    return res['success'] == true
+        ? res['data'] as Map<String, dynamic>
+        : {
+            'totalTokens': 0, 'promptTokens': 0, 'completionTokens': 0,
+            'estimatedCost': 0.0, 'totalCalls': 0, 'daily': [], 'byBot': []
+          };
   }
 }
