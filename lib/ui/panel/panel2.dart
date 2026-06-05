@@ -45,7 +45,7 @@ abstract class _C {
   static const textLo = Color(0xFF2E3D5C);
   static const divider = Color(0xFF141E30);
 }
-//update
+//update2
 class _ErrorBanner extends StatelessWidget {
   final String message;
   const _ErrorBanner({required this.message});
