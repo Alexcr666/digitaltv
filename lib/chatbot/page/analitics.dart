@@ -1,5 +1,3 @@
-
-  
 import 'dart:developer';
 import 'dart:html' as html;
 import 'dart:async';
@@ -20,17 +18,17 @@ import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:digitaltv/chatbot/page/widget.dart' as widget2;
 // ─────────────────────────────────────────
-  
+
 // ─────────────────────────────────────────
 // ANALYTICS VIEW — Embudo + Usuarios + Trazabilidad IA
 // ─────────────────────────────────────────
-
 
 class AnalyticsView extends StatefulWidget {
   final WAChatbot bot;
   final WAService service;
   final VoidCallback onBack;
-  const AnalyticsView({required this.bot, required this.service, required this.onBack});
+  const AnalyticsView(
+      {required this.bot, required this.service, required this.onBack});
 
   @override
   State<AnalyticsView> createState() => _AnalyticsViewState();
@@ -104,15 +102,22 @@ class _AnalyticsViewState extends State<AnalyticsView>
               indicatorColor: WAColors.accent,
               indicatorSize: TabBarIndicatorSize.label,
               tabs: const [
-                Tab(icon: Icon(Icons.filter_alt_rounded, size: 16), text: 'Embudo'),
-                Tab(icon: Icon(Icons.group_rounded, size: 16), text: 'Usuarios'),
-                Tab(icon: Icon(Icons.psychology_rounded, size: 16), text: 'Trazabilidad IA'),
+                Tab(
+                    icon: Icon(Icons.filter_alt_rounded, size: 16),
+                    text: 'Embudo'),
+                Tab(
+                    icon: Icon(Icons.group_rounded, size: 16),
+                    text: 'Usuarios'),
+                Tab(
+                    icon: Icon(Icons.psychology_rounded, size: 16),
+                    text: 'Trazabilidad IA'),
               ],
             ),
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: WAColors.accent))
+                ? const Center(
+                    child: CircularProgressIndicator(color: WAColors.accent))
                 : TabBarView(
                     controller: _tabController,
                     children: [
@@ -130,10 +135,30 @@ class _AnalyticsViewState extends State<AnalyticsView>
   // ── TAB 1: EMBUDO ──
   Widget _buildFunnelTab() {
     final stages = [
-      {'label': 'Total contactos', 'value': _totalUsers, 'color': WAColors.accent, 'icon': Icons.people_rounded},
-      {'label': 'Activos últimas 24h', 'value': _activeUsers, 'color': WAColors.green, 'icon': Icons.online_prediction},
-      {'label': 'Solo IA (sin humano)', 'value': _aiOnly, 'color': WAColors.info, 'icon': Icons.psychology_rounded},
-      {'label': 'Derivados a humano', 'value': _humanControl, 'color': WAColors.human, 'icon': Icons.support_agent_rounded},
+      {
+        'label': 'Total contactos',
+        'value': _totalUsers,
+        'color': WAColors.accent,
+        'icon': Icons.people_rounded
+      },
+      {
+        'label': 'Activos últimas 24h',
+        'value': _activeUsers,
+        'color': WAColors.green,
+        'icon': Icons.online_prediction
+      },
+      {
+        'label': 'Solo IA (sin humano)',
+        'value': _aiOnly,
+        'color': WAColors.info,
+        'icon': Icons.psychology_rounded
+      },
+      {
+        'label': 'Derivados a humano',
+        'value': _humanControl,
+        'color': WAColors.human,
+        'icon': Icons.support_agent_rounded
+      },
     ];
 
     final maxVal = _totalUsers == 0 ? 1 : _totalUsers;
@@ -144,7 +169,10 @@ class _AnalyticsViewState extends State<AnalyticsView>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Embudo de conversaciones',
-              style: TextStyle(color: WAColors.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  color: WAColors.textPri,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
           WACard(
             child: Column(
@@ -163,17 +191,23 @@ class _AnalyticsViewState extends State<AnalyticsView>
                     children: [
                       Row(
                         children: [
-                          Icon(stage['icon'] as IconData, color: color, size: 16),
+                          Icon(stage['icon'] as IconData,
+                              color: color, size: 16),
                           const SizedBox(width: 8),
                           Text(stage['label'] as String,
-                              style: const TextStyle(color: WAColors.textSec, fontSize: 13)),
+                              style: const TextStyle(
+                                  color: WAColors.textSec, fontSize: 13)),
                           const Spacer(),
                           Text('$val',
-                              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
+                              style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16)),
                           const SizedBox(width: 8),
                           Text(
                             '${(pct * 100).toStringAsFixed(0)}%',
-                            style: const TextStyle(color: WAColors.textMuted, fontSize: 12),
+                            style: const TextStyle(
+                                color: WAColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -194,7 +228,11 @@ class _AnalyticsViewState extends State<AnalyticsView>
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(5),
                                 color: color,
-                                boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 4)],
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: color.withOpacity(0.4),
+                                      blurRadius: 4)
+                                ],
                               ),
                             ),
                           ),
@@ -215,14 +253,20 @@ class _AnalyticsViewState extends State<AnalyticsView>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Por semana',
-                          style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(
+                              color: WAColors.textPri,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
                       const SizedBox(height: 12),
                       InfoRow('Nuevos esta semana',
                           '${_conversations.where((c) => DateTime.now().difference(c.lastMessageAt).inDays <= 7).length}'),
                       InfoRow('Activos esta semana',
                           '${_conversations.where((c) => DateTime.now().difference(c.lastMessageAt).inDays <= 7).length}'),
-                      InfoRow('Tasa derivación humano',
-                          _totalUsers > 0 ? '${(_humanControl / _totalUsers * 100).toStringAsFixed(1)}%' : '0%'),
+                      InfoRow(
+                          'Tasa derivación humano',
+                          _totalUsers > 0
+                              ? '${(_humanControl / _totalUsers * 100).toStringAsFixed(1)}%'
+                              : '0%'),
                     ],
                   ),
                 ),
@@ -234,7 +278,10 @@ class _AnalyticsViewState extends State<AnalyticsView>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Estados',
-                          style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(
+                              color: WAColors.textPri,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
                       const SizedBox(height: 12),
                       InfoRow('Modo IA activo', '$_aiOnly'),
                       InfoRow('Modo humano activo', '$_humanControl'),
@@ -267,16 +314,23 @@ class _AnalyticsViewState extends State<AnalyticsView>
           Row(
             children: [
               const Text('Usuarios nuevos (últimos 7 días)',
-                  style: TextStyle(color: WAColors.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      color: WAColors.textPri,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: WAColors.green.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text('${newUsers.length} nuevos',
-                    style: const TextStyle(color: WAColors.green, fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(
+                        color: WAColors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -304,9 +358,13 @@ class _AnalyticsViewState extends State<AnalyticsView>
                             backgroundColor: WAColors.accent.withOpacity(0.2),
                             radius: 20,
                             child: Text(
-                              conv.contactName.isNotEmpty ? conv.contactName[0].toUpperCase() : '?',
+                              conv.contactName.isNotEmpty
+                                  ? conv.contactName[0].toUpperCase()
+                                  : '?',
                               style: const TextStyle(
-                                  color: WAColors.accent, fontWeight: FontWeight.w700, fontSize: 14),
+                                  color: WAColors.accent,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -316,18 +374,22 @@ class _AnalyticsViewState extends State<AnalyticsView>
                               children: [
                                 Text(conv.contactName,
                                     style: const TextStyle(
-                                        color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 13)),
+                                        color: WAColors.textPri,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13)),
                                 const SizedBox(height: 2),
                                 Text(
                                   conv.from.replaceAll('@c.us', ''),
-                                  style: const TextStyle(color: WAColors.textMuted, fontSize: 11),
+                                  style: const TextStyle(
+                                      color: WAColors.textMuted, fontSize: 11),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   conv.lastMessage,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: WAColors.textSec, fontSize: 12),
+                                  style: const TextStyle(
+                                      color: WAColors.textSec, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -338,11 +400,13 @@ class _AnalyticsViewState extends State<AnalyticsView>
                             children: [
                               Text(
                                 _formatDiff(conv.lastMessageAt),
-                                style: const TextStyle(color: WAColors.textMuted, fontSize: 11),
+                                style: const TextStyle(
+                                    color: WAColors.textMuted, fontSize: 11),
                               ),
                               const SizedBox(height: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: conv.humanControl
                                       ? WAColors.human.withOpacity(0.15)
@@ -352,7 +416,9 @@ class _AnalyticsViewState extends State<AnalyticsView>
                                 child: Text(
                                   conv.humanControl ? 'Humano' : 'IA',
                                   style: TextStyle(
-                                    color: conv.humanControl ? WAColors.human : WAColors.green,
+                                    color: conv.humanControl
+                                        ? WAColors.human
+                                        : WAColors.green,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -363,9 +429,12 @@ class _AnalyticsViewState extends State<AnalyticsView>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text('Ver traza',
-                                      style: TextStyle(color: WAColors.accent, fontSize: 10)),
+                                      style: TextStyle(
+                                          color: WAColors.accent,
+                                          fontSize: 10)),
                                   SizedBox(width: 2),
-                                  Icon(Icons.arrow_forward_ios, size: 10, color: WAColors.accent),
+                                  Icon(Icons.arrow_forward_ios,
+                                      size: 10, color: WAColors.accent),
                                 ],
                               ),
                             ],
@@ -405,16 +474,20 @@ class _AnalyticsViewState extends State<AnalyticsView>
                   value: _selectedConvId.isEmpty ? null : _selectedConvId,
                   isExpanded: true,
                   underline: const SizedBox(),
-                  hint: const Text('Elige una conversación', style: TextStyle(color: WAColors.textMuted, fontSize: 13)),
+                  hint: const Text('Elige una conversación',
+                      style:
+                          TextStyle(color: WAColors.textMuted, fontSize: 13)),
                   dropdownColor: WAColors.card,
                   style: const TextStyle(color: WAColors.textPri, fontSize: 13),
                   items: _conversations
                       .map((c) => DropdownMenuItem(
                             value: c.id,
-                            child: Text('${c.contactName} — ${c.from.replaceAll("@c.us", "")}'),
+                            child: Text(
+                                '${c.contactName} — ${c.from.replaceAll("@c.us", "")}'),
                           ))
                       .toList(),
-                  onChanged: (val) => setState(() => _selectedConvId = val ?? ''),
+                  onChanged: (val) =>
+                      setState(() => _selectedConvId = val ?? ''),
                 ),
               ),
             ],
@@ -430,7 +503,8 @@ class _AnalyticsViewState extends State<AnalyticsView>
                       Icon(Icons.timeline, size: 48, color: WAColors.textMuted),
                       SizedBox(height: 12),
                       Text('Selecciona un usuario para ver su trazabilidad',
-                          style: TextStyle(color: WAColors.textSec, fontSize: 13)),
+                          style:
+                              TextStyle(color: WAColors.textSec, fontSize: 13)),
                     ],
                   ),
                 )
@@ -438,31 +512,38 @@ class _AnalyticsViewState extends State<AnalyticsView>
                   future: _getMessages(_selectedConvId),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: WAColors.accent));
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              color: WAColors.accent));
                     }
                     final msgs = snapshot.data ?? [];
                     if (msgs.isEmpty) {
                       return const Center(
-                          child: Text('Sin mensajes', style: TextStyle(color: WAColors.textMuted)));
+                          child: Text('Sin mensajes',
+                              style: TextStyle(color: WAColors.textMuted)));
                     }
 
                     // Stats de esta conversación
-                    final aiMsgs = msgs.where((m) => m.role == 'assistant').length;
+                    final aiMsgs =
+                        msgs.where((m) => m.role == 'assistant').length;
                     final userMsgs = msgs.where((m) => m.role == 'user').length;
-                    final agentMsgs = msgs.where((m) => m.role == 'agent').length;
+                    final agentMsgs =
+                        msgs.where((m) => m.role == 'agent').length;
 
                     return Column(
                       children: [
                         // Stats rápidas de la conversación
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
                           color: WAColors.surface,
                           child: Row(
                             children: [
                               MiniStat('Usuario', '$userMsgs', WAColors.accent),
                               MiniStat('Resp. IA', '$aiMsgs', WAColors.green),
                               MiniStat('Agente', '$agentMsgs', WAColors.human),
-                              MiniStat('Total', '${msgs.length}', WAColors.textSec),
+                              MiniStat(
+                                  'Total', '${msgs.length}', WAColors.textSec),
                             ],
                           ),
                         ),
@@ -480,7 +561,11 @@ class _AnalyticsViewState extends State<AnalyticsView>
                                   : isAI
                                       ? WAColors.green
                                       : WAColors.human;
-                              final roleLabel = isUser ? 'Usuario' : isAI ? 'IA (OpenAI)' : 'Agente';
+                              final roleLabel = isUser
+                                  ? 'Usuario'
+                                  : isAI
+                                      ? 'IA (OpenAI)'
+                                      : 'Agente';
                               final roleIcon = isUser
                                   ? Icons.person_rounded
                                   : isAI
@@ -502,9 +587,12 @@ class _AnalyticsViewState extends State<AnalyticsView>
                                             decoration: BoxDecoration(
                                               color: color.withOpacity(0.15),
                                               shape: BoxShape.circle,
-                                              border: Border.all(color: color.withOpacity(0.4)),
+                                              border: Border.all(
+                                                  color:
+                                                      color.withOpacity(0.4)),
                                             ),
-                                            child: Icon(roleIcon, size: 14, color: color),
+                                            child: Icon(roleIcon,
+                                                size: 14, color: color),
                                           ),
                                           if (i < msgs.length - 1)
                                             Expanded(
@@ -520,42 +608,60 @@ class _AnalyticsViewState extends State<AnalyticsView>
                                     // Contenido
                                     Expanded(
                                       child: Padding(
-                                        padding: const EdgeInsets.only(bottom: 16),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 16),
                                         child: Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
                                             color: color.withOpacity(0.06),
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(color: color.withOpacity(0.2)),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            border: Border.all(
+                                                color: color.withOpacity(0.2)),
                                           ),
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Row(
                                                 children: [
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3),
                                                     decoration: BoxDecoration(
-                                                      color: color.withOpacity(0.15),
-                                                      borderRadius: BorderRadius.circular(6),
+                                                      color: color
+                                                          .withOpacity(0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
                                                     ),
                                                     child: Text(roleLabel,
                                                         style: TextStyle(
                                                             color: color,
                                                             fontSize: 10,
-                                                            fontWeight: FontWeight.w700)),
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w700)),
                                                   ),
                                                   const Spacer(),
                                                   Text(
-                                                    DateFormat('dd/MM HH:mm').format(msg.timestamp),
-                                                    style: const TextStyle(color: WAColors.textMuted, fontSize: 10),
+                                                    DateFormat('dd/MM HH:mm')
+                                                        .format(msg.timestamp),
+                                                    style: const TextStyle(
+                                                        color:
+                                                            WAColors.textMuted,
+                                                        fontSize: 10),
                                                   ),
                                                 ],
                                               ),
                                               const SizedBox(height: 8),
                                               Text(msg.body,
                                                   style: const TextStyle(
-                                                      color: WAColors.textPri, fontSize: 13, height: 1.4)),
+                                                      color: WAColors.textPri,
+                                                      fontSize: 13,
+                                                      height: 1.4)),
                                             ],
                                           ),
                                         ),

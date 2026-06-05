@@ -1,4 +1,3 @@
-
 // ─────────────────────────────────────────
 // CONFIG VIEW
 // ─────────────────────────────────────────
@@ -62,8 +61,7 @@ class _ConfigViewState extends State<ConfigView> {
         text: b.humanTransferMessage.isNotEmpty
             ? b.humanTransferMessage
             : 'Te conecto con un agente. Un momento por favor.');
-    _keywordsCtrl =
-        TextEditingController(text: b.humanKeywords.join(', '));
+    _keywordsCtrl = TextEditingController(text: b.humanKeywords.join(', '));
     _model = b.aiModel;
     _temperature = b.temperature;
     _maxTokens = b.maxTokens;
@@ -129,28 +127,33 @@ class _ConfigViewState extends State<ConfigView> {
             iconColor: WAColors.accent,
             onBack: widget.onBack,
             actions: [
-          ElevatedButton(
-  onPressed: _saving ? null : _save,
-  style: ElevatedButton.styleFrom(
-    backgroundColor: WAColors.green,
-    foregroundColor: Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    minimumSize: Size.zero, // ✅
-    tapTargetSize: MaterialTapTargetSize.shrinkWrap, // ✅
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-  ),
-  child: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      _saving
-          ? const SizedBox(width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-          : const Icon(Icons.save_rounded, size: 16),
-      const SizedBox(width: 8),
-      Text(_saving ? 'Guardando...' : 'Guardar'),
-    ],
-  ),
-),
+              ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WAColors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  minimumSize: Size.zero, // ✅
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap, // ✅
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.save_rounded, size: 16),
+                    const SizedBox(width: 8),
+                    Text(_saving ? 'Guardando...' : 'Guardar'),
+                  ],
+                ),
+              ),
             ],
           ),
           Expanded(
@@ -173,16 +176,16 @@ class _ConfigViewState extends State<ConfigView> {
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15)),
                               const SizedBox(height: 16),
-                            widget2.  FormField(
+                              widget2.FormField(
                                   label: 'Nombre del bot',
                                   controller: _nameCtrl),
                               const SizedBox(height: 12),
-                              widget2.   FormField(
+                              widget2.FormField(
                                   label: 'Descripción',
                                   controller: _descCtrl,
                                   maxLines: 2),
                               const SizedBox(height: 12),
-                               widget2.  FormField(
+                              widget2.FormField(
                                   label: 'Empresa / Negocio',
                                   controller: _companyCtrl),
                             ],
@@ -202,22 +205,21 @@ class _ConfigViewState extends State<ConfigView> {
                               const Text(
                                   'Datos de tu cuenta de WhatsApp Business (Meta)',
                                   style: TextStyle(
-                                      color: WAColors.textMuted,
-                                      fontSize: 12)),
+                                      color: WAColors.textMuted, fontSize: 12)),
                               const SizedBox(height: 14),
-                               widget2.  FormField(
+                              widget2.FormField(
                                 label: 'Número de WhatsApp',
                                 controller: _phoneCtrl,
                                 hint: 'Ej: +573001234567',
                               ),
                               const SizedBox(height: 12),
-                                widget2. FormField(
+                              widget2.FormField(
                                 label: 'Phone Number ID (Meta)',
                                 controller: _phoneIdCtrl,
                                 hint: 'ID del número en Meta Business',
                               ),
                               const SizedBox(height: 12),
-                               widget2.  FormField(
+                              widget2.FormField(
                                 label: 'Access Token (Meta)',
                                 controller: _tokenCtrl,
                                 hint: 'Token de acceso de Meta',
@@ -237,7 +239,7 @@ class _ConfigViewState extends State<ConfigView> {
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15)),
                               const SizedBox(height: 12),
-                                widget2. FormField(
+                              widget2.FormField(
                                 label: 'System Prompt',
                                 controller: _promptCtrl,
                                 maxLines: 6,
@@ -245,7 +247,7 @@ class _ConfigViewState extends State<ConfigView> {
                                     'Eres un asistente de WhatsApp para {empresa}...',
                               ),
                               const SizedBox(height: 12),
-                                 widget2.FormField(
+                              widget2.FormField(
                                 label: 'Instrucciones adicionales',
                                 controller: _instructionsCtrl,
                                 maxLines: 4,
@@ -275,17 +277,15 @@ class _ConfigViewState extends State<ConfigView> {
                               const SizedBox(height: 16),
                               const Text('Modelo',
                                   style: TextStyle(
-                                      color: WAColors.textSec,
-                                      fontSize: 12)),
+                                      color: WAColors.textSec, fontSize: 12)),
                               const SizedBox(height: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
                                 decoration: BoxDecoration(
                                   color: WAColors.bg,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: WAColors.border),
+                                  border: Border.all(color: WAColors.border),
                                 ),
                                 child: DropdownButton<String>(
                                   value: _model,
@@ -293,8 +293,7 @@ class _ConfigViewState extends State<ConfigView> {
                                   underline: const SizedBox(),
                                   dropdownColor: WAColors.card,
                                   style: const TextStyle(
-                                      color: WAColors.textPri,
-                                      fontSize: 13),
+                                      color: WAColors.textPri, fontSize: 13),
                                   items: const [
                                     DropdownMenuItem(
                                         value: 'gpt-4o-mini',
@@ -306,8 +305,7 @@ class _ConfigViewState extends State<ConfigView> {
                                         value: 'gpt-3.5-turbo',
                                         child: Text('GPT-3.5 Turbo')),
                                   ],
-                                  onChanged: (v) =>
-                                      setState(() => _model = v!),
+                                  onChanged: (v) => setState(() => _model = v!),
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -400,22 +398,21 @@ class _ConfigViewState extends State<ConfigView> {
                               const Text(
                                   'Palabras que activan el traspaso al agente',
                                   style: TextStyle(
-                                      color: WAColors.textMuted,
-                                      fontSize: 12)),
+                                      color: WAColors.textMuted, fontSize: 12)),
                               const SizedBox(height: 12),
-                                   widget2.  FormField(
+                              widget2.FormField(
                                 label: 'Palabras clave (separadas por coma)',
                                 controller: _keywordsCtrl,
                                 hint: 'humano, agente, persona, help',
                               ),
                               const SizedBox(height: 12),
-                                  widget2.   FormField(
+                              widget2.FormField(
                                 label: 'Mensaje de transferencia',
                                 controller: _transferMsgCtrl,
                                 maxLines: 2,
                               ),
                               const SizedBox(height: 12),
-                            widget2.  FormField(
+                              widget2.FormField(
                                 label: 'Mensaje de error',
                                 controller: _errorMsgCtrl,
                                 maxLines: 2,

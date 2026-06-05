@@ -1,4 +1,3 @@
-
 // ─────────────────────────────────────────
 // SERVICIO API
 // ─────────────────────────────────────────
@@ -10,6 +9,7 @@ import 'package:digitaltv/chatbot/chatbot.dart';
 import 'package:digitaltv/chatbot/models/waConversations.dart';
 import 'package:digitaltv/chatbot/page/massSend.dart';
 import 'package:http/http.dart' as http;
+
 class WAService {
   final String userId;
   WAService(this.userId);
@@ -17,24 +17,28 @@ class WAService {
   Future<Map<String, dynamic>> _get(String path) async {
     final r = await http.get(Uri.parse('$kWABaseUrl$path'),
         headers: {'Content-Type': 'application/json'});
-        log("message12: "+Uri.parse('$kWABaseUrl$path').toString()+".  :  "+r.body);
+    log("message12: " +
+        Uri.parse('$kWABaseUrl$path').toString() +
+        ".  :  " +
+        r.body);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> _post(
       String path, Map<String, dynamic> body) async {
     final r = await http.post(Uri.parse('$kWABaseUrl$path'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body));
-            log("message123: "+Uri.parse('$kWABaseUrl$path').toString()+".  :   "+r.body);
+        headers: {'Content-Type': 'application/json'}, body: jsonEncode(body));
+    log("message123: " +
+        Uri.parse('$kWABaseUrl$path').toString() +
+        ".  :   " +
+        r.body);
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> _patch(
       String path, Map<String, dynamic> body) async {
     final r = await http.patch(Uri.parse('$kWABaseUrl$path'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body));
+        headers: {'Content-Type': 'application/json'}, body: jsonEncode(body));
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
@@ -71,37 +75,29 @@ class WAService {
   }
 
   Future<bool> toggleAI(String botId) async {
-    final res =
-        await _post('/api/wa/chatbots/$userId/$botId/toggle-ai', {});
+    final res = await _post('/api/wa/chatbots/$userId/$botId/toggle-ai', {});
     return res['success'] == true;
   }
 
   Future<Map<String, dynamic>?> getBotStatus(String botId) async {
     final res = await _get('/api/wa/chatbots/$userId/$botId/status');
-    return res['success'] == true
-        ? res['data'] as Map<String, dynamic>
-        : null;
+    return res['success'] == true ? res['data'] as Map<String, dynamic> : null;
   }
 
   Future<Map<String, dynamic>?> getBotSummary(String botId) async {
     final res = await _get('/api/wa/chatbots/$userId/$botId/summary');
-    return res['success'] == true
-        ? res['data'] as Map<String, dynamic>
-        : null;
+    return res['success'] == true ? res['data'] as Map<String, dynamic> : null;
   }
 
   Future<Map<String, dynamic>?> getBotStats(String botId,
       {String period = '7d'}) async {
     final res =
         await _get('/api/wa/chatbots/$userId/$botId/stats?period=$period');
-    return res['success'] == true
-        ? res['data'] as Map<String, dynamic>
-        : null;
+    return res['success'] == true ? res['data'] as Map<String, dynamic> : null;
   }
 
   Future<List<WAConversation>> getConversations(String botId) async {
-    final res =
-        await _get('/api/wa/chatbots/$userId/$botId/conversations');
+    final res = await _get('/api/wa/chatbots/$userId/$botId/conversations');
     if (res['success'] == true) {
       return (res['data']['conversations'] as List)
           .map((e) => WAConversation.fromJson(e as Map<String, dynamic>))
@@ -111,8 +107,7 @@ class WAService {
   }
 
   Future<List<WAMessage>> getMessages(String conversationId) async {
-    final res =
-        await _get('/api/wa/conversations/$conversationId/messages');
+    final res = await _get('/api/wa/conversations/$conversationId/messages');
     if (res['success'] == true) {
       return (res['data']['messages'] as List)
           .map((e) => WAMessage.fromJson(e as Map<String, dynamic>))
@@ -128,8 +123,7 @@ class WAService {
     return res['success'] == true;
   }
 
-  Future<bool> setHumanControl(
-      String conversationId, bool enable) async {
+  Future<bool> setHumanControl(String conversationId, bool enable) async {
     final res = await _post(
         '/api/wa/conversations/$conversationId/human-control',
         {'enable': enable});
@@ -138,16 +132,22 @@ class WAService {
 
   Future<Map<String, dynamic>?> getDashboard() async {
     final res = await _get('/api/wa/dashboard/$userId');
-    return res['success'] == true
-        ? res['data'] as Map<String, dynamic>
-        : null;
+    return res['success'] == true ? res['data'] as Map<String, dynamic> : null;
   }
+
   // ── TOKEN USAGE ──
   Future<Map<String, dynamic>> getTokenUsage({String period = '7d'}) async {
     final res = await _get('/api/wa/tokens/$userId?period=$period');
     return res['success'] == true
         ? res['data'] as Map<String, dynamic>
-        : {'totalTokens': 0, 'promptTokens': 0, 'completionTokens': 0, 'estimatedCost': 0.0, 'daily': [], 'byBot': []};
+        : {
+            'totalTokens': 0,
+            'promptTokens': 0,
+            'completionTokens': 0,
+            'estimatedCost': 0.0,
+            'daily': [],
+            'byBot': []
+          };
   }
 
   // ── MASS SEND ──
@@ -204,8 +204,8 @@ class WAService {
   // ── PHONE VERIFICATION ──
   Future<Map<String, dynamic>> verifyPhoneNumber(
       String botId, String displayName) async {
-    final res = await _post(
-        '/api/wa/chatbots/$userId/$botId/verify-phone', {'displayName': displayName});
+    final res = await _post('/api/wa/chatbots/$userId/$botId/verify-phone',
+        {'displayName': displayName});
     return res;
   }
 
@@ -213,7 +213,6 @@ class WAService {
     final res = await _get('/api/wa/chatbots/$userId/$botId/phone-status');
     return res['success'] == true ? res['data'] as Map<String, dynamic> : {};
   }
-
 
   // ── TEMPLATES RICH ──
   Future<List<WATemplate>> getTemplatesRich(String botId) async {
@@ -252,19 +251,26 @@ class WAService {
   }
 
   Future<bool> syncMetaTemplates(String botId) async {
-    final res = await _post('/api/wa/chatbots/$userId/$botId/templates/sync-meta', {});
+    final res =
+        await _post('/api/wa/chatbots/$userId/$botId/templates/sync-meta', {});
     return res['success'] == true;
   }
 
   // ── TOKEN USAGE ADVANCED ──
-  Future<Map<String, dynamic>> getTokenUsageAdvanced(Map<String, String> params) async {
+  Future<Map<String, dynamic>> getTokenUsageAdvanced(
+      Map<String, String> params) async {
     final query = params.entries.map((e) => '${e.key}=${e.value}').join('&');
     final res = await _get('/api/wa/tokens/$userId?$query');
     return res['success'] == true
         ? res['data'] as Map<String, dynamic>
         : {
-            'totalTokens': 0, 'promptTokens': 0, 'completionTokens': 0,
-            'estimatedCost': 0.0, 'totalCalls': 0, 'daily': [], 'byBot': []
+            'totalTokens': 0,
+            'promptTokens': 0,
+            'completionTokens': 0,
+            'estimatedCost': 0.0,
+            'totalCalls': 0,
+            'daily': [],
+            'byBot': []
           };
   }
 }

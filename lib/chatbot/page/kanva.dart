@@ -1,4 +1,3 @@
-
 import 'package:digitaltv/chatbot/chatbot.dart';
 import 'package:digitaltv/chatbot/color.dart';
 import 'package:digitaltv/chatbot/models/waConversations.dart';
@@ -7,14 +6,13 @@ import 'package:digitaltv/chatbot/page/widget.dart';
 import 'package:digitaltv/chatbot/service/service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 class KanbanConv {
   final WAConversation conv;
   final String botId;
   SalesStage stage;
   KanbanConv({required this.conv, required this.botId, required this.stage});
 }
-
-
 
 class _KanbanColumn extends StatelessWidget {
   final SalesStage stage;
@@ -58,7 +56,8 @@ class _KanbanColumn extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: stage.color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
@@ -76,7 +75,8 @@ class _KanbanColumn extends StatelessWidget {
                               fontSize: 13)),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
                         color: stage.color.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10),
@@ -129,7 +129,8 @@ class _KanbanColumn extends StatelessWidget {
                               ? stage.color
                               : WAColors.textMuted.withOpacity(0.6),
                           fontSize: 11,
-                          fontWeight: isHovering ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight:
+                              isHovering ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
                     ],
@@ -142,8 +143,6 @@ class _KanbanColumn extends StatelessWidget {
     );
   }
 }
-
-
 
 class KanbanView extends StatefulWidget {
   final WAService service;
@@ -190,24 +189,24 @@ class _KanbanViewState extends State<KanbanView> {
 
 // Agrega este método en _KanbanViewState para preservar stages entre recargas:
 
-Future<void> _load() async {
-  setState(() => _loading = true);
-  final List<KanbanConv> result = [];
-  for (final bot in widget.bots) {
-    final convs = await widget.service.getConversations(bot.id);
-    for (final conv in convs) {
-      // Preserva el stage ya asignado si existe, si no usa inicial
-      final stage = _stageMap[conv.id] ?? SalesStage.inicial;
-      result.add(KanbanConv(conv: conv, botId: bot.id, stage: stage));
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final List<KanbanConv> result = [];
+    for (final bot in widget.bots) {
+      final convs = await widget.service.getConversations(bot.id);
+      for (final conv in convs) {
+        // Preserva el stage ya asignado si existe, si no usa inicial
+        final stage = _stageMap[conv.id] ?? SalesStage.inicial;
+        result.add(KanbanConv(conv: conv, botId: bot.id, stage: stage));
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _all = result;
+        _loading = false;
+      });
     }
   }
-  if (mounted) {
-    setState(() {
-      _all = result;
-      _loading = false;
-    });
-  }
-}
 
   List<KanbanConv> get _filtered {
     return _all.where((k) {
@@ -246,8 +245,11 @@ Future<void> _load() async {
   }
 
   String _botName(String botId) {
-    try { return widget.bots.firstWhere((b) => b.id == botId).name; }
-    catch (_) { return botId; }
+    try {
+      return widget.bots.firstWhere((b) => b.id == botId).name;
+    } catch (_) {
+      return botId;
+    }
   }
 
   Future<void> _pickDate(bool isFrom) async {
@@ -269,8 +271,10 @@ Future<void> _load() async {
     );
     if (picked != null) {
       setState(() {
-        if (isFrom) _dateFrom = picked;
-        else _dateTo = picked;
+        if (isFrom)
+          _dateFrom = picked;
+        else
+          _dateTo = picked;
       });
     }
   }
@@ -303,11 +307,14 @@ Future<void> _load() async {
                   width: 200,
                   child: TextField(
                     controller: _searchCtrl,
-                    style: const TextStyle(color: WAColors.textPri, fontSize: 12),
+                    style:
+                        const TextStyle(color: WAColors.textPri, fontSize: 12),
                     decoration: InputDecoration(
                       hintText: 'Buscar contacto...',
-                      hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: WAColors.textMuted, size: 16),
+                      hintStyle: const TextStyle(
+                          color: WAColors.textMuted, fontSize: 12),
+                      prefixIcon: const Icon(Icons.search,
+                          color: WAColors.textMuted, size: 16),
                       filled: true,
                       fillColor: WAColors.card,
                       border: OutlineInputBorder(
@@ -333,10 +340,13 @@ Future<void> _load() async {
                       value: _botFilter,
                       underline: const SizedBox(),
                       dropdownColor: WAColors.card,
-                      style: const TextStyle(color: WAColors.textPri, fontSize: 12),
+                      style: const TextStyle(
+                          color: WAColors.textPri, fontSize: 12),
                       items: [
-                        const DropdownMenuItem(value: 'all', child: Text('Todos los bots')),
-                        ...widget.bots.map((b) => DropdownMenuItem(value: b.id, child: Text(b.name))),
+                        const DropdownMenuItem(
+                            value: 'all', child: Text('Todos los bots')),
+                        ...widget.bots.map((b) =>
+                            DropdownMenuItem(value: b.id, child: Text(b.name))),
                       ],
                       onChanged: (v) => setState(() => _botFilter = v ?? 'all'),
                     ),
@@ -354,11 +364,14 @@ Future<void> _load() async {
                     value: _modeFilter,
                     underline: const SizedBox(),
                     dropdownColor: WAColors.card,
-                    style: const TextStyle(color: WAColors.textPri, fontSize: 12),
+                    style:
+                        const TextStyle(color: WAColors.textPri, fontSize: 12),
                     items: const [
-                      DropdownMenuItem(value: 'all', child: Text('IA + Humano')),
+                      DropdownMenuItem(
+                          value: 'all', child: Text('IA + Humano')),
                       DropdownMenuItem(value: 'ai', child: Text('Solo IA')),
-                      DropdownMenuItem(value: 'human', child: Text('Solo Humano')),
+                      DropdownMenuItem(
+                          value: 'human', child: Text('Solo Humano')),
                     ],
                     onChanged: (v) => setState(() => _modeFilter = v ?? 'all'),
                   ),
@@ -368,26 +381,36 @@ Future<void> _load() async {
                 InkWell(
                   onTap: () => _pickDate(true),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: _dateFrom != null ? WAColors.accent.withOpacity(0.15) : WAColors.card,
+                      color: _dateFrom != null
+                          ? WAColors.accent.withOpacity(0.15)
+                          : WAColors.card,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _dateFrom != null ? WAColors.accent.withOpacity(0.4) : WAColors.border,
+                        color: _dateFrom != null
+                            ? WAColors.accent.withOpacity(0.4)
+                            : WAColors.border,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 13,
-                            color: _dateFrom != null ? WAColors.accent : WAColors.textMuted),
+                        Icon(Icons.calendar_today_rounded,
+                            size: 13,
+                            color: _dateFrom != null
+                                ? WAColors.accent
+                                : WAColors.textMuted),
                         const SizedBox(width: 6),
                         Text(
                           _dateFrom != null
                               ? DateFormat('dd/MM/yy').format(_dateFrom!)
                               : 'Desde',
                           style: TextStyle(
-                            color: _dateFrom != null ? WAColors.accent : WAColors.textMuted,
+                            color: _dateFrom != null
+                                ? WAColors.accent
+                                : WAColors.textMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -400,26 +423,36 @@ Future<void> _load() async {
                 InkWell(
                   onTap: () => _pickDate(false),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: _dateTo != null ? WAColors.accent.withOpacity(0.15) : WAColors.card,
+                      color: _dateTo != null
+                          ? WAColors.accent.withOpacity(0.15)
+                          : WAColors.card,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _dateTo != null ? WAColors.accent.withOpacity(0.4) : WAColors.border,
+                        color: _dateTo != null
+                            ? WAColors.accent.withOpacity(0.4)
+                            : WAColors.border,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 13,
-                            color: _dateTo != null ? WAColors.accent : WAColors.textMuted),
+                        Icon(Icons.calendar_today_rounded,
+                            size: 13,
+                            color: _dateTo != null
+                                ? WAColors.accent
+                                : WAColors.textMuted),
                         const SizedBox(width: 6),
                         Text(
                           _dateTo != null
                               ? DateFormat('dd/MM/yy').format(_dateTo!)
                               : 'Hasta',
                           style: TextStyle(
-                            color: _dateTo != null ? WAColors.accent : WAColors.textMuted,
+                            color: _dateTo != null
+                                ? WAColors.accent
+                                : WAColors.textMuted,
                             fontSize: 12,
                           ),
                         ),
@@ -431,14 +464,18 @@ Future<void> _load() async {
                 if (_dateFrom != null || _dateTo != null) ...[
                   const SizedBox(width: 6),
                   InkWell(
-                    onTap: () => setState(() { _dateFrom = null; _dateTo = null; }),
+                    onTap: () => setState(() {
+                      _dateFrom = null;
+                      _dateTo = null;
+                    }),
                     child: Container(
                       padding: const EdgeInsets.all(7),
                       decoration: BoxDecoration(
                         color: WAColors.error.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.close_rounded, size: 14, color: WAColors.error),
+                      child: const Icon(Icons.close_rounded,
+                          size: 14, color: WAColors.error),
                     ),
                   ),
                 ],
@@ -446,7 +483,8 @@ Future<void> _load() async {
                 // Conteo total
                 Text(
                   '${_filtered.length} contactos',
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 12),
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 12),
                 ),
               ],
             ),
@@ -454,7 +492,8 @@ Future<void> _load() async {
           // ── Tablero Kanban ──
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: WAColors.green))
+                ? const Center(
+                    child: CircularProgressIndicator(color: WAColors.green))
                 : SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.all(16),
@@ -554,7 +593,9 @@ class KanbanCard extends StatelessWidget {
                     radius: 16,
                     backgroundColor: stage.color.withOpacity(0.2),
                     child: Text(
-                      conv.contactName.isNotEmpty ? conv.contactName[0].toUpperCase() : '?',
+                      conv.contactName.isNotEmpty
+                          ? conv.contactName[0].toUpperCase()
+                          : '?',
                       style: TextStyle(
                         color: stage.color,
                         fontWeight: FontWeight.w800,
@@ -564,9 +605,11 @@ class KanbanCard extends StatelessWidget {
                   ),
                   if (isActive)
                     Positioned(
-                      right: 0, bottom: 0,
+                      right: 0,
+                      bottom: 0,
                       child: Container(
-                        width: 9, height: 9,
+                        width: 9,
+                        height: 9,
                         decoration: BoxDecoration(
                           color: WAColors.green,
                           shape: BoxShape.circle,
@@ -588,7 +631,8 @@ class KanbanCard extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                             fontSize: 12)),
                     Text(conv.from.replaceAll('@c.us', ''),
-                        style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+                        style: const TextStyle(
+                            color: WAColors.textMuted, fontSize: 10)),
                   ],
                 ),
               ),
@@ -600,19 +644,23 @@ class KanbanCard extends StatelessWidget {
           Text(conv.lastMessage,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: WAColors.textSec, fontSize: 11, height: 1.3)),
+              style: const TextStyle(
+                  color: WAColors.textSec, fontSize: 11, height: 1.3)),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.smart_toy_rounded, size: 10, color: WAColors.textMuted),
+              const Icon(Icons.smart_toy_rounded,
+                  size: 10, color: WAColors.textMuted),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(botName,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+                    style: const TextStyle(
+                        color: WAColors.textMuted, fontSize: 10)),
               ),
               Text(_fmt(conv.lastMessageAt),
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 10)),
             ],
           ),
           const SizedBox(height: 8),
@@ -661,18 +709,23 @@ class KanbanCard extends StatelessWidget {
                         ))
                     .toList(),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: WAColors.accent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: WAColors.accent.withOpacity(0.25)),
+                    border:
+                        Border.all(color: WAColors.accent.withOpacity(0.25)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Mover', style: TextStyle(color: WAColors.accent, fontSize: 10)),
+                      Text('Mover',
+                          style:
+                              TextStyle(color: WAColors.accent, fontSize: 10)),
                       SizedBox(width: 3),
-                      Icon(Icons.keyboard_arrow_down_rounded, size: 12, color: WAColors.accent),
+                      Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 12, color: WAColors.accent),
                     ],
                   ),
                 ),

@@ -11,20 +11,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-
-
 class FirebaseService {
   static bool suppressAuthRedirect = false;
 
-  final FirebaseAuth      _auth      = FirebaseAuth.instance;
-  final FirebaseFirestore _db        = FirebaseFirestore.instance;
-  final FirebaseStorage   _storage   = FirebaseStorage.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
-  CollectionReference get _users         => _db.collection('users');
-  CollectionReference get _roles         => _db.collection('roles');
+  CollectionReference get _users => _db.collection('users');
+  CollectionReference get _roles => _db.collection('roles');
   CollectionReference get _notifications => _db.collection('notifications');
-  CollectionReference get _companies     => _db.collection('companies');
+  CollectionReference get _companies => _db.collection('companies');
 
   User? get currentFirebaseUser => _auth.currentUser;
   Stream<User?> get authStateStream => _auth.authStateChanges();
@@ -32,9 +30,9 @@ class FirebaseService {
   // ── SEED ──────────────────────────────────────────────────────────────────
 
   Future<void> seedSuperAdmin() async {
-    const email    = 'sly@gmail.com';
+    const email = 'sly@gmail.com';
     const password = 'Mercurio123*';
-    const name     = 'Super Administrador';
+    const name = 'Super Administrador';
 
     try {
       final exists = await _superAdminExistsInFirestore(email);
@@ -52,10 +50,7 @@ class FirebaseService {
   }
 
   Future<bool> _superAdminExistsInFirestore(String email) async {
-    final snap = await _users
-        .where('email', isEqualTo: email)
-        .limit(1)
-        .get();
+    final snap = await _users.where('email', isEqualTo: email).limit(1).get();
     return snap.docs.isNotEmpty;
   }
 
@@ -84,14 +79,14 @@ class FirebaseService {
       String uid, String name, String email) async {
     final now = DateTime.now();
     final appUser = AppUser(
-      uid:         uid,
-      name:        name,
-      email:       email,
-      roles:       [AppRole.superAdmin],
+      uid: uid,
+      name: name,
+      email: email,
+      roles: [AppRole.superAdmin],
       permissions: AppPermission.values.toList(),
-      companyId:   null,
-      createdAt:   now,
-      updatedAt:   now,
+      companyId: null,
+      createdAt: now,
+      updatedAt: now,
     );
     await _users.doc(uid).set(appUser.toFirestore());
   }
@@ -160,14 +155,14 @@ class FirebaseService {
       final now = DateTime.now();
 
       final appUser = AppUser(
-        uid:         cred.user!.uid,
-        name:        name.trim(),
-        email:       email.trim(),
-        roles:       [role],
+        uid: cred.user!.uid,
+        name: name.trim(),
+        email: email.trim(),
+        roles: [role],
         permissions: permissions,
-        companyId:   companyId,
-        createdAt:   now,
-        updatedAt:   now,
+        companyId: companyId,
+        createdAt: now,
+        updatedAt: now,
       );
 
       await _users.doc(cred.user!.uid).set(appUser.toFirestore());
@@ -259,9 +254,9 @@ class FirebaseService {
     try {
       final updates = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
-        if (name     != null) 'name':     name.trim(),
-        if (phone    != null) 'phone':    phone.trim(),
-        if (address  != null) 'address':  address.trim(),
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim(),
+        if (address != null) 'address': address.trim(),
         if (photoUrl != null) 'photoUrl': photoUrl,
       };
 
@@ -281,8 +276,8 @@ class FirebaseService {
     required String filename,
   }) async {
     try {
-      final ext  = filename.split('.').last.toLowerCase();
-      final ref  = _storage.ref('profile_photos/$uid/avatar.$ext');
+      final ext = filename.split('.').last.toLowerCase();
+      final ref = _storage.ref('profile_photos/$uid/avatar.$ext');
       final meta = SettableMetadata(contentType: 'image/$ext');
       await ref.putData(bytes, meta);
       final url = await ref.getDownloadURL();
@@ -295,11 +290,8 @@ class FirebaseService {
   // ── COMPANIES ─────────────────────────────────────────────────────────────
 
   Stream<List<Company>> companiesStream() {
-   return _companies
-    .snapshots()
-    .map((snap) {
-      final companies =
-          snap.docs.map(Company.fromFirestore).toList();
+    return _companies.snapshots().map((snap) {
+      final companies = snap.docs.map(Company.fromFirestore).toList();
 
       companies.sort(
         (a, b) => b.createdAt.compareTo(a.createdAt),
@@ -333,23 +325,23 @@ class FirebaseService {
     try {
       FirebaseService.suppressAuthRedirect = true;
 
-      final now     = DateTime.now();
+      final now = DateTime.now();
       final compRef = _companies.doc();
 
       final company = Company(
-        id:        compRef.id,
-        name:      name.trim(),
+        id: compRef.id,
+        name: name.trim(),
         legalName: legalName.trim(),
-        email:     email.trim(),
-        phone:     phone.trim(),
-        address:   address.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
         createdAt: now,
         updatedAt: now,
       );
       await compRef.set(company.toFirestore());
 
       final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
-      secondaryApp  = await Firebase.initializeApp(
+      secondaryApp = await Firebase.initializeApp(
           name: appName, options: Firebase.app().options);
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
 
@@ -359,14 +351,14 @@ class FirebaseService {
 
       final adminPerms = kDefaultRolePermissions[AppRole.companyAdmin] ?? [];
       final appUser = AppUser(
-        uid:         cred.user!.uid,
-        name:        adminName.trim(),
-        email:       adminEmail.trim(),
-        roles:       [AppRole.companyAdmin],
+        uid: cred.user!.uid,
+        name: adminName.trim(),
+        email: adminEmail.trim(),
+        roles: [AppRole.companyAdmin],
         permissions: adminPerms,
-        companyId:   compRef.id,
-        createdAt:   now,
-        updatedAt:   now,
+        companyId: compRef.id,
+        createdAt: now,
+        updatedAt: now,
       );
       await _users.doc(cred.user!.uid).set(appUser.toFirestore());
 
@@ -400,7 +392,7 @@ class FirebaseService {
   Future<Result<void>> deleteCompany(String companyId) async {
     try {
       await _companies.doc(companyId).update({
-        'status':    'inactive',
+        'status': 'inactive',
         'updatedAt': FieldValue.serverTimestamp(),
       });
       return const Success(null);
@@ -415,7 +407,7 @@ class FirebaseService {
   }) async {
     try {
       await _companies.doc(companyId).update({
-        'status':    status,
+        'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       return const Success(null);
@@ -426,24 +418,24 @@ class FirebaseService {
 
   // ── USERS (admin) ─────────────────────────────────────────────────────────
 
- Stream<List<AppUser>> allUsersStream({String? companyId}) {
-  Query query = _users;
+  Stream<List<AppUser>> allUsersStream({String? companyId}) {
+    Query query = _users;
 
-  if (companyId != null) {
-    query = query.where('companyId', isEqualTo: companyId);
+    if (companyId != null) {
+      query = query.where('companyId', isEqualTo: companyId);
+    }
+
+    return query.snapshots().map((snap) {
+      final users = snap.docs.map(AppUser.fromFirestore).toList();
+
+      users.sort(
+        (a, b) => b.createdAt.compareTo(a.createdAt),
+      );
+
+      return users;
+    });
   }
 
-  return query.snapshots().map((snap) {
-    final users =
-        snap.docs.map(AppUser.fromFirestore).toList();
-
-    users.sort(
-      (a, b) => b.createdAt.compareTo(a.createdAt),
-    );
-
-    return users;
-  });
-}
   Future<Result<AppUser>> createUserAsAdmin({
     required String name,
     required String email,
@@ -459,7 +451,7 @@ class FirebaseService {
       FirebaseService.suppressAuthRedirect = true;
 
       final appName = 'secondary_${DateTime.now().millisecondsSinceEpoch}';
-      secondaryApp  = await Firebase.initializeApp(
+      secondaryApp = await Firebase.initializeApp(
           name: appName, options: Firebase.app().options);
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
 
@@ -467,19 +459,19 @@ class FirebaseService {
           email: email.trim(), password: password);
       await cred.user!.updateDisplayName(name.trim());
 
-      final uid   = cred.user!.uid;
-      final now   = DateTime.now();
+      final uid = cred.user!.uid;
+      final now = DateTime.now();
       final perms = kDefaultRolePermissions[role] ?? [];
 
       final appUser = AppUser(
-        uid:         uid,
-        name:        name.trim(),
-        email:       email.trim(),
-        roles:       [role],
+        uid: uid,
+        name: name.trim(),
+        email: email.trim(),
+        roles: [role],
         permissions: perms,
-        companyId:   companyId,
-        createdAt:   now,
-        updatedAt:   now,
+        companyId: companyId,
+        createdAt: now,
+        updatedAt: now,
       );
 
       await _users.doc(uid).set(appUser.toFirestore());
@@ -510,9 +502,9 @@ class FirebaseService {
           .toList();
 
       await _users.doc(uid).update({
-        'roles':       roles.map((r) => r.value).toList(),
+        'roles': roles.map((r) => r.value).toList(),
         'permissions': perms.map((p) => p.value).toList(),
-        'updatedAt':   FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
       return const Success(null);
     } catch (e) {
@@ -526,7 +518,7 @@ class FirebaseService {
   }) async {
     try {
       await _users.doc(uid).update({
-        'status':    status,
+        'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       return const Success(null);
@@ -547,13 +539,13 @@ class FirebaseService {
         return AppRole.values
             .where((r) => r != AppRole.superAdmin)
             .map((role) => RoleDefinition(
-                  id:          role.value,
-                  name:        role.value,
+                  id: role.value,
+                  name: role.value,
                   displayName: role.displayName,
                   description: 'Rol predeterminado',
                   permissions: kDefaultRolePermissions[role] ?? [],
-                  companyId:   companyId,
-                  createdAt:   DateTime.now(),
+                  companyId: companyId,
+                  createdAt: DateTime.now(),
                 ))
             .toList();
       }
@@ -591,22 +583,21 @@ class FirebaseService {
 
   // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
 
-Stream<List<AppNotification>> notificationsStream(String userId) {
-  return _notifications
-      .where('userId', isEqualTo: userId)
-      .limit(50)
-      .snapshots()
-      .map((s) {
-        final list =
-            s.docs.map(AppNotification.fromFirestore).toList();
+  Stream<List<AppNotification>> notificationsStream(String userId) {
+    return _notifications
+        .where('userId', isEqualTo: userId)
+        .limit(50)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map(AppNotification.fromFirestore).toList();
 
-        list.sort(
-          (a, b) => b.createdAt.compareTo(a.createdAt),
-        );
+      list.sort(
+        (a, b) => b.createdAt.compareTo(a.createdAt),
+      );
 
-        return list;
-      });
-}
+      return list;
+    });
+  }
 
   Stream<int> unreadCountStream(String userId) {
     return _notifications
@@ -634,14 +625,14 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
   }) async {
     try {
       await _notifications.add({
-        'userId':    userId,
+        'userId': userId,
         'companyId': companyId,
-        'title':     title,
-        'body':      body,
-        'type':      type.name,
-        'read':      false,
+        'title': title,
+        'body': body,
+        'type': type.name,
+        'read': false,
         'createdAt': FieldValue.serverTimestamp(),
-        'metadata':  <String, dynamic>{},
+        'metadata': <String, dynamic>{},
       });
       return const Success(null);
     } catch (e) {
@@ -744,13 +735,13 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
       batch.set(
         ref,
         RoleDefinition(
-          id:          ref.id,
-          name:        role.value,
+          id: ref.id,
+          name: role.value,
           displayName: role.displayName,
           description: 'Rol predeterminado: ${role.displayName}',
           permissions: kDefaultRolePermissions[role] ?? [],
-          companyId:   companyId,
-          createdAt:   DateTime.now(),
+          companyId: companyId,
+          createdAt: DateTime.now(),
         ).toFirestore(),
       );
     }
@@ -760,16 +751,16 @@ Stream<List<AppNotification>> notificationsStream(String userId) {
   // ── HELPERS ───────────────────────────────────────────────────────────────
 
   String _authErrorMessage(String code) => switch (code) {
-        'user-not-found'         => 'No existe una cuenta con ese email.',
-        'wrong-password'         => 'Contraseña incorrecta.',
-        'email-already-in-use'   => 'Este email ya está registrado.',
-        'weak-password'          => 'La contraseña debe tener al menos 6 caracteres.',
-        'invalid-email'          => 'El formato del email no es válido.',
-        'too-many-requests'      => 'Demasiados intentos. Intenta más tarde.',
-        'user-disabled'          => 'Esta cuenta ha sido desactivada.',
-        'invalid-credential'     => 'Credenciales inválidas.',
+        'user-not-found' => 'No existe una cuenta con ese email.',
+        'wrong-password' => 'Contraseña incorrecta.',
+        'email-already-in-use' => 'Este email ya está registrado.',
+        'weak-password' => 'La contraseña debe tener al menos 6 caracteres.',
+        'invalid-email' => 'El formato del email no es válido.',
+        'too-many-requests' => 'Demasiados intentos. Intenta más tarde.',
+        'user-disabled' => 'Esta cuenta ha sido desactivada.',
+        'invalid-credential' => 'Credenciales inválidas.',
         'network-request-failed' => 'Error de conexión. Verifica tu internet.',
-        'requires-recent-login'  => 'Debes iniciar sesión nuevamente.',
-        _                        => 'Error de autenticación ($code).',
+        'requires-recent-login' => 'Debes iniciar sesión nuevamente.',
+        _ => 'Error de autenticación ($code).',
       };
 }

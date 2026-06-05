@@ -9,7 +9,7 @@ import 'dart:math' as math;
 import 'package:digitaltv/ui/panel/panel.dart';
 import 'package:digitaltv/ui/panel/panel/page/model/model.dart';
 import 'package:digitaltv/ui/panel/panel/page/widget/utils.dart';
-import 'package:digitaltv/ui/panel/programing.dart';
+import 'package:digitaltv/ui/programming/programing.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -74,7 +74,6 @@ class _ErrorBanner extends StatelessWidget {
     ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.05);
   }
 }
-
 
 SnackBar _snack(String message) => SnackBar(
       content:

@@ -1,5 +1,3 @@
-
-
 import 'dart:developer';
 import 'dart:html' as html;
 import 'dart:async';
@@ -48,7 +46,8 @@ class _CreateBotDialogState extends State<CreateBotDialog> {
 
   // ─── TU Facebook App ID aquí ───
   static const _fbAppId = '1673571300005129';
-  static const _fbRedirectUri = 'https://gettranscribeai.onrender.com/api/wa/facebook/exchange-token';
+  static const _fbRedirectUri =
+      'https://gettranscribeai.onrender.com/api/wa/facebook/exchange-token';
 
   @override
   void dispose() {
@@ -57,56 +56,57 @@ class _CreateBotDialogState extends State<CreateBotDialog> {
     super.dispose();
   }
 
-void _loginWithFacebook() {
-  final scope = 'whatsapp_business_management,whatsapp_business_messaging,business_management';
-  final url =
-      'https://www.facebook.com/v19.0/dialog/oauth'
-      '?client_id=$_fbAppId'
-      '&redirect_uri=${Uri.encodeComponent('https://gettranscribeai.onrender.com/oauth/facebook/callback')}'
-      '&scope=${Uri.encodeComponent(scope)}'
-      '&response_type=code';
+  void _loginWithFacebook() {
+    final scope =
+        'whatsapp_business_management,whatsapp_business_messaging,business_management';
+    final url = 'https://www.facebook.com/v19.0/dialog/oauth'
+        '?client_id=$_fbAppId'
+        '&redirect_uri=${Uri.encodeComponent('https://gettranscribeai.onrender.com/oauth/facebook/callback')}'
+        '&scope=${Uri.encodeComponent(scope)}'
+        '&response_type=code';
 
-  html.window.open(url, 'fb_login', 'width=600,height=700');
+    html.window.open(url, 'fb_login', 'width=600,height=700');
 
-  html.window.onMessage.listen((event) async {
-    final data = event.data;
-    if (data is! Map) return;
-    if (data['type'] != 'fb_code') return;
-    final code = data['code'] as String?;
-    if (code == null) return;
+    html.window.onMessage.listen((event) async {
+      final data = event.data;
+      if (data is! Map) return;
+      if (data['type'] != 'fb_code') return;
+      final code = data['code'] as String?;
+      if (code == null) return;
 
-    if (!mounted) return;
-    setState(() => _fbLoading = true);
-
-    try {
-      final res = await http.post(
-        Uri.parse('$kWABaseUrl/api/wa/facebook/exchange-token'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'code': code,
-          'redirectUri': 'https://gettranscribeai.onrender.com/oauth/facebook/callback',
-        }),
-      );
-      final body = jsonDecode(res.body);
-      if (body['success'] == true) {
-        if (!mounted) return;
-        setState(() {
-          _accessToken = body['data']['accessToken'];
-          _phones = List<Map<String, dynamic>>.from(body['data']['phones']);
-          _step = 'phone';
-        });
-      } else {
-        if (!mounted) return;
-        _showError(body['error'] ?? 'Error al conectar');
-      }
-    } catch (e) {
       if (!mounted) return;
-      _showError(e.toString());
-    } finally {
-      if (mounted) setState(() => _fbLoading = false);
-    }
-  });
-}
+      setState(() => _fbLoading = true);
+
+      try {
+        final res = await http.post(
+          Uri.parse('$kWABaseUrl/api/wa/facebook/exchange-token'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'code': code,
+            'redirectUri':
+                'https://gettranscribeai.onrender.com/oauth/facebook/callback',
+          }),
+        );
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          if (!mounted) return;
+          setState(() {
+            _accessToken = body['data']['accessToken'];
+            _phones = List<Map<String, dynamic>>.from(body['data']['phones']);
+            _step = 'phone';
+          });
+        } else {
+          if (!mounted) return;
+          _showError(body['error'] ?? 'Error al conectar');
+        }
+      } catch (e) {
+        if (!mounted) return;
+        _showError(e.toString());
+      } finally {
+        if (mounted) setState(() => _fbLoading = false);
+      }
+    });
+  }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -150,11 +150,15 @@ void _loginWithFacebook() {
                     color: WAColors.green.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.smart_toy_rounded, color: WAColors.green, size: 22),
+                  child: const Icon(Icons.smart_toy_rounded,
+                      color: WAColors.green, size: 22),
                 ),
                 const SizedBox(width: 12),
                 const Text('Conectar WhatsApp',
-                    style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 18)),
+                    style: TextStyle(
+                        color: WAColors.textPri,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18)),
                 const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -168,7 +172,8 @@ void _loginWithFacebook() {
             if (_step == 'fb') ...[
               const Text(
                 'Conecta tu cuenta de Facebook Business para vincular tu número de WhatsApp automáticamente.',
-                style: TextStyle(color: WAColors.textSec, fontSize: 13, height: 1.5),
+                style: TextStyle(
+                    color: WAColors.textSec, fontSize: 13, height: 1.5),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -181,17 +186,23 @@ void _loginWithFacebook() {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _fbLoading
-                      ? const SizedBox(width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                       : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.facebook, size: 20),
                             SizedBox(width: 10),
-                            Text('Continuar con Facebook', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            Text('Continuar con Facebook',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w600)),
                           ],
                         ),
                 ),
@@ -225,7 +236,8 @@ void _loginWithFacebook() {
                   style: TextStyle(color: WAColors.textSec, fontSize: 13)),
               const SizedBox(height: 12),
               if (_phones.isEmpty)
-                const Text('No se encontraron números. Verifica tu cuenta de WhatsApp Business.',
+                const Text(
+                    'No se encontraron números. Verifica tu cuenta de WhatsApp Business.',
                     style: TextStyle(color: WAColors.error, fontSize: 12))
               else
                 ..._phones.map((phone) => Padding(
@@ -245,19 +257,25 @@ void _loginWithFacebook() {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.phone_android, color: WAColors.green, size: 20),
+                              const Icon(Icons.phone_android,
+                                  color: WAColors.green, size: 20),
                               const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(phone['verifiedName'] ?? '',
-                                      style: const TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600)),
+                                      style: const TextStyle(
+                                          color: WAColors.textPri,
+                                          fontWeight: FontWeight.w600)),
                                   Text(phone['phoneNumber'] ?? '',
-                                      style: const TextStyle(color: WAColors.textMuted, fontSize: 12)),
+                                      style: const TextStyle(
+                                          color: WAColors.textMuted,
+                                          fontSize: 12)),
                                 ],
                               ),
                               const Spacer(),
-                              const Icon(Icons.arrow_forward_ios, size: 14, color: WAColors.textMuted),
+                              const Icon(Icons.arrow_forward_ios,
+                                  size: 14, color: WAColors.textMuted),
                             ],
                           ),
                         ),
@@ -276,19 +294,29 @@ void _loginWithFacebook() {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle, color: WAColors.green, size: 16),
+                    const Icon(Icons.check_circle,
+                        color: WAColors.green, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       '${_selectedPhone!['verifiedName']} — ${_selectedPhone!['phoneNumber']}',
-                      style: const TextStyle(color: WAColors.green, fontSize: 12, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: WAColors.green,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-           widget2.   FormField(label: 'Nombre del bot *', controller: _nameCtrl, hint: 'Ej: Soporte Ventas'),
+              widget2.FormField(
+                  label: 'Nombre del bot *',
+                  controller: _nameCtrl,
+                  hint: 'Ej: Soporte Ventas'),
               const SizedBox(height: 12),
-               widget2. FormField(label: 'Empresa / Negocio', controller: _companyCtrl, hint: 'Ej: Mi Empresa S.A.'),
+              widget2.FormField(
+                  label: 'Empresa / Negocio',
+                  controller: _companyCtrl,
+                  hint: 'Ej: Mi Empresa S.A.'),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -300,12 +328,18 @@ void _loginWithFacebook() {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _saving
-                      ? const SizedBox(width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Crear Bot', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Crear Bot',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 15)),
                 ),
               ),
             ],
@@ -316,11 +350,9 @@ void _loginWithFacebook() {
   }
 }
 
-
 // ─────────────────────────────────────────
 // STATS VIEW
 // ─────────────────────────────────────────
-
 
 class StatsView extends StatefulWidget {
   final WAChatbot bot;
@@ -346,8 +378,7 @@ class _StatsViewState extends State<StatsView> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    _stats =
-        await widget.service.getBotStats(widget.bot.id, period: _period);
+    _stats = await widget.service.getBotStats(widget.bot.id, period: _period);
     setState(() => _loading = false);
   }
 
@@ -376,9 +407,7 @@ class _StatsViewState extends State<StatsView> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: _period == p
-                              ? WAColors.accent
-                              : WAColors.card,
+                          color: _period == p ? WAColors.accent : WAColors.card,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                               color: _period == p
@@ -399,8 +428,7 @@ class _StatsViewState extends State<StatsView> {
           Expanded(
             child: _loading
                 ? const Center(
-                    child:
-                        CircularProgressIndicator(color: WAColors.accent))
+                    child: CircularProgressIndicator(color: WAColors.accent))
                 : _stats == null
                     ? const Center(
                         child: Text('Sin datos',
@@ -451,9 +479,7 @@ class _StatsViewState extends State<StatsView> {
                                           color: WAColors.textPri,
                                           fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 20),
-                                  SizedBox(
-                                      height: 200,
-                                      child: _buildChart()),
+                                  SizedBox(height: 200, child: _buildChart()),
                                 ],
                               ),
                             ),
@@ -496,17 +522,13 @@ class _StatsViewState extends State<StatsView> {
                                                 color: WAColors.textPri,
                                                 fontWeight: FontWeight.w600)),
                                         const SizedBox(height: 16),
-                                        InfoRow(
-                                            'Recibidos',
+                                        InfoRow('Recibidos',
                                             '${(_stats!['totals'] as Map?)?['messagesReceived'] ?? 0}'),
-                                        InfoRow(
-                                            'Enviados',
+                                        InfoRow('Enviados',
                                             '${(_stats!['totals'] as Map?)?['messagesSent'] ?? 0}'),
-                                        InfoRow(
-                                            'Resp. IA',
+                                        InfoRow('Resp. IA',
                                             '${(_stats!['totals'] as Map?)?['aiReplies'] ?? 0}'),
-                                        InfoRow(
-                                            'Resp. Humano',
+                                        InfoRow('Resp. Humano',
                                             '${(_stats!['totals'] as Map?)?['humanReplies'] ?? 0}'),
                                       ],
                                     ),
@@ -533,14 +555,14 @@ class _StatsViewState extends State<StatsView> {
     final spots = daily
         .asMap()
         .entries
-        .map((e) => FlSpot(e.key.toDouble(),
-            (e.value['messagesReceived'] ?? 0).toDouble()))
+        .map((e) => FlSpot(
+            e.key.toDouble(), (e.value['messagesReceived'] ?? 0).toDouble()))
         .toList();
     final spotsOut = daily
         .asMap()
         .entries
-        .map((e) => FlSpot(e.key.toDouble(),
-            (e.value['messagesSent'] ?? 0).toDouble()))
+        .map((e) =>
+            FlSpot(e.key.toDouble(), (e.value['messagesSent'] ?? 0).toDouble()))
         .toList();
 
     return LineChart(LineChartData(
@@ -556,8 +578,7 @@ class _StatsViewState extends State<StatsView> {
           showTitles: true,
           reservedSize: 32,
           getTitlesWidget: (v, _) => Text('${v.toInt()}',
-              style: const TextStyle(
-                  color: WAColors.textMuted, fontSize: 10)),
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
         )),
         bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -566,16 +587,13 @@ class _StatsViewState extends State<StatsView> {
           getTitlesWidget: (v, _) {
             final idx = v.toInt();
             if (idx < 0 || idx >= daily.length) return const SizedBox();
-            return Text(
-                daily[idx]['date']?.toString().substring(5) ?? '',
-                style: const TextStyle(
-                    color: WAColors.textMuted, fontSize: 9));
+            return Text(daily[idx]['date']?.toString().substring(5) ?? '',
+                style: const TextStyle(color: WAColors.textMuted, fontSize: 9));
           },
         )),
-        rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false)),
-        topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
       lineBarsData: [
@@ -585,9 +603,8 @@ class _StatsViewState extends State<StatsView> {
           color: WAColors.green,
           barWidth: 2.5,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-              show: true,
-              color: WAColors.green.withOpacity(0.08)),
+          belowBarData:
+              BarAreaData(show: true, color: WAColors.green.withOpacity(0.08)),
         ),
         LineChartBarData(
           spots: spotsOut,
@@ -595,12 +612,10 @@ class _StatsViewState extends State<StatsView> {
           color: WAColors.accent,
           barWidth: 2.5,
           dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-              show: true,
-              color: WAColors.accent.withOpacity(0.08)),
+          belowBarData:
+              BarAreaData(show: true, color: WAColors.accent.withOpacity(0.08)),
         ),
       ],
     ));
   }
 }
-

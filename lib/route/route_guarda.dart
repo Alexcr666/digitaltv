@@ -1,6 +1,7 @@
 // lib/route/route_guard.dart
 
 import 'package:digitaltv/auth/auth.dart';
+import 'package:digitaltv/auth/utils/utils.dart';
 import 'package:digitaltv/utils/permission_label.dart';
 
 import '../auth/authSystem.dart';
@@ -18,19 +19,21 @@ abstract class RouteGuard {
     if (path.startsWith('/wa/')) return null;
 
     const publicRoutes = {
-      AppRoutes.login,
-      AppRoutes.register,
-      AppRoutes.forgotPassword,
+      AppRoutesAuth.login,
+      AppRoutesAuth.register,
+      AppRoutesAuth.forgotPassword,
       '/portal',
       '/panel',
     };
     final isPublic = publicRoutes.contains(path);
 
-    if (!isAuthenticated && !isPublic) return AppRoutes.login;
+    if (!isAuthenticated && !isPublic) return AppRoutesAuth.login;
 
     if (isAuthenticated && isPublic) {
       if (user == null) return null;
-      return user.isSuperAdmin ? AppRoutes.superDashboard : AppRoutes.dashboard;
+      return user.isSuperAdmin
+          ? AppRoutesAuth.superDashboard
+          : AppRoutesAuth.dashboard;
     }
 
     if (isAuthenticated && user == null) return null;
@@ -47,21 +50,24 @@ abstract class RouteGuard {
   }
 
   static String? _evaluateNormalUser(String path, AppUser user) {
-    const superOnlyRoutes = {AppRoutes.superDashboard, AppRoutes.companies};
+    const superOnlyRoutes = {
+      AppRoutesAuth.superDashboard,
+      AppRoutesAuth.companies
+    };
     if (superOnlyRoutes.contains(path) || path.startsWith('/company/')) {
-      return AppRoutes.dashboard;
+      return AppRoutesAuth.dashboard;
     }
 
     final permissionRoutes = {
-      AppRoutes.users: AppPermission.usersView,
-      AppRoutes.roles: AppPermission.rolesView,
-      AppRoutes.notifications2: AppPermission.notificationsSend,
+      AppRoutesAuth.users: AppPermission.usersView,
+      AppRoutesAuth.roles: AppPermission.rolesView,
+      AppRoutesAuth.notifications2: AppPermission.notificationsSend,
     };
     final requiredPerm = permissionRoutes[path];
     if (requiredPerm != null &&
         !user.hasPermission(requiredPerm) &&
         !user.isCompanyAdmin) {
-      return AppRoutes.dashboard;
+      return AppRoutesAuth.dashboard;
     }
 
     const adminOnlyPaths = {
@@ -73,7 +79,7 @@ abstract class RouteGuard {
       '/content',
     };
     if (adminOnlyPaths.contains(path) && !user.isCompanyAdmin) {
-      return AppRoutes.dashboard;
+      return AppRoutesAuth.dashboard;
     }
 
     return null;
@@ -81,15 +87,15 @@ abstract class RouteGuard {
 
   static String? _evaluateSuperAdmin(String path) {
     const superRoutes = {
-      AppRoutes.superDashboard,
-      AppRoutes.companies,
-      AppRoutes.superUsers,
-      AppRoutes.superRoles,
-      AppRoutes.superNotifications,
-      AppRoutes.superProfile,
+      AppRoutesAuth.superDashboard,
+      AppRoutesAuth.companies,
+      AppRoutesAuth.superUsers,
+      AppRoutesAuth.superRoles,
+      AppRoutesAuth.superNotifications,
+      AppRoutesAuth.superProfile,
     };
     if (!superRoutes.contains(path) && !path.startsWith('/company/')) {
-      return AppRoutes.superDashboard;
+      return AppRoutesAuth.superDashboard;
     }
     return null;
   }

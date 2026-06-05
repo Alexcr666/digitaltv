@@ -1,4 +1,3 @@
-
 abstract class AppConfig {
   // Cargados desde --dart-define en build
   static const superAdminEmail =

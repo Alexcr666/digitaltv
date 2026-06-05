@@ -261,8 +261,6 @@ class PlaylistService {
   }
 }
 
-
-
 // =============================================================================
 // ADD DEVICE BOTTOM SHEET
 // =============================================================================
@@ -584,7 +582,6 @@ class _SectionTitle extends StatelessWidget {
         ),
       );
 }
-
 
 class _OrientationChip extends StatelessWidget {
   final String label;
@@ -1096,8 +1093,7 @@ class _PlaylistCardState extends ConsumerState<_PlaylistCard> {
                     color: _C.accent,
                     onTap: () => _openEditor(context, pl),
                   ),
-                 
-      
+
                   const SizedBox(width: 6),
                   IconBtn(
                     icon: Icons.copy_rounded,
@@ -2816,7 +2812,6 @@ class _Badge extends StatelessWidget {
                 color: color, fontSize: 10, fontWeight: FontWeight.w600)),
       );
 }
-
 
 class DeviceSchedulesManagerDialog extends StatefulWidget {
   final DeviceModel device;

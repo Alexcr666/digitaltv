@@ -1,25 +1,3 @@
-// =============================================================================
-// firebase_service.dart
-// Firebase Service Layer — Auth, Firestore, Storage, Functions
-// SignageOS Enterprise — Clean Architecture
-// =============================================================================
-// pubspec.yaml dependencies:
-//   firebase_core: ^2.32.0
-//   firebase_auth: ^4.20.0
-//   cloud_firestore: ^4.17.5
-//   firebase_storage: ^11.7.7
-//   cloud_functions: ^4.7.6
-//   flutter_riverpod: ^2.5.1
-//   riverpod_annotation: ^2.3.5
-//   go_router: ^14.2.7
-//   image_picker: ^1.1.2
-//   image_picker_for_web: ^3.0.4
-//   cached_network_image: ^3.3.1
-//   intl: ^0.19.0
-// =============================================================================
-
-// ignore_for_file: avoid_print
-
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -31,71 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// =============================================================================
-// FIRESTORE RULES (paste in Firebase Console)
-// =============================================================================
-/*
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isSelf(uid) {
-      return request.auth.uid == uid;
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasRole(role) {
-      return isAuthenticated() && getUserData().roles.hasAny([role]);
-    }
-
-    function hasPermission(perm) {
-      return isAuthenticated() && getUserData().permissions.hasAny([perm]);
-    }
-
-    function isSuperAdmin() {
-      return hasRole('super_admin');
-    }
-
-    // Users collection
-    match /users/{uid} {
-      allow read: if isAuthenticated() && (isSelf(uid) || hasPermission('users.view'));
-      allow create: if isAuthenticated() && isSuperAdmin();
-      allow update: if isAuthenticated() && (isSelf(uid) || hasPermission('users.edit'));
-      allow delete: if isSuperAdmin();
-    }
-
-    // Roles collection
-    match /roles/{roleId} {
-      allow read: if isAuthenticated() && hasPermission('roles.view');
-      allow write: if isSuperAdmin();
-    }
-
-    // Permissions collection
-    match /permissions/{permId} {
-      allow read: if isAuthenticated();
-      allow write: if isSuperAdmin();
-    }
-
-    // Notifications collection
-    match /notifications/{notifId} {
-      allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isSuperAdmin());
-      allow create: if isAuthenticated() && hasPermission('notifications.send');
-      allow update: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
-      allow delete: if isSuperAdmin();
-    }
-  }
-}
-*/
 
 // =============================================================================
 // COMPANY MODEL
@@ -131,27 +44,27 @@ class Company {
   factory Company.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return Company(
-      id:        doc.id,
-      name:      d['name'] as String? ?? '',
+      id: doc.id,
+      name: d['name'] as String? ?? '',
       legalName: d['legalName'] as String? ?? '',
-      email:     d['email'] as String? ?? '',
-      phone:     d['phone'] as String? ?? '',
-      address:   d['address'] as String? ?? '',
-      logoUrl:   d['logoUrl'] as String?,
-      status:    d['status'] as String? ?? 'active',
+      email: d['email'] as String? ?? '',
+      phone: d['phone'] as String? ?? '',
+      address: d['address'] as String? ?? '',
+      logoUrl: d['logoUrl'] as String?,
+      status: d['status'] as String? ?? 'active',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toFirestore() => {
-        'name':      name,
+        'name': name,
         'legalName': legalName,
-        'email':     email,
-        'phone':     phone,
-        'address':   address,
-        'logoUrl':   logoUrl,
-        'status':    status,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'logoUrl': logoUrl,
+        'status': status,
         'createdAt': Timestamp.fromDate(createdAt),
         'updatedAt': Timestamp.fromDate(updatedAt),
       };
@@ -200,9 +113,10 @@ const Map<AppRole, List<AppPermission>> kDefaultRolePermissions = {
 List<String> firestoreToStringList(dynamic value) {
   if (value == null) return const [];
   if (value is List) return value.map((e) => e.toString()).toList();
-  if (value is Map)  return value.values.map((e) => e.toString()).toList();
+  if (value is Map) return value.values.map((e) => e.toString()).toList();
   return const [];
 }
+
 class AppUser {
   final String uid;
   final String name;
@@ -212,8 +126,8 @@ class AppUser {
   final String address;
   final List<AppRole> roles;
   final List<AppPermission> permissions;
-  final String status;       // active | inactive | suspended
-  final String? companyId;   // null solo para superAdmin
+  final String status; // active | inactive | suspended
+  final String? companyId; // null solo para superAdmin
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastLogin;
@@ -243,8 +157,7 @@ class AppUser {
   bool hasPermission(AppPermission permission) =>
       roles.contains(AppRole.superAdmin) || permissions.contains(permission);
 
-  bool hasAnyPermission(List<AppPermission> perms) =>
-      perms.any(hasPermission);
+  bool hasAnyPermission(List<AppPermission> perms) => perms.any(hasPermission);
 
   AppUser copyWith({
     String? name,
@@ -280,20 +193,18 @@ class AppUser {
   factory AppUser.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return AppUser(
-      uid:      d['uid']      as String? ?? doc.id,
-      name:     d['name']     as String? ?? '',
-      email:    d['email']    as String? ?? '',
-      phone:    d['phone']    as String? ?? '',
+      uid: d['uid'] as String? ?? doc.id,
+      name: d['name'] as String? ?? '',
+      email: d['email'] as String? ?? '',
+      phone: d['phone'] as String? ?? '',
       photoUrl: d['photoUrl'] as String?,
-      address:  d['address']  as String? ?? '',
-      roles: firestoreToStringList(d['roles'])
-          .map(AppRole.fromString)
-          .toList(),
+      address: d['address'] as String? ?? '',
+      roles: firestoreToStringList(d['roles']).map(AppRole.fromString).toList(),
       permissions: firestoreToStringList(d['permissions'])
           .map(AppPermission.fromString)
           .whereType<AppPermission>()
           .toList(),
-      status:    d['status']    as String? ?? 'active',
+      status: d['status'] as String? ?? 'active',
       companyId: d['companyId'] as String?,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -302,19 +213,19 @@ class AppUser {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'uid':         uid,
-        'name':        name,
-        'email':       email,
-        'phone':       phone,
-        'photoUrl':    photoUrl,
-        'address':     address,
-        'roles':       roles.map((r) => r.value).toList(),
+        'uid': uid,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'photoUrl': photoUrl,
+        'address': address,
+        'roles': roles.map((r) => r.value).toList(),
         'permissions': permissions.map((p) => p.value).toList(),
-        'status':      status,
-        'companyId':   companyId,
-        'createdAt':   Timestamp.fromDate(createdAt),
-        'updatedAt':   Timestamp.fromDate(updatedAt),
-        'lastLogin':   lastLogin != null ? Timestamp.fromDate(lastLogin!) : null,
+        'status': status,
+        'companyId': companyId,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': Timestamp.fromDate(updatedAt),
+        'lastLogin': lastLogin != null ? Timestamp.fromDate(lastLogin!) : null,
       };
 }
 
@@ -354,42 +265,42 @@ class AppNotification {
   });
 
   AppNotification copyWith({bool? read}) => AppNotification(
-        id:        id,
-        userId:    userId,
-        title:     title,
-        body:      body,
-        type:      type,
-        read:      read ?? this.read,
+        id: id,
+        userId: userId,
+        title: title,
+        body: body,
+        type: type,
+        read: read ?? this.read,
         createdAt: createdAt,
-        metadata:  Map.unmodifiable(metadata),
+        metadata: Map.unmodifiable(metadata),
       );
 
   factory AppNotification.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return AppNotification(
-      id:        doc.id,
-      userId:    d['userId']    as String? ?? '',
-      title:     d['title']     as String? ?? '',
-      body:      d['body']      as String? ?? '',
+      id: doc.id,
+      userId: d['userId'] as String? ?? '',
+      title: d['title'] as String? ?? '',
+      body: d['body'] as String? ?? '',
       type: NotificationType.values.firstWhere(
         (t) => t.name == (d['type'] as String? ?? 'info'),
         orElse: () => NotificationType.info,
       ),
-      read:      d['read']      as bool? ?? false,
+      read: d['read'] as bool? ?? false,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      metadata:  Map.unmodifiable(
-          (d['metadata'] as Map<String, dynamic>?) ?? {}),
+      metadata:
+          Map.unmodifiable((d['metadata'] as Map<String, dynamic>?) ?? {}),
     );
   }
 
   Map<String, dynamic> toFirestore() => {
-        'userId':    userId,
-        'title':     title,
-        'body':      body,
-        'type':      type.name,
-        'read':      read,
+        'userId': userId,
+        'title': title,
+        'body': body,
+        'type': type.name,
+        'read': read,
         'createdAt': Timestamp.fromDate(createdAt),
-        'metadata':  metadata,
+        'metadata': metadata,
       };
 }
 
@@ -419,26 +330,26 @@ class RoleDefinition {
   factory RoleDefinition.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
     return RoleDefinition(
-      id:          doc.id,
-      name:        d['name'] as String? ?? '',
+      id: doc.id,
+      name: d['name'] as String? ?? '',
       displayName: d['displayName'] as String? ?? '',
       description: d['description'] as String? ?? '',
       permissions: ((d['permissions'] as List<dynamic>?) ?? [])
           .map((p) => AppPermission.fromString(p as String))
           .whereType<AppPermission>()
           .toList(),
-      companyId:   d['companyId'] as String?,
-      createdAt:   (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      companyId: d['companyId'] as String?,
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toFirestore() => {
-        'name':        name,
+        'name': name,
         'displayName': displayName,
         'description': description,
         'permissions': permissions.map((p) => p.value).toList(),
-        'companyId':   companyId,
-        'createdAt':   Timestamp.fromDate(createdAt),
+        'companyId': companyId,
+        'createdAt': Timestamp.fromDate(createdAt),
       };
 }
 
@@ -460,4 +371,3 @@ class Failure<T> extends Result<T> {
   final Object? error;
   const Failure(this.message, {this.error});
 }
-

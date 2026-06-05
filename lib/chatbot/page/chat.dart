@@ -1,4 +1,3 @@
-
 import 'dart:developer';
 import 'dart:html' as html;
 import 'dart:async';
@@ -21,8 +20,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:digitaltv/chatbot/page/widget.dart' as widget2;
-
-
 
 // ─────────────────────────────────────────
 // CHAT VIEW
@@ -76,28 +73,28 @@ class _ChatViewState extends State<ChatView> {
     super.dispose();
   }
 
- // REEMPLAZA estos dos métodos completos en _ChatViewState:
+  // REEMPLAZA estos dos métodos completos en _ChatViewState:
 
-Future<void> _loadConversations(String botId) async {
-  if (!mounted) return;
-  setState(() => _loadingConvs = true);
-  final result = await widget.service.getConversations(botId);
-  if (!mounted) return;
-  setState(() {
-    _conversations = result;
-    _loadingConvs = false;
-  });
-}
-
-Future<void> _refreshMessages() async {
-  if (_selectedConv == null || !mounted) return;
-  final msgs = await widget.service.getMessages(_selectedConv!.id);
-  if (!mounted) return;
-  if (msgs.length != _messages.length) {
-    setState(() => _messages = msgs);
-    _scrollToBottom();
+  Future<void> _loadConversations(String botId) async {
+    if (!mounted) return;
+    setState(() => _loadingConvs = true);
+    final result = await widget.service.getConversations(botId);
+    if (!mounted) return;
+    setState(() {
+      _conversations = result;
+      _loadingConvs = false;
+    });
   }
-}
+
+  Future<void> _refreshMessages() async {
+    if (_selectedConv == null || !mounted) return;
+    final msgs = await widget.service.getMessages(_selectedConv!.id);
+    if (!mounted) return;
+    if (msgs.length != _messages.length) {
+      setState(() => _messages = msgs);
+      _scrollToBottom();
+    }
+  }
 
   Future<void> _selectConversation(WAConversation conv) async {
     setState(() {
@@ -164,11 +161,11 @@ Future<void> _refreshMessages() async {
                     value: _activeBot?.id,
                     underline: const SizedBox(),
                     dropdownColor: WAColors.card,
-                    style: const TextStyle(
-                        color: WAColors.textPri, fontSize: 13),
+                    style:
+                        const TextStyle(color: WAColors.textPri, fontSize: 13),
                     items: widget.bots
-                        .map((b) => DropdownMenuItem(
-                            value: b.id, child: Text(b.name)))
+                        .map((b) =>
+                            DropdownMenuItem(value: b.id, child: Text(b.name)))
                         .toList(),
                     onChanged: (id) {
                       if (id == null) return;
@@ -193,8 +190,7 @@ Future<void> _refreshMessages() async {
                   width: 300,
                   decoration: const BoxDecoration(
                     color: WAColors.surface,
-                    border:
-                        Border(right: BorderSide(color: WAColors.border)),
+                    border: Border(right: BorderSide(color: WAColors.border)),
                   ),
                   child: Column(
                     children: [
@@ -238,16 +234,14 @@ Future<void> _refreshMessages() async {
                                       final isSelected =
                                           _selectedConv?.id == conv.id;
                                       return InkWell(
-                                        onTap: () =>
-                                            _selectConversation(conv),
+                                        onTap: () => _selectConversation(conv),
                                         child: AnimatedContainer(
-                                          duration: const Duration(
-                                              milliseconds: 150),
+                                          duration:
+                                              const Duration(milliseconds: 150),
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 16, vertical: 12),
                                           color: isSelected
-                                              ? WAColors.green
-                                                  .withOpacity(0.1)
+                                              ? WAColors.green.withOpacity(0.1)
                                               : Colors.transparent,
                                           child: Row(
                                             children: [
@@ -313,20 +307,20 @@ Future<void> _refreshMessages() async {
                                                             style: TextStyle(
                                                               color: WAColors
                                                                   .textPri,
-                                                              fontWeight: conv
-                                                                          .unreadCount >
-                                                                      0
-                                                                  ? FontWeight
-                                                                      .w700
-                                                                  : FontWeight
-                                                                      .w500,
+                                                              fontWeight:
+                                                                  conv.unreadCount >
+                                                                          0
+                                                                      ? FontWeight
+                                                                          .w700
+                                                                      : FontWeight
+                                                                          .w500,
                                                               fontSize: 13,
                                                             ),
                                                           ),
                                                         ),
                                                         Text(
-                                                          _formatTime(
-                                                              conv.lastMessageAt),
+                                                          _formatTime(conv
+                                                              .lastMessageAt),
                                                           style: const TextStyle(
                                                               color: WAColors
                                                                   .textMuted,
@@ -391,8 +385,7 @@ Future<void> _refreshMessages() async {
                               SizedBox(height: 4),
                               Text('para ver los mensajes',
                                   style: TextStyle(
-                                      color: WAColors.textMuted,
-                                      fontSize: 13)),
+                                      color: WAColors.textMuted, fontSize: 13)),
                             ],
                           ),
                         )
@@ -405,8 +398,7 @@ Future<void> _refreshMessages() async {
                               decoration: const BoxDecoration(
                                 color: WAColors.surface,
                                 border: Border(
-                                    bottom: BorderSide(
-                                        color: WAColors.border)),
+                                    bottom: BorderSide(color: WAColors.border)),
                               ),
                               child: Row(
                                 children: [
@@ -465,14 +457,12 @@ Future<void> _refreshMessages() async {
                                       const SizedBox(width: 8),
                                       Switch(
                                         value: _humanMode,
-                                        onChanged: (_) =>
-                                            _toggleHumanControl(),
+                                        onChanged: (_) => _toggleHumanControl(),
                                         activeColor: WAColors.human,
                                         inactiveTrackColor:
                                             WAColors.green.withOpacity(0.3),
-                                        thumbColor:
-                                            MaterialStateProperty.all(
-                                                Colors.white),
+                                        thumbColor: MaterialStateProperty.all(
+                                            Colors.white),
                                       ),
                                     ],
                                   ),
@@ -500,8 +490,7 @@ Future<void> _refreshMessages() async {
                                 decoration: BoxDecoration(
                                   color: WAColors.surface,
                                   border: const Border(
-                                      top: BorderSide(
-                                          color: WAColors.border)),
+                                      top: BorderSide(color: WAColors.border)),
                                 ),
                                 child: Row(
                                   children: [
@@ -509,10 +498,8 @@ Future<void> _refreshMessages() async {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color:
-                                            WAColors.human.withOpacity(0.15),
-                                        borderRadius:
-                                            BorderRadius.circular(6),
+                                        color: WAColors.human.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: const Text('Agente',
                                           style: TextStyle(
@@ -541,8 +528,7 @@ Future<void> _refreshMessages() async {
                                           ),
                                           contentPadding:
                                               const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 10),
+                                                  horizontal: 16, vertical: 10),
                                         ),
                                         onSubmitted: (_) => _sendMessage(),
                                       ),
@@ -550,8 +536,7 @@ Future<void> _refreshMessages() async {
                                     const SizedBox(width: 10),
                                     InkWell(
                                       onTap: _sendMessage,
-                                      borderRadius:
-                                          BorderRadius.circular(24),
+                                      borderRadius: BorderRadius.circular(24),
                                       child: Container(
                                         padding: const EdgeInsets.all(10),
                                         decoration: const BoxDecoration(

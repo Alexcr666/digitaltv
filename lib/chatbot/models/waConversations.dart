@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class WAChatbot {
@@ -72,8 +71,6 @@ class WAChatbot {
   Color get statusColor =>
       isActive ? const Color(0xFF25D366) : const Color(0xFF6B7280);
 }
-
-
 
 class WAConversation {
   final String id;

@@ -1,33 +1,10 @@
-
 import 'package:digitaltv/chatbot/color.dart';
 import 'package:digitaltv/chatbot/models/waConversations.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-abstract class _C {
-  static const bg = Color(0xFF070B12);
-  static const surface = Color(0xFF0C1018);
-  static const card = Color(0xFF111827);
-  static const cardHover = Color(0xFF151E2F);
-  static const border = Color(0xFF1F2D45);
-  static const borderFocus = Color(0xFF6366F1);
-  static const primary = Color(0xFF6366F1);
-  static const primaryLo = Color(0x1A6366F1);
-  static const accent = Color(0xFF38BDF8);
-  static const accentLo = Color(0x1A38BDF8);
-  static const green = Color(0xFF22C55E);
-  static const greenLo = Color(0x1A22C55E);
-  static const amber = Color(0xFFF59E0B);
-  static const amberLo = Color(0x1AF59E0B);
-  static const red = Color(0xFFEF4444);
-  static const redLo = Color(0x1AEF4444);
-  static const purple = Color(0xFFA855F7);
-  static const purpleLo = Color(0x1AA855F7);
-  static const textHi = Color(0xFFF1F5FF);
-  static const textMid = Color(0xFF7B8DB0);
-  static const textLo = Color(0xFF2E3D5C);
-  static const divider = Color(0xFF141E30);
-}
+
+
 class HeaderBtn extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -66,21 +43,16 @@ class StatusBadge extends StatelessWidget {
           Container(
               width: 7,
               height: 7,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle)),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 6),
           Text(label,
               style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
+                  color: color, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 }
-
-
 
 class CompactStat extends StatelessWidget {
   final String label;
@@ -94,7 +66,8 @@ class CompactStat extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(value,
-            style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w800)),
+            style: TextStyle(
+                color: color, fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 2),
         Text(label,
             style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
@@ -139,8 +112,7 @@ class MessageBubble extends StatelessWidget {
           Flexible(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 420),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: isUser
                     ? WAColors.cardLight
@@ -166,9 +138,7 @@ class MessageBubble extends StatelessWidget {
                 children: [
                   Text(msg.body,
                       style: const TextStyle(
-                          color: WAColors.textPri,
-                          fontSize: 13,
-                          height: 1.4)),
+                          color: WAColors.textPri, fontSize: 13, height: 1.4)),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -183,8 +153,7 @@ class MessageBubble extends StatelessWidget {
                         Text(
                           isBot ? 'IA' : 'Agente',
                           style: TextStyle(
-                              color:
-                                  isBot ? WAColors.green : WAColors.human,
+                              color: isBot ? WAColors.green : WAColors.human,
                               fontSize: 10,
                               fontWeight: FontWeight.w600),
                         ),
@@ -253,8 +222,7 @@ class EmptyState extends StatelessWidget {
           const SizedBox(height: 6),
           Text(subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: WAColors.textMuted, fontSize: 13)),
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 13)),
           if (action != null) ...[const SizedBox(height: 20), action!],
         ],
       ),
@@ -281,6 +249,7 @@ class WACard extends StatelessWidget {
     );
   }
 }
+
 class PageHeader extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -298,57 +267,56 @@ class PageHeader extends StatelessWidget {
   });
 
   @override
-Widget build(BuildContext context) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-    decoration: const BoxDecoration(
-      color: WAColors.surface,
-      border: Border(bottom: BorderSide(color: WAColors.border)),
-    ),
-    child: Row(
-      children: [
-        if (onBack != null) ...[
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                size: 16, color: WAColors.textSec),
-          ),
-          const SizedBox(width: 4),
-        ],
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: iconColor, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    color: WAColors.textPri,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16)),
-            if (subtitle.isNotEmpty)
-              Text(subtitle,
-                  style: const TextStyle(
-                      color: WAColors.textMuted, fontSize: 12)),
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: const BoxDecoration(
+        color: WAColors.surface,
+        border: Border(bottom: BorderSide(color: WAColors.border)),
+      ),
+      child: Row(
+        children: [
+          if (onBack != null) ...[
+            IconButton(
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 16, color: WAColors.textSec),
+            ),
+            const SizedBox(width: 4),
           ],
-        ),
-        const Spacer(),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: actions,
-        ),
-      ],
-    ),
-  );
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      color: WAColors.textPri,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
+              if (subtitle.isNotEmpty)
+                Text(subtitle,
+                    style: const TextStyle(
+                        color: WAColors.textMuted, fontSize: 12)),
+            ],
+          ),
+          const Spacer(),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: actions,
+          ),
+        ],
+      ),
+    );
+  }
 }
-}
-
 
 class FormField extends StatelessWidget {
   final String label;
@@ -375,12 +343,10 @@ class FormField extends StatelessWidget {
         TextField(
           controller: controller,
           maxLines: maxLines,
-          style:
-              const TextStyle(color: WAColors.textPri, fontSize: 13),
+          style: const TextStyle(color: WAColors.textPri, fontSize: 13),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(
-                color: WAColors.textMuted, fontSize: 13),
+            hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 13),
             filled: true,
             fillColor: WAColors.bg,
             border: OutlineInputBorder(
@@ -395,8 +361,8 @@ class FormField extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: WAColors.green),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           ),
         ),
       ],
@@ -421,13 +387,12 @@ class ActionButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: (color ?? WAColors.accent).withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: (color ?? WAColors.accent).withOpacity(0.25)),
+          border:
+              Border.all(color: (color ?? WAColors.accent).withOpacity(0.25)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -475,9 +440,7 @@ class QuickAction extends StatelessWidget {
             const SizedBox(width: 10),
             Text(label,
                 style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
+                    color: color, fontSize: 13, fontWeight: FontWeight.w500)),
             const Spacer(),
             Icon(Icons.arrow_forward_ios,
                 size: 12, color: color.withOpacity(0.5)),
@@ -501,14 +464,11 @@ class MiniStat extends StatelessWidget {
         children: [
           Text(value,
               style: TextStyle(
-                  color: color,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800)),
+                  color: color, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: WAColors.textMuted, fontSize: 11)),
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
         ],
       ),
     );
@@ -527,8 +487,7 @@ class ConfigRow extends StatelessWidget {
       child: Row(
         children: [
           Text(label,
-              style: const TextStyle(
-                  color: WAColors.textMuted, fontSize: 12)),
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 12)),
           const Spacer(),
           Text(value,
               style: const TextStyle(
@@ -553,8 +512,7 @@ class InfoRow extends StatelessWidget {
       child: Row(
         children: [
           Text(label,
-              style: const TextStyle(
-                  color: WAColors.textSec, fontSize: 13)),
+              style: const TextStyle(color: WAColors.textSec, fontSize: 13)),
           const Spacer(),
           Text(value,
               style: const TextStyle(

@@ -7,11 +7,11 @@
 import 'package:digitaltv/auth/auth.dart';
 import 'package:digitaltv/auth/authSystem.dart';
 import 'package:digitaltv/auth/firebaseService.dart';
+import 'package:digitaltv/auth/page/login.dart';
 import 'package:digitaltv/provider/app_providers.dart';
 import 'package:digitaltv/utils/permission_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -24,60 +24,59 @@ import 'package:image_picker/image_picker.dart';
 
 // Local import — ensure this matches your actual package path
 
-
 // =============================================================================
 // 1. DESIGN TOKENS
 // =============================================================================
 
 abstract class _T {
   // Surface
-  static const bg        = Color(0xFF080C14);
-  static const surface   = Color(0xFF0E1420);
-  static const card      = Color(0xFF131B2B);
+  static const bg = Color(0xFF080C14);
+  static const surface = Color(0xFF0E1420);
+  static const card = Color(0xFF131B2B);
   static const cardHover = Color(0xFF172035);
-  static const border    = Color(0xFF1E2D47);
-  static const divider   = Color(0xFF1A2540);
+  static const border = Color(0xFF1E2D47);
+  static const divider = Color(0xFF1A2540);
 
   // Brand
-  static const primary    = Color(0xFF6366F1);
-  static const primaryLo  = Color(0x1A6366F1);
+  static const primary = Color(0xFF6366F1);
+  static const primaryLo = Color(0x1A6366F1);
   static const primaryMid = Color(0x336366F1);
-  static const accent     = Color(0xFF38BDF8);
+  static const accent = Color(0xFF38BDF8);
 
   // Text
-  static const textHi  = Color(0xFFF0F4FF);
+  static const textHi = Color(0xFFF0F4FF);
   static const textMid = Color(0xFF8B9CC8);
-  static const textLo  = Color(0xFF3D4F72);
+  static const textLo = Color(0xFF3D4F72);
 
   // Semantic
-  static const success  = Color(0xFF22C55E);
-  static const warning  = Color(0xFFF59E0B);
-  static const error    = Color(0xFFEF4444);
-  static const errorLo  = Color(0x1AEF4444);
+  static const success = Color(0xFF22C55E);
+  static const warning = Color(0xFFF59E0B);
+  static const error = Color(0xFFEF4444);
+  static const errorLo = Color(0x1AEF4444);
 
   // Radius
-  static const r8  = BorderRadius.all(Radius.circular(8));
+  static const r8 = BorderRadius.all(Radius.circular(8));
   static const r12 = BorderRadius.all(Radius.circular(12));
   static const r16 = BorderRadius.all(Radius.circular(16));
   static const r20 = BorderRadius.all(Radius.circular(20));
 
   static ThemeData get theme => ThemeData(
-        useMaterial3:       true,
+        useMaterial3: true,
         scaffoldBackgroundColor: bg,
         colorScheme: ColorScheme.dark(
-          primary:   primary,
+          primary: primary,
           secondary: accent,
-          surface:   surface,
-          error:     error,
+          surface: surface,
+          error: error,
         ),
         textTheme: const TextTheme().apply(
-          bodyColor:    textMid,
+          bodyColor: textMid,
           displayColor: textHi,
         ),
         inputDecorationTheme: InputDecorationTheme(
-          filled:       true,
-          fillColor:    card,
-          hintStyle:    const TextStyle(color: textLo, fontSize: 14),
+          filled: true,
+          fillColor: card,
+          hintStyle: const TextStyle(color: textLo, fontSize: 14),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
@@ -88,8 +87,7 @@ abstract class _T {
               borderRadius: r12,
               borderSide: const BorderSide(color: primary, width: 1.5)),
           errorBorder: OutlineInputBorder(
-              borderRadius: r12,
-              borderSide: const BorderSide(color: error)),
+              borderRadius: r12, borderSide: const BorderSide(color: error)),
           focusedErrorBorder: OutlineInputBorder(
               borderRadius: r12,
               borderSide: const BorderSide(color: error, width: 1.5)),
@@ -97,14 +95,14 @@ abstract class _T {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor:         primary,
-            foregroundColor:         Colors.white,
+            backgroundColor: primary,
+            foregroundColor: Colors.white,
             disabledBackgroundColor: card,
-            elevation:               0,
+            elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: r12),
-            minimumSize:             const Size(double.infinity, 48),
+            minimumSize: const Size(double.infinity, 48),
             textStyle: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+                fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.2),
           ),
         ),
         cardTheme: CardTheme(
@@ -136,21 +134,18 @@ class _InfoTile extends StatelessWidget {
           _FieldLabel(label),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color:        _T.surface,
+              color: _T.surface,
               borderRadius: _T.r12,
-              border:       const Border.fromBorderSide(
-                  BorderSide(color: _T.border)),
+              border: const Border.fromBorderSide(BorderSide(color: _T.border)),
             ),
             child: Row(
               children: [
                 Icon(icon, size: 14, color: iconColor),
                 const SizedBox(width: 8),
                 Text(value,
-                  style: const TextStyle(
-                      color: _T.textMid, fontSize: 13)),
+                    style: const TextStyle(color: _T.textMid, fontSize: 13)),
               ],
             ),
           ),
@@ -170,9 +165,9 @@ InputDecoration _inputDeco({
   Widget? suffix,
 }) =>
     InputDecoration(
-      hintText:    hint,
-      prefixIcon:  Icon(icon, size: 18, color: _T.textMid),
-      suffixIcon:  suffix,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 18, color: _T.textMid),
+      suffixIcon: suffix,
     );
 
 Widget _togglePassButton({
@@ -181,10 +176,9 @@ Widget _togglePassButton({
 }) =>
     IconButton(
       icon: Icon(
-        show
-            ? Icons.visibility_off_rounded
-            : Icons.visibility_rounded,
-        size: 18, color: _T.textMid,
+        show ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+        size: 18,
+        color: _T.textMid,
       ),
       onPressed: onTap,
     );
@@ -195,8 +189,8 @@ String _formatDate(DateTime dt) {
 
   if (diff.inMinutes < 1) return 'Ahora mismo';
   if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes}m';
-  if (diff.inHours < 24)   return 'Hace ${diff.inHours}h';
-  if (diff.inDays < 7)     return 'Hace ${diff.inDays}d';
+  if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+  if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
 
   return '${dt.day.toString().padLeft(2, '0')}/'
       '${dt.month.toString().padLeft(2, '0')}/'
@@ -211,9 +205,11 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
-          style: const TextStyle(
-            color: _T.textMid, fontSize: 12,
-            fontWeight: FontWeight.w500, letterSpacing: 0.3)),
+            style: const TextStyle(
+                color: _T.textMid,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3)),
       );
 }
 
@@ -230,12 +226,14 @@ class _SubmitButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity, height: 48,
+      width: double.infinity,
+      height: 48,
       child: ElevatedButton(
         onPressed: loading ? null : onTap,
         child: loading
             ? const SizedBox(
-                width: 20, height: 20,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.white))
             : Text(label),
@@ -253,23 +251,28 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final photoUrl = user?.photoUrl;
     final initials = (user?.name.isNotEmpty == true)
-        ? user!.name.trim().split(' ').take(2)
+        ? user!.name
+            .trim()
+            .split(' ')
+            .take(2)
             .map((w) => w[0].toUpperCase())
             .join()
         : '?';
 
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color:  _T.primaryMid,
-        shape:  BoxShape.circle,
+        color: _T.primaryMid,
+        shape: BoxShape.circle,
         border: Border.all(color: _T.border, width: 2),
       ),
       clipBehavior: Clip.antiAlias,
       child: photoUrl != null
-          ? Image.network(photoUrl, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _InitialsWidget(
-                  initials: initials, size: size))
+          ? Image.network(photoUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  _InitialsWidget(initials: initials, size: size))
           : _InitialsWidget(initials: initials, size: size),
     );
   }
@@ -283,10 +286,10 @@ class _InitialsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
         child: Text(initials,
-          style: TextStyle(
-            color:      _T.primary,
-            fontSize:   size * 0.32,
-            fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                color: _T.primary,
+                fontSize: size * 0.32,
+                fontWeight: FontWeight.w700)),
       );
 }
 
@@ -306,13 +309,14 @@ class _ToggleLink extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('$prompt ',
-            style: const TextStyle(color: _T.textMid, fontSize: 13)),
+              style: const TextStyle(color: _T.textMid, fontSize: 13)),
           GestureDetector(
             onTap: onTap,
             child: Text(action,
-              style: const TextStyle(
-                color: _T.primary, fontSize: 13,
-                fontWeight: FontWeight.w600)),
+                style: const TextStyle(
+                    color: _T.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -327,8 +331,7 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Banner(
-        message: message, color: _T.error,
-        icon: Icons.error_outline_rounded);
+        message: message, color: _T.error, icon: Icons.error_outline_rounded);
   }
 }
 
@@ -346,12 +349,11 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color:        color.withOpacity(0.08),
+        color: color.withOpacity(0.08),
         borderRadius: _T.r12,
-        border:       Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         children: [
@@ -359,10 +361,8 @@ class _Banner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,
-              style: TextStyle(
-                color:      color,
-                fontSize:   12,
-                fontWeight: FontWeight.w500)),
+                style: TextStyle(
+                    color: color, fontSize: 12, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
@@ -375,14 +375,15 @@ class _Banner extends StatelessWidget {
 // =============================================================================
 
 abstract class AppRoutes {
-  static const login          = '/login';
-  static const register       = '/register';
+  static const login = '/login';
+  static const register = '/register';
   static const forgotPassword = '/forgot-password';
-  static const profile        = '/profile';
-  static const notifications  = '/notifications';
-  static const roles          = '/roles';
-  static const dashboard      = '/dashboard';
+  static const profile = '/profile';
+  static const notifications = '/notifications';
+  static const roles = '/roles';
+  static const dashboard = '/dashboard';
 }
+
 class _AuthRouteNotifier extends ChangeNotifier {
   late final ProviderSubscription _sub;
 
@@ -405,10 +406,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = _AuthRouteNotifier(ref);
 
   return GoRouter(
-    initialLocation:  AppRoutes.login,
+    initialLocation: AppRoutes.login,
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      final isAuth   = ref.read(authStateProvider).valueOrNull != null;
+      final isAuth = ref.read(authStateProvider).valueOrNull != null;
       final isLoading = ref.read(authStateProvider).isLoading;
 
       if (isLoading) return null;
@@ -421,26 +422,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isPublic = publicRoutes.contains(state.matchedLocation);
 
       if (!isAuth && !isPublic) return AppRoutes.login;
-      if (isAuth  &&  isPublic) return AppRoutes.dashboard;
+      if (isAuth && isPublic) return AppRoutes.dashboard;
 
       return null;
     },
     routes: [
       GoRoute(
-        path:    AppRoutes.login,
+        path: AppRoutes.login,
         builder: (_, __) => const LoginPage(),
       ),
       GoRoute(
-        path:    AppRoutes.register,
+        path: AppRoutes.register,
         builder: (_, __) => const RegisterPage(),
       ),
       GoRoute(
-        path:    AppRoutes.forgotPassword,
+        path: AppRoutes.forgotPassword,
         builder: (_, __) => const ForgotPasswordPage(),
       ),
-     
     ],
-  //  errorBuilder: (_, state) => _ErrorPage(error: state.error.toString()),
+    //  errorBuilder: (_, state) => _ErrorPage(error: state.error.toString()),
   );
 });
 
@@ -465,7 +465,7 @@ class _NotificationPushOverlayState
   }
 
   void _listenNotifications() {
-   /* final user = ref.read(currentUserProvider).valueOrNull;
+    /* final user = ref.read(currentUserProvider).valueOrNull;
     if (user == null) return;
 
     ref.listen(newNotificationsProvider(user.uid), (_, next) {
@@ -539,11 +539,10 @@ class _PushCardState extends State<_PushCard>
     super.initState();
     _ctrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 420));
-    _slide = Tween<double>(begin: 60, end: 0).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _fade =
-        Tween<double>(begin: 0, end: 1).animate(
-            CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _slide = Tween<double>(begin: 60, end: 0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     _ctrl.forward();
   }
 
@@ -556,17 +555,17 @@ class _PushCardState extends State<_PushCard>
   Color get _typeColor => switch (widget.entry.notif.type) {
         NotificationType.success => _T.success,
         NotificationType.warning => _T.warning,
-        NotificationType.error   => _T.error,
-        NotificationType.system  => _T.primary,
-        NotificationType.info    => _T.accent,
+        NotificationType.error => _T.error,
+        NotificationType.system => _T.primary,
+        NotificationType.info => _T.accent,
       };
 
   IconData get _typeIcon => switch (widget.entry.notif.type) {
         NotificationType.success => Icons.check_circle_rounded,
         NotificationType.warning => Icons.warning_rounded,
-        NotificationType.error   => Icons.error_rounded,
-        NotificationType.system  => Icons.settings_rounded,
-        NotificationType.info    => Icons.info_rounded,
+        NotificationType.error => Icons.error_rounded,
+        NotificationType.system => Icons.settings_rounded,
+        NotificationType.info => Icons.info_rounded,
       };
 
   @override
@@ -582,7 +581,8 @@ class _PushCardState extends State<_PushCard>
             decoration: BoxDecoration(
               color: _T.card,
               borderRadius: _T.r16,
-              border: Border.all(color: _typeColor.withOpacity(0.4), width: 1.5),
+              border:
+                  Border.all(color: _typeColor.withOpacity(0.4), width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: _typeColor.withOpacity(0.15),
@@ -602,7 +602,9 @@ class _PushCardState extends State<_PushCard>
                 children: [
                   // Accent left bar
                   Positioned(
-                    left: 0, top: 0, bottom: 0,
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
                     child: Container(width: 4, color: _typeColor),
                   ),
                   Padding(
@@ -611,7 +613,8 @@ class _PushCardState extends State<_PushCard>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 36, height: 36,
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
                             color: _typeColor.withOpacity(0.12),
                             shape: BoxShape.circle,
@@ -624,14 +627,17 @@ class _PushCardState extends State<_PushCard>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(widget.entry.notif.title,
-                                style: const TextStyle(
-                                  color: _T.textHi, fontSize: 13,
-                                  fontWeight: FontWeight.w700)),
+                                  style: const TextStyle(
+                                      color: _T.textHi,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700)),
                               const SizedBox(height: 2),
-                              Text(widget.entry.notif.body,
+                              Text(
+                                widget.entry.notif.body,
                                 style: const TextStyle(
-                                  color: _T.textMid, fontSize: 12,
-                                  height: 1.4),
+                                    color: _T.textMid,
+                                    fontSize: 12,
+                                    height: 1.4),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -648,8 +654,8 @@ class _PushCardState extends State<_PushCard>
                               size: 14, color: _T.textLo),
                           onPressed: widget.onDismiss,
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 24, minHeight: 24),
+                          constraints:
+                              const BoxConstraints(minWidth: 24, minHeight: 24),
                         ),
                       ],
                     ),
@@ -730,9 +736,10 @@ class NotificationsPage22 extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Notificaciones',
-                style: TextStyle(
-                  color: _T.textHi, fontSize: 22,
-                  fontWeight: FontWeight.w700)),
+                  style: TextStyle(
+                      color: _T.textHi,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700)),
               Row(
                 children: [
                   if (canSend)
@@ -771,7 +778,8 @@ class NotificationsPage22 extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 72, height: 72,
+                          width: 72,
+                          height: 72,
                           decoration: BoxDecoration(
                             color: _T.primaryLo,
                             shape: BoxShape.circle,
@@ -781,12 +789,13 @@ class NotificationsPage22 extends ConsumerWidget {
                         ),
                         const SizedBox(height: 16),
                         const Text('Sin notificaciones',
-                          style: TextStyle(
-                            color: _T.textHi, fontSize: 16,
-                            fontWeight: FontWeight.w600)),
+                            style: TextStyle(
+                                color: _T.textHi,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
                         const SizedBox(height: 4),
                         const Text('Las notificaciones aparecerán aquí',
-                          style: TextStyle(color: _T.textMid, fontSize: 13)),
+                            style: TextStyle(color: _T.textMid, fontSize: 13)),
                       ],
                     ),
                   );
@@ -795,8 +804,7 @@ class NotificationsPage22 extends ConsumerWidget {
                   itemCount: notifs.length,
                   separatorBuilder: (_, __) =>
                       const Divider(color: _T.divider, height: 1),
-                  itemBuilder: (_, i) =>
-                      _NotifTile(notif: notifs[i], svc: svc),
+                  itemBuilder: (_, i) => _NotifTile(notif: notifs[i], svc: svc),
                 );
               },
             ),
@@ -806,8 +814,7 @@ class NotificationsPage22 extends ConsumerWidget {
     );
   }
 
-  void _showCreateDialog(
-      BuildContext context, WidgetRef ref, AppUser sender) {
+  void _showCreateDialog(BuildContext context, WidgetRef ref, AppUser sender) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -821,8 +828,7 @@ class NotificationsPage22 extends ConsumerWidget {
 class _CreateNotificationDialog extends ConsumerStatefulWidget {
   final AppUser sender;
   final WidgetRef ref;
-  const _CreateNotificationDialog(
-      {required this.sender, required this.ref});
+  const _CreateNotificationDialog({required this.sender, required this.ref});
 
   @override
   ConsumerState<_CreateNotificationDialog> createState() =>
@@ -832,27 +838,26 @@ class _CreateNotificationDialog extends ConsumerStatefulWidget {
 class _CreateNotificationDialogState
     extends ConsumerState<_CreateNotificationDialog>
     with SingleTickerProviderStateMixin {
-  final _formKey    = GlobalKey<FormState>();
-  final _titleCtrl  = TextEditingController();
-  final _bodyCtrl   = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _titleCtrl = TextEditingController();
+  final _bodyCtrl = TextEditingController();
 
-  NotificationType _type      = NotificationType.info;
-  String           _target    = 'self'; // 'self' | 'all' | 'user'
-  AppUser?         _targetUser;
-  bool             _sending   = false;
-  bool             _sent      = false;
-  String?          _error;
+  NotificationType _type = NotificationType.info;
+  String _target = 'self'; // 'self' | 'all' | 'user'
+  AppUser? _targetUser;
+  bool _sending = false;
+  bool _sent = false;
+  String? _error;
 
   late final AnimationController _animCtrl;
-  late final Animation<double>   _scaleAnim;
+  late final Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 350));
-    _scaleAnim = CurvedAnimation(
-        parent: _animCtrl, curve: Curves.easeOutBack);
+    _scaleAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutBack);
     _animCtrl.forward();
   }
 
@@ -867,17 +872,17 @@ class _CreateNotificationDialogState
   Color get _typeColor => switch (_type) {
         NotificationType.success => _T.success,
         NotificationType.warning => _T.warning,
-        NotificationType.error   => _T.error,
-        NotificationType.system  => _T.primary,
-        NotificationType.info    => _T.accent,
+        NotificationType.error => _T.error,
+        NotificationType.system => _T.primary,
+        NotificationType.info => _T.accent,
       };
 
   IconData get _typeIcon => switch (_type) {
         NotificationType.success => Icons.check_circle_rounded,
         NotificationType.warning => Icons.warning_rounded,
-        NotificationType.error   => Icons.error_rounded,
-        NotificationType.system  => Icons.settings_rounded,
-        NotificationType.info    => Icons.info_rounded,
+        NotificationType.error => Icons.error_rounded,
+        NotificationType.system => Icons.settings_rounded,
+        NotificationType.info => Icons.info_rounded,
       };
 
   Future<void> _send() async {
@@ -887,34 +892,39 @@ class _CreateNotificationDialogState
       return;
     }
 
-    setState(() { _sending = true; _error = null; });
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
 
-    final svc   = ref.read(firebaseServiceProvider);
+    final svc = ref.read(firebaseServiceProvider);
     final users = ref.read(allUsersProvider).valueOrNull ?? [];
 
     List<String> targetUids = switch (_target) {
       'self' => [widget.sender.uid],
-      'all'  => users.map((u) => u.uid).toList(),
+      'all' => users.map((u) => u.uid).toList(),
       'user' => [_targetUser!.uid],
-      _      => [widget.sender.uid],
+      _ => [widget.sender.uid],
     };
 
     String? lastError;
     for (final uid in targetUids) {
       final result = await svc.createNotification(AppNotification(
-        id:        '',
-        userId:    uid,
-        title:     _titleCtrl.text.trim(),
-        body:      _bodyCtrl.text.trim(),
-        type:      _type,
-        read:      false,
+        id: '',
+        userId: uid,
+        title: _titleCtrl.text.trim(),
+        body: _bodyCtrl.text.trim(),
+        type: _type,
+        read: false,
         createdAt: DateTime.now(),
       ));
       if (result is Failure) lastError = (result as Failure).message;
     }
 
     if (!mounted) return;
-    setState(() { _sending = false; });
+    setState(() {
+      _sending = false;
+    });
 
     if (lastError != null) {
       setState(() => _error = lastError);
@@ -929,16 +939,15 @@ class _CreateNotificationDialogState
       scale: _scaleAnim,
       child: Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(
-            horizontal: 20, vertical: 24),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: Container(
             decoration: BoxDecoration(
-              color:        _T.card,
+              color: _T.card,
               borderRadius: _T.r20,
-              border: Border.all(
-                  color: _typeColor.withOpacity(0.3), width: 1.5),
+              border:
+                  Border.all(color: _typeColor.withOpacity(0.3), width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: _typeColor.withOpacity(0.08),
@@ -961,23 +970,23 @@ class _CreateNotificationDialogState
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72, height: 72,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
-              color:  _T.success.withOpacity(0.12),
-              shape:  BoxShape.circle,
+              color: _T.success.withOpacity(0.12),
+              shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle_rounded,
                 color: _T.success, size: 36),
           ),
           const SizedBox(height: 20),
           const Text('¡Notificación enviada!',
-            style: TextStyle(
-              color: _T.textHi, fontSize: 20,
-              fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  color: _T.textHi, fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           const Text('Los destinatarios la recibirán en tiempo real.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _T.textMid, fontSize: 13, height: 1.5)),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _T.textMid, fontSize: 13, height: 1.5)),
           const SizedBox(height: 28),
           SizedBox(
             width: double.infinity,
@@ -1008,10 +1017,11 @@ class _CreateNotificationDialogState
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    width: 40, height: 40,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color:  _typeColor.withOpacity(0.12),
-                      shape:  BoxShape.circle,
+                      color: _typeColor.withOpacity(0.12),
+                      shape: BoxShape.circle,
                     ),
                     child: Icon(_typeIcon, color: _typeColor, size: 20),
                   ),
@@ -1021,11 +1031,12 @@ class _CreateNotificationDialogState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Nueva notificación',
-                          style: TextStyle(
-                            color: _T.textHi, fontSize: 18,
-                            fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: _T.textHi,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
                         Text('Se entregará en tiempo real vía Firestore',
-                          style: TextStyle(color: _T.textMid, fontSize: 12)),
+                            style: TextStyle(color: _T.textMid, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -1050,7 +1061,7 @@ class _CreateNotificationDialogState
               const _FieldLabel('Tipo de notificación'),
               const SizedBox(height: 8),
               _TypeSelector(
-                selected:  _type,
+                selected: _type,
                 onChanged: (t) => setState(() => _type = t),
               ),
 
@@ -1059,19 +1070,19 @@ class _CreateNotificationDialogState
               // Título
               const _FieldLabel('Título *'),
               TextFormField(
-                controller:   _titleCtrl,
-                style:        _inputStyle,
-                maxLength:    80,
-                decoration:   _inputDeco(
+                controller: _titleCtrl,
+                style: _inputStyle,
+                maxLength: 80,
+                decoration: _inputDeco(
                   hint: 'Ej: Mantenimiento programado',
                   icon: Icons.title_rounded,
-                ).copyWith(counterStyle: const TextStyle(
-                    color: _T.textLo, fontSize: 10)),
+                ).copyWith(
+                    counterStyle:
+                        const TextStyle(color: _T.textLo, fontSize: 10)),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty)
                     return 'El título es requerido';
-                  if (v.trim().length < 3)
-                    return 'Mínimo 3 caracteres';
+                  if (v.trim().length < 3) return 'Mínimo 3 caracteres';
                   return null;
                 },
               ),
@@ -1081,15 +1092,15 @@ class _CreateNotificationDialogState
               // Cuerpo
               const _FieldLabel('Mensaje *'),
               TextFormField(
-                controller:  _bodyCtrl,
-                style:       _inputStyle,
-                maxLines:    4,
-                maxLength:   300,
-                decoration:  InputDecoration(
-                  hintText:    'Describe el contenido de la notificación...',
-                  hintStyle:   const TextStyle(color: _T.textLo, fontSize: 13),
-                  filled:      true,
-                  fillColor:   _T.card,
+                controller: _bodyCtrl,
+                style: _inputStyle,
+                maxLines: 4,
+                maxLength: 300,
+                decoration: InputDecoration(
+                  hintText: 'Describe el contenido de la notificación...',
+                  hintStyle: const TextStyle(color: _T.textLo, fontSize: 13),
+                  filled: true,
+                  fillColor: _T.card,
                   counterStyle: const TextStyle(color: _T.textLo, fontSize: 10),
                   border: OutlineInputBorder(
                       borderRadius: _T.r12,
@@ -1099,19 +1110,20 @@ class _CreateNotificationDialogState
                       borderSide: const BorderSide(color: _T.border)),
                   focusedBorder: OutlineInputBorder(
                       borderRadius: _T.r12,
-                      borderSide: const BorderSide(color: _T.primary, width: 1.5)),
+                      borderSide:
+                          const BorderSide(color: _T.primary, width: 1.5)),
                   errorBorder: OutlineInputBorder(
                       borderRadius: _T.r12,
                       borderSide: const BorderSide(color: _T.error)),
                   focusedErrorBorder: OutlineInputBorder(
                       borderRadius: _T.r12,
-                      borderSide: const BorderSide(color: _T.error, width: 1.5)),
+                      borderSide:
+                          const BorderSide(color: _T.error, width: 1.5)),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty)
                     return 'El mensaje es requerido';
-                  if (v.trim().length < 5)
-                    return 'Mínimo 5 caracteres';
+                  if (v.trim().length < 5) return 'Mínimo 5 caracteres';
                   return null;
                 },
               ),
@@ -1122,9 +1134,9 @@ class _CreateNotificationDialogState
               const _FieldLabel('Destinatario'),
               const SizedBox(height: 8),
               _TargetSelector(
-                selected:  _target,
+                selected: _target,
                 onChanged: (t) => setState(() {
-                  _target     = t;
+                  _target = t;
                   _targetUser = null;
                 }),
               ),
@@ -1141,12 +1153,11 @@ class _CreateNotificationDialogState
                   error: (e, _) => Text('Error: $e',
                       style: const TextStyle(color: _T.error, fontSize: 12)),
                   data: (users) {
-                    final others = users
-                        .where((u) => u.uid != widget.sender.uid)
-                        .toList();
+                    final others =
+                        users.where((u) => u.uid != widget.sender.uid).toList();
                     return Container(
                       decoration: BoxDecoration(
-                        color:        _T.surface,
+                        color: _T.surface,
                         borderRadius: _T.r12,
                         border: const Border.fromBorderSide(
                             BorderSide(color: _T.border)),
@@ -1156,31 +1167,30 @@ class _CreateNotificationDialogState
                           value: _targetUser,
                           isExpanded: true,
                           dropdownColor: _T.card,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           hint: const Text('Elige un usuario',
-                            style: TextStyle(
-                                color: _T.textLo, fontSize: 13)),
-                          items: others.map((u) => DropdownMenuItem(
-                            value: u,
-                            child: Row(
-                              children: [
-                                _Avatar(user: u, size: 24),
-                                const SizedBox(width: 8),
-                                Text(u.name,
-                                  style: const TextStyle(
-                                      color: _T.textHi,
-                                      fontSize: 13)),
-                                const SizedBox(width: 6),
-                                Text(u.email,
-                                  style: const TextStyle(
-                                      color: _T.textLo,
-                                      fontSize: 11)),
-                              ],
-                            ),
-                          )).toList(),
-                          onChanged: (u) =>
-                              setState(() => _targetUser = u),
+                              style: TextStyle(color: _T.textLo, fontSize: 13)),
+                          items: others
+                              .map((u) => DropdownMenuItem(
+                                    value: u,
+                                    child: Row(
+                                      children: [
+                                        _Avatar(user: u, size: 24),
+                                        const SizedBox(width: 8),
+                                        Text(u.name,
+                                            style: const TextStyle(
+                                                color: _T.textHi,
+                                                fontSize: 13)),
+                                        const SizedBox(width: 6),
+                                        Text(u.email,
+                                            style: const TextStyle(
+                                                color: _T.textLo,
+                                                fontSize: 11)),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: (u) => setState(() => _targetUser = u),
                         ),
                       ),
                     );
@@ -1193,8 +1203,8 @@ class _CreateNotificationDialogState
               // Preview card
               _NotifPreview(
                 title: _titleCtrl.text,
-                body:  _bodyCtrl.text,
-                type:  _type,
+                body: _bodyCtrl.text,
+                type: _type,
               ),
 
               const SizedBox(height: 24),
@@ -1211,19 +1221,18 @@ class _CreateNotificationDialogState
                   ),
                   child: _sending
                       ? const SizedBox(
-                          width: 20, height: 20,
+                          width: 20,
+                          height: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white))
+                              strokeWidth: 2, color: Colors.white))
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: const [
                             Icon(Icons.send_rounded, size: 16),
                             SizedBox(width: 8),
                             Text('Enviar notificación',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14)),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 14)),
                           ],
                         ),
                 ),
@@ -1241,48 +1250,41 @@ class _CreateNotificationDialogState
 class _TypeSelector extends StatelessWidget {
   final NotificationType selected;
   final ValueChanged<NotificationType> onChanged;
-  const _TypeSelector(
-      {required this.selected, required this.onChanged});
+  const _TypeSelector({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8, runSpacing: 8,
+      spacing: 8,
+      runSpacing: 8,
       children: NotificationType.values.map((t) {
         final isSelected = t == selected;
-        final color      = _color(t);
+        final color = _color(t);
         return GestureDetector(
           onTap: () => onChanged(t),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? color.withOpacity(0.12)
-                  : _T.surface,
+              color: isSelected ? color.withOpacity(0.12) : _T.surface,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected
-                    ? color.withOpacity(0.6) : _T.border,
+                color: isSelected ? color.withOpacity(0.6) : _T.border,
                 width: isSelected ? 1.5 : 1,
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(_icon(t),
-                  size:  14,
-                  color: isSelected ? color : _T.textLo),
+                Icon(_icon(t), size: 14, color: isSelected ? color : _T.textLo),
                 const SizedBox(width: 6),
                 Text(t.label,
-                  style: TextStyle(
-                    color: isSelected ? color : _T.textMid,
-                    fontSize:   12,
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                  )),
+                    style: TextStyle(
+                      color: isSelected ? color : _T.textMid,
+                      fontSize: 12,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                    )),
               ],
             ),
           ),
@@ -1294,17 +1296,17 @@ class _TypeSelector extends StatelessWidget {
   Color _color(NotificationType t) => switch (t) {
         NotificationType.success => _T.success,
         NotificationType.warning => _T.warning,
-        NotificationType.error   => _T.error,
-        NotificationType.system  => _T.primary,
-        NotificationType.info    => _T.accent,
+        NotificationType.error => _T.error,
+        NotificationType.system => _T.primary,
+        NotificationType.info => _T.accent,
       };
 
   IconData _icon(NotificationType t) => switch (t) {
         NotificationType.success => Icons.check_circle_rounded,
         NotificationType.warning => Icons.warning_rounded,
-        NotificationType.error   => Icons.error_rounded,
-        NotificationType.system  => Icons.settings_rounded,
-        NotificationType.info    => Icons.info_rounded,
+        NotificationType.error => Icons.error_rounded,
+        NotificationType.system => Icons.settings_rounded,
+        NotificationType.info => Icons.info_rounded,
       };
 }
 
@@ -1313,14 +1315,13 @@ class _TypeSelector extends StatelessWidget {
 class _TargetSelector extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onChanged;
-  const _TargetSelector(
-      {required this.selected, required this.onChanged});
+  const _TargetSelector({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final options = [
-      ('self', Icons.person_rounded,       'Solo yo'),
-      ('all',  Icons.groups_rounded,       'Todos los usuarios'),
+      ('self', Icons.person_rounded, 'Solo yo'),
+      ('all', Icons.groups_rounded, 'Todos los usuarios'),
       ('user', Icons.person_search_rounded, 'Usuario específico'),
     ];
 
@@ -1339,25 +1340,23 @@ class _TargetSelector extends StatelessWidget {
                 color: isSelected ? _T.primaryLo : _T.surface,
                 borderRadius: _T.r12,
                 border: Border.all(
-                  color: isSelected
-                      ? _T.primary.withOpacity(0.5) : _T.border,
+                  color: isSelected ? _T.primary.withOpacity(0.5) : _T.border,
                   width: isSelected ? 1.5 : 1,
                 ),
               ),
               child: Column(
                 children: [
                   Icon(icon,
-                    size:  20,
-                    color: isSelected ? _T.primary : _T.textMid),
+                      size: 20, color: isSelected ? _T.primary : _T.textMid),
                   const SizedBox(height: 4),
                   Text(label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color:      isSelected ? _T.primary : _T.textMid,
-                      fontSize:   10,
-                      fontWeight: isSelected
-                          ? FontWeight.w600 : FontWeight.w400,
-                    )),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isSelected ? _T.primary : _T.textMid,
+                        fontSize: 10,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
+                      )),
                 ],
               ),
             ),
@@ -1389,16 +1388,16 @@ class _NotifPreviewState extends State<_NotifPreview> {
     final color = switch (widget.type) {
       NotificationType.success => _T.success,
       NotificationType.warning => _T.warning,
-      NotificationType.error   => _T.error,
-      NotificationType.system  => _T.primary,
-      NotificationType.info    => _T.accent,
+      NotificationType.error => _T.error,
+      NotificationType.system => _T.primary,
+      NotificationType.info => _T.accent,
     };
     final icon = switch (widget.type) {
       NotificationType.success => Icons.check_circle_rounded,
       NotificationType.warning => Icons.warning_rounded,
-      NotificationType.error   => Icons.error_rounded,
-      NotificationType.system  => Icons.settings_rounded,
-      NotificationType.info    => Icons.info_rounded,
+      NotificationType.error => Icons.error_rounded,
+      NotificationType.system => Icons.settings_rounded,
+      NotificationType.info => Icons.info_rounded,
     };
 
     return Column(
@@ -1406,32 +1405,30 @@ class _NotifPreviewState extends State<_NotifPreview> {
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Divider(color: _T.divider)),
+            const Expanded(child: Divider(color: _T.divider)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text('Vista previa',
-                style: const TextStyle(
-                    color: _T.textLo, fontSize: 11)),
+                  style: const TextStyle(color: _T.textLo, fontSize: 11)),
             ),
-            const Expanded(
-              child: Divider(color: _T.divider)),
+            const Expanded(child: Divider(color: _T.divider)),
           ],
         ),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color:        _T.surface,
+            color: _T.surface,
             borderRadius: _T.r12,
             border: Border.all(color: color.withOpacity(0.25)),
           ),
           child: Row(
             children: [
               Container(
-                width: 34, height: 34,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12), shape: BoxShape.circle),
+                    color: color.withOpacity(0.12), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 16),
               ),
               const SizedBox(width: 10),
@@ -1439,25 +1436,21 @@ class _NotifPreviewState extends State<_NotifPreview> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.title.isEmpty ? 'Título...' : widget.title,
-                      style: TextStyle(
-                        color: widget.title.isEmpty
-                            ? _T.textLo : _T.textHi,
-                        fontSize:   12,
-                        fontWeight: FontWeight.w600,
-                      )),
+                    Text(widget.title.isEmpty ? 'Título...' : widget.title,
+                        style: TextStyle(
+                          color: widget.title.isEmpty ? _T.textLo : _T.textHi,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        )),
                     const SizedBox(height: 2),
-                    Text(
-                      widget.body.isEmpty
-                          ? 'Mensaje...' : widget.body,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: widget.body.isEmpty
-                            ? _T.textLo : _T.textMid,
-                        fontSize: 11, height: 1.4,
-                      )),
+                    Text(widget.body.isEmpty ? 'Mensaje...' : widget.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: widget.body.isEmpty ? _T.textLo : _T.textMid,
+                          fontSize: 11,
+                          height: 1.4,
+                        )),
                   ],
                 ),
               ),
@@ -1479,17 +1472,17 @@ class _NotifTile extends StatelessWidget {
   Color get _typeColor => switch (notif.type) {
         NotificationType.success => _T.success,
         NotificationType.warning => _T.warning,
-        NotificationType.error   => _T.error,
-        NotificationType.system  => _T.primary,
-        NotificationType.info    => _T.accent,
+        NotificationType.error => _T.error,
+        NotificationType.system => _T.primary,
+        NotificationType.info => _T.accent,
       };
 
   IconData get _typeIcon => switch (notif.type) {
         NotificationType.success => Icons.check_circle_rounded,
         NotificationType.warning => Icons.warning_rounded,
-        NotificationType.error   => Icons.error_rounded,
-        NotificationType.system  => Icons.settings_rounded,
-        NotificationType.info    => Icons.info_rounded,
+        NotificationType.error => Icons.error_rounded,
+        NotificationType.system => Icons.settings_rounded,
+        NotificationType.info => Icons.info_rounded,
       };
 
   @override
@@ -1498,48 +1491,47 @@ class _NotifTile extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       color: notif.read ? Colors.transparent : _T.primaryLo,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
-          width: 40, height: 40,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color:  _typeColor.withOpacity(0.12),
-            shape:  BoxShape.circle,
+            color: _typeColor.withOpacity(0.12),
+            shape: BoxShape.circle,
           ),
           child: Icon(_typeIcon, color: _typeColor, size: 18),
         ),
         title: Text(notif.title,
-          style: TextStyle(
-            color: _T.textHi, fontSize: 13,
-            fontWeight: notif.read
-                ? FontWeight.w400 : FontWeight.w600,
-          )),
+            style: TextStyle(
+              color: _T.textHi,
+              fontSize: 13,
+              fontWeight: notif.read ? FontWeight.w400 : FontWeight.w600,
+            )),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 2),
             Text(notif.body,
-              style: const TextStyle(
-                  color: _T.textMid, fontSize: 12)),
+                style: const TextStyle(color: _T.textMid, fontSize: 12)),
             const SizedBox(height: 4),
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: _typeColor.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(notif.type.label,
-                    style: TextStyle(
-                      color: _typeColor, fontSize: 9,
-                      fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          color: _typeColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 8),
                 Text(_formatDate(notif.createdAt),
-                  style: const TextStyle(
-                      color: _T.textLo, fontSize: 11)),
+                    style: const TextStyle(color: _T.textLo, fontSize: 11)),
               ],
             ),
           ],

@@ -149,21 +149,33 @@ class _MassSendViewState extends State<MassSendView>
     if (_selectedBot == null) return;
     setState(() => _loadingContacts = true);
     final convs = await widget.service.getConversations(_selectedBot!.id);
-    if (mounted) setState(() { _contacts = convs; _loadingContacts = false; });
+    if (mounted)
+      setState(() {
+        _contacts = convs;
+        _loadingContacts = false;
+      });
   }
 
   Future<void> _loadTemplates() async {
     if (_selectedBot == null) return;
     setState(() => _loadingTemplates = true);
     final raw = await widget.service.getTemplatesRich(_selectedBot!.id);
-    if (mounted) setState(() { _templates = raw; _loadingTemplates = false; });
+    if (mounted)
+      setState(() {
+        _templates = raw;
+        _loadingTemplates = false;
+      });
   }
 
   Future<void> _loadHistory() async {
     if (_selectedBot == null) return;
     setState(() => _loadingHistory = true);
     final h = await widget.service.getMassSendHistory(_selectedBot!.id);
-    if (mounted) setState(() { _history = h; _loadingHistory = false; });
+    if (mounted)
+      setState(() {
+        _history = h;
+        _loadingHistory = false;
+      });
   }
 
   bool get _canSend {
@@ -193,9 +205,15 @@ class _MassSendViewState extends State<MassSendView>
     if (!mounted) return;
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Enviado a ${result['sent'] ?? _selectedIds.length} contactos'),
+          content: Text(
+              'Enviado a ${result['sent'] ?? _selectedIds.length} contactos'),
           backgroundColor: WAColors.green));
-      setState(() { _selectedIds = []; _selectedTemplate = null; _templateVarValues = {}; _msgCtrl.clear(); });
+      setState(() {
+        _selectedIds = [];
+        _selectedTemplate = null;
+        _templateVarValues = {};
+        _msgCtrl.clear();
+      });
       _loadHistory();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -206,7 +224,9 @@ class _MassSendViewState extends State<MassSendView>
 
   String _resolveTemplateBody(String body, Map<String, String> vars) {
     String result = body;
-    vars.forEach((k, v) { result = result.replaceAll('{{$k}}', v); });
+    vars.forEach((k, v) {
+      result = result.replaceAll('{{$k}}', v);
+    });
     return result;
   }
 
@@ -231,16 +251,26 @@ class _MassSendViewState extends State<MassSendView>
               indicatorColor: WAColors.green,
               indicatorSize: TabBarIndicatorSize.label,
               tabs: const [
-                Tab(icon: Icon(Icons.send_rounded, size: 15), text: 'Envío Masivo'),
-                Tab(icon: Icon(Icons.description_rounded, size: 15), text: 'Plantillas'),
-                Tab(icon: Icon(Icons.history_rounded, size: 15), text: 'Historial'),
+                Tab(
+                    icon: Icon(Icons.send_rounded, size: 15),
+                    text: 'Envío Masivo'),
+                Tab(
+                    icon: Icon(Icons.description_rounded, size: 15),
+                    text: 'Plantillas'),
+                Tab(
+                    icon: Icon(Icons.history_rounded, size: 15),
+                    text: 'Historial'),
               ],
             ),
           ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [_buildSendTab(), _buildTemplatesTab(), _buildHistoryTab()],
+              children: [
+                _buildSendTab(),
+                _buildTemplatesTab(),
+                _buildHistoryTab()
+              ],
             ),
           ),
         ],
@@ -263,14 +293,18 @@ class _MassSendViewState extends State<MassSendView>
               color: WAColors.green.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.send_rounded, color: WAColors.green, size: 18),
+            child:
+                const Icon(Icons.send_rounded, color: WAColors.green, size: 18),
           ),
           const SizedBox(width: 12),
           const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Envíos Masivos',
-                  style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: TextStyle(
+                      color: WAColors.textPri,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
               Text('WhatsApp masivo y plantillas',
                   style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
             ],
@@ -289,13 +323,18 @@ class _MassSendViewState extends State<MassSendView>
                 underline: const SizedBox(),
                 dropdownColor: WAColors.card,
                 style: const TextStyle(color: WAColors.textPri, fontSize: 13),
-                items: widget.bots.map((b) =>
-                    DropdownMenuItem(value: b.id, child: Text(b.name))).toList(),
+                items: widget.bots
+                    .map((b) =>
+                        DropdownMenuItem(value: b.id, child: Text(b.name)))
+                    .toList(),
                 onChanged: (id) {
                   if (id == null) return;
                   setState(() {
                     _selectedBot = widget.bots.firstWhere((b) => b.id == id);
-                    _contacts = []; _selectedIds = []; _templates = []; _history = [];
+                    _contacts = [];
+                    _selectedIds = [];
+                    _templates = [];
+                    _history = [];
                   });
                   _loadAll();
                 },
@@ -310,7 +349,8 @@ class _MassSendViewState extends State<MassSendView>
   // TAB: ENVÍO MASIVO
   // ══════════════════════════════════════════════════════
   Widget _buildSendTab() {
-    final allSelected = _selectedIds.length == _contacts.length && _contacts.isNotEmpty;
+    final allSelected =
+        _selectedIds.length == _contacts.length && _contacts.isNotEmpty;
     return Row(
       children: [
         // Lista contactos
@@ -323,45 +363,60 @@ class _MassSendViewState extends State<MassSendView>
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: WAColors.border)),
                 ),
                 child: Row(
                   children: [
                     Text('${_contacts.length} contactos',
-                        style: const TextStyle(color: WAColors.textSec, fontWeight: FontWeight.w600, fontSize: 13)),
+                        style: const TextStyle(
+                            color: WAColors.textSec,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
                     const Spacer(),
                     if (_selectedIds.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: WAColors.green.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text('${_selectedIds.length} sel.',
-                            style: const TextStyle(color: WAColors.green, fontSize: 11, fontWeight: FontWeight.w700)),
+                            style: const TextStyle(
+                                color: WAColors.green,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
                       ),
                     const SizedBox(width: 8),
                     TextButton(
                       onPressed: () => setState(() {
-                        _selectedIds = allSelected ? [] : _contacts.map((c) => c.from).toList();
+                        _selectedIds = allSelected
+                            ? []
+                            : _contacts.map((c) => c.from).toList();
                       }),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         minimumSize: Size.zero,
                       ),
                       child: Text(allSelected ? 'Desel. todos' : 'Sel. todos',
-                          style: const TextStyle(color: WAColors.accent, fontSize: 11)),
+                          style: const TextStyle(
+                              color: WAColors.accent, fontSize: 11)),
                     ),
                   ],
                 ),
               ),
               Expanded(
                 child: _loadingContacts
-                    ? const Center(child: CircularProgressIndicator(color: WAColors.green))
+                    ? const Center(
+                        child: CircularProgressIndicator(color: WAColors.green))
                     : _contacts.isEmpty
-                        ? const Center(child: Text('Sin contactos', style: TextStyle(color: WAColors.textMuted)))
+                        ? const Center(
+                            child: Text('Sin contactos',
+                                style: TextStyle(color: WAColors.textMuted)))
                         : ListView.builder(
                             itemCount: _contacts.length,
                             itemBuilder: (_, i) {
@@ -369,13 +424,18 @@ class _MassSendViewState extends State<MassSendView>
                               final sel = _selectedIds.contains(c.from);
                               return InkWell(
                                 onTap: () => setState(() {
-                                  if (sel) _selectedIds.remove(c.from);
-                                  else _selectedIds.add(c.from);
+                                  if (sel)
+                                    _selectedIds.remove(c.from);
+                                  else
+                                    _selectedIds.add(c.from);
                                 }),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 150),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                                  color: sel ? WAColors.green.withOpacity(0.08) : Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 9),
+                                  color: sel
+                                      ? WAColors.green.withOpacity(0.08)
+                                      : Colors.transparent,
                                   child: Row(
                                     children: [
                                       SizedBox(
@@ -384,36 +444,53 @@ class _MassSendViewState extends State<MassSendView>
                                         child: Checkbox(
                                           value: sel,
                                           onChanged: (_) => setState(() {
-                                            if (sel) _selectedIds.remove(c.from);
-                                            else _selectedIds.add(c.from);
+                                            if (sel)
+                                              _selectedIds.remove(c.from);
+                                            else
+                                              _selectedIds.add(c.from);
                                           }),
                                           activeColor: WAColors.green,
-                                          side: const BorderSide(color: WAColors.border),
-                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          side: const BorderSide(
+                                              color: WAColors.border),
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       CircleAvatar(
-                                        backgroundColor: WAColors.accent.withOpacity(0.15),
+                                        backgroundColor:
+                                            WAColors.accent.withOpacity(0.15),
                                         radius: 14,
                                         child: Text(
-                                          c.contactName.isNotEmpty ? c.contactName[0].toUpperCase() : '?',
-                                          style: const TextStyle(color: WAColors.accent, fontWeight: FontWeight.w700, fontSize: 11),
+                                          c.contactName.isNotEmpty
+                                              ? c.contactName[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                              color: WAColors.accent,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 11),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(c.contactName,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                    color: sel ? WAColors.textPri : WAColors.textSec,
+                                                    color: sel
+                                                        ? WAColors.textPri
+                                                        : WAColors.textSec,
                                                     fontSize: 12,
-                                                    fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                                                    fontWeight: sel
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w400)),
                                             Text(c.from.replaceAll('@c.us', ''),
-                                                style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+                                                style: const TextStyle(
+                                                    color: WAColors.textMuted,
+                                                    fontSize: 10)),
                                           ],
                                         ),
                                       ),
@@ -439,7 +516,8 @@ class _MassSendViewState extends State<MassSendView>
                   children: [
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: _selectedIds.isNotEmpty
                             ? WAColors.green.withOpacity(0.15)
@@ -455,12 +533,16 @@ class _MassSendViewState extends State<MassSendView>
                         children: [
                           Icon(Icons.people_rounded,
                               size: 14,
-                              color: _selectedIds.isNotEmpty ? WAColors.green : WAColors.textMuted),
+                              color: _selectedIds.isNotEmpty
+                                  ? WAColors.green
+                                  : WAColors.textMuted),
                           const SizedBox(width: 6),
                           Text(
                             '${_selectedIds.length} contactos seleccionados',
                             style: TextStyle(
-                                color: _selectedIds.isNotEmpty ? WAColors.green : WAColors.textMuted,
+                                color: _selectedIds.isNotEmpty
+                                    ? WAColors.green
+                                    : WAColors.textMuted,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13),
                           ),
@@ -472,14 +554,21 @@ class _MassSendViewState extends State<MassSendView>
                 const SizedBox(height: 16),
 
                 // Seleccionar plantilla aprobada
-                if (_templates.where((t) => t.status == 'APPROVED').isNotEmpty) ...[
+                if (_templates
+                    .where((t) => t.status == 'APPROVED')
+                    .isNotEmpty) ...[
                   const Text('Usar plantilla aprobada (opcional)',
-                      style: TextStyle(color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500)),
+                      style: TextStyle(
+                          color: WAColors.textSec,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _templates.where((t) => t.status == 'APPROVED').map((t) {
+                    children: _templates
+                        .where((t) => t.status == 'APPROVED')
+                        .map((t) {
                       final sel = _selectedTemplate?.id == t.id;
                       return InkWell(
                         onTap: () => setState(() {
@@ -495,21 +584,31 @@ class _MassSendViewState extends State<MassSendView>
                         }),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: sel ? WAColors.green.withOpacity(0.15) : WAColors.card,
+                            color: sel
+                                ? WAColors.green.withOpacity(0.15)
+                                : WAColors.card,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: sel ? WAColors.green : WAColors.border),
+                            border: Border.all(
+                                color: sel ? WAColors.green : WAColors.border),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.check_circle_rounded, size: 12,
-                                  color: sel ? WAColors.green : WAColors.textMuted),
+                              Icon(Icons.check_circle_rounded,
+                                  size: 12,
+                                  color: sel
+                                      ? WAColors.green
+                                      : WAColors.textMuted),
                               const SizedBox(width: 6),
                               Text(t.name,
                                   style: TextStyle(
-                                      color: sel ? WAColors.green : WAColors.textSec, fontSize: 12)),
+                                      color: sel
+                                          ? WAColors.green
+                                          : WAColors.textSec,
+                                      fontSize: 12)),
                             ],
                           ),
                         ),
@@ -524,7 +623,8 @@ class _MassSendViewState extends State<MassSendView>
                   _TemplatePreviewCard(
                     template: _selectedTemplate!,
                     varValues: _templateVarValues,
-                    onVarChanged: (k, v) => setState(() => _templateVarValues[k] = v),
+                    onVarChanged: (k, v) =>
+                        setState(() => _templateVarValues[k] = v),
                     vars: _extractVars(_selectedTemplate!.body),
                   ),
                   const SizedBox(height: 16),
@@ -539,10 +639,13 @@ class _MassSendViewState extends State<MassSendView>
                         Row(
                           children: [
                             const Text('Mensaje',
-                                style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600)),
+                                style: TextStyle(
+                                    color: WAColors.textPri,
+                                    fontWeight: FontWeight.w600)),
                             const Spacer(),
                             Text('${_msgCtrl.text.length}/1024',
-                                style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                                style: const TextStyle(
+                                    color: WAColors.textMuted, fontSize: 11)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -550,32 +653,47 @@ class _MassSendViewState extends State<MassSendView>
                           controller: _msgCtrl,
                           maxLines: 6,
                           maxLength: 1024,
-                          style: const TextStyle(color: WAColors.textPri, fontSize: 13),
+                          style: const TextStyle(
+                              color: WAColors.textPri, fontSize: 13),
                           decoration: InputDecoration(
-                            hintText: 'Escribe el mensaje para todos los contactos seleccionados...',
-                            hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 13),
+                            hintText:
+                                'Escribe el mensaje para todos los contactos seleccionados...',
+                            hintStyle: const TextStyle(
+                                color: WAColors.textMuted, fontSize: 13),
                             filled: true,
                             fillColor: WAColors.bg,
-                            counterStyle: const TextStyle(color: WAColors.textMuted, fontSize: 10),
+                            counterStyle: const TextStyle(
+                                color: WAColors.textMuted, fontSize: 10),
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: WAColors.border)),
+                                borderSide:
+                                    const BorderSide(color: WAColors.border)),
                             enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: WAColors.border)),
+                                borderSide:
+                                    const BorderSide(color: WAColors.border)),
                             focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: WAColors.green)),
+                                borderSide:
+                                    const BorderSide(color: WAColors.green)),
                             contentPadding: const EdgeInsets.all(14),
                           ),
                         ),
                         // Formato rápido
                         Row(
                           children: [
-                            _FormatBtn(label: 'B', onTap: () => _insertFormat('*')),
-                            _FormatBtn(label: 'I', italic: true, onTap: () => _insertFormat('_')),
-                            _FormatBtn(label: '~', onTap: () => _insertFormat('~')),
-                            _FormatBtn(label: '```', mono: true, onTap: () => _insertFormat('```')),
+                            _FormatBtn(
+                                label: 'B', onTap: () => _insertFormat('*')),
+                            _FormatBtn(
+                                label: 'I',
+                                italic: true,
+                                onTap: () => _insertFormat('_')),
+                            _FormatBtn(
+                                label: '~', onTap: () => _insertFormat('~')),
+                            _FormatBtn(
+                                label: '```',
+                                mono: true,
+                                onTap: () => _insertFormat('```')),
                           ],
                         ),
                       ],
@@ -590,16 +708,19 @@ class _MassSendViewState extends State<MassSendView>
                   decoration: BoxDecoration(
                     color: WAColors.warning.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: WAColors.warning.withOpacity(0.3)),
+                    border:
+                        Border.all(color: WAColors.warning.withOpacity(0.3)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline, color: WAColors.warning, size: 15),
+                      Icon(Icons.info_outline,
+                          color: WAColors.warning, size: 15),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Los envíos masivos se envían directamente por WhatsApp. Solo plantillas aprobadas por Meta garantizan entrega.',
-                          style: TextStyle(color: WAColors.warning, fontSize: 11),
+                          style:
+                              TextStyle(color: WAColors.warning, fontSize: 11),
                         ),
                       ),
                     ],
@@ -612,14 +733,19 @@ class _MassSendViewState extends State<MassSendView>
                   child: ElevatedButton(
                     onPressed: (_sending || !_canSend) ? null : _sendMass,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _canSend ? WAColors.green : WAColors.border,
+                      backgroundColor:
+                          _canSend ? WAColors.green : WAColors.border,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     child: _sending
-                        ? const SizedBox(width: 20, height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -629,7 +755,8 @@ class _MassSendViewState extends State<MassSendView>
                                 _selectedIds.isEmpty
                                     ? 'Selecciona contactos primero'
                                     : 'Enviar a ${_selectedIds.length} contactos',
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 14),
                               ),
                             ],
                           ),
@@ -648,14 +775,18 @@ class _MassSendViewState extends State<MassSendView>
     final sel = _msgCtrl.selection;
     if (sel.isValid && sel.start != sel.end) {
       final selected = text.substring(sel.start, sel.end);
-      final newText = text.replaceRange(sel.start, sel.end, '$marker$selected$marker');
+      final newText =
+          text.replaceRange(sel.start, sel.end, '$marker$selected$marker');
       _msgCtrl.value = TextEditingValue(
         text: newText,
-        selection: TextSelection.collapsed(offset: sel.start + marker.length + selected.length + marker.length),
+        selection: TextSelection.collapsed(
+            offset:
+                sel.start + marker.length + selected.length + marker.length),
       );
     } else {
       final cursor = sel.baseOffset < 0 ? text.length : sel.baseOffset;
-      final newText = text.substring(0, cursor) + '$marker$marker' + text.substring(cursor);
+      final newText =
+          text.substring(0, cursor) + '$marker$marker' + text.substring(cursor);
       _msgCtrl.value = TextEditingValue(
         text: newText,
         selection: TextSelection.collapsed(offset: cursor + marker.length),
@@ -676,12 +807,16 @@ class _MassSendViewState extends State<MassSendView>
             children: [
               // Filtros de estado
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 color: WAColors.surface,
                 child: Row(
                   children: [
                     const Text('Plantillas',
-                        style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 15)),
+                        style: TextStyle(
+                            color: WAColors.textPri,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15)),
                     const Spacer(),
                     ...[
                       ('TODAS', null),
@@ -690,20 +825,29 @@ class _MassSendViewState extends State<MassSendView>
                       ('REJECTED', WAColors.error),
                       ('LOCAL', WAColors.textMuted),
                     ].map((e) => _StatusFilterChip(
-                          label: e.$1 == 'TODAS' ? 'Todas' : _statusLabelShort(e.$1!),
+                          label: e.$1 == 'TODAS'
+                              ? 'Todas'
+                              : _statusLabelShort(e.$1!),
                           color: e.$2 ?? WAColors.accent,
                           count: e.$1 == null || e.$1 == 'TODAS'
                               ? _templates.length
-                              : _templates.where((t) => t.status == e.$1).length,
+                              : _templates
+                                  .where((t) => t.status == e.$1)
+                                  .length,
                         )),
                     const SizedBox(width: 8),
-                    HeaderBtn(icon: Icons.refresh, label: 'Sync Meta', onTap: _syncMetaTemplates),
+                    HeaderBtn(
+                        icon: Icons.refresh,
+                        label: 'Sync Meta',
+                        onTap: _syncMetaTemplates),
                   ],
                 ),
               ),
               Expanded(
                 child: _loadingTemplates
-                    ? const Center(child: CircularProgressIndicator(color: WAColors.accent))
+                    ? const Center(
+                        child:
+                            CircularProgressIndicator(color: WAColors.accent))
                     : _templates.isEmpty
                         ? EmptyState(
                             icon: Icons.description_outlined,
@@ -777,18 +921,26 @@ class _MassSendViewState extends State<MassSendView>
           color: WAColors.surface,
           child: Row(
             children: [
-              const Icon(Icons.history_rounded, color: WAColors.accent, size: 16),
+              const Icon(Icons.history_rounded,
+                  color: WAColors.accent, size: 16),
               const SizedBox(width: 8),
               Text('${_history.length} envíos masivos',
-                  style: const TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                  style: const TextStyle(
+                      color: WAColors.textPri,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
               const Spacer(),
-              HeaderBtn(icon: Icons.refresh, label: 'Actualizar', onTap: _loadHistory),
+              HeaderBtn(
+                  icon: Icons.refresh,
+                  label: 'Actualizar',
+                  onTap: _loadHistory),
             ],
           ),
         ),
         Expanded(
           child: _loadingHistory
-              ? const Center(child: CircularProgressIndicator(color: WAColors.accent))
+              ? const Center(
+                  child: CircularProgressIndicator(color: WAColors.accent))
               : _history.isEmpty
                   ? EmptyState(
                       icon: Icons.history_rounded,
@@ -825,11 +977,15 @@ class _MassSendViewState extends State<MassSendView>
               Row(
                 children: [
                   const Text('Detalle del envío',
-                      style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 16)),
+                      style: TextStyle(
+                          color: WAColors.textPri,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16)),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: WAColors.textMuted, size: 18),
+                    icon: const Icon(Icons.close,
+                        color: WAColors.textMuted, size: 18),
                   ),
                 ],
               ),
@@ -840,28 +996,39 @@ class _MassSendViewState extends State<MassSendView>
                   const SizedBox(width: 8),
                   _MiniChip('Enviados: ${record['sent'] ?? 0}', WAColors.green),
                   const SizedBox(width: 8),
-                  _MiniChip('Fallidos: ${record['failed'] ?? 0}', WAColors.error),
+                  _MiniChip(
+                      'Fallidos: ${record['failed'] ?? 0}', WAColors.error),
                 ],
               ),
               const SizedBox(height: 12),
               Expanded(
                 child: results.isEmpty
-                    ? const Center(child: Text('Sin detalles', style: TextStyle(color: WAColors.textMuted)))
+                    ? const Center(
+                        child: Text('Sin detalles',
+                            style: TextStyle(color: WAColors.textMuted)))
                     : ListView.separated(
                         itemCount: results.length,
-                        separatorBuilder: (_, __) => const Divider(color: WAColors.border, height: 1),
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: WAColors.border, height: 1),
                         itemBuilder: (_, i) {
                           final r = results[i];
                           final ok = r['status'] == 'sent';
                           return ListTile(
                             dense: true,
                             leading: Icon(
-                              ok ? Icons.check_circle_rounded : Icons.error_rounded,
+                              ok
+                                  ? Icons.check_circle_rounded
+                                  : Icons.error_rounded,
                               color: ok ? WAColors.green : WAColors.error,
                               size: 16,
                             ),
-                            title: Text(r['contactId']?.toString().replaceAll('@c.us', '') ?? '',
-                                style: const TextStyle(color: WAColors.textSec, fontSize: 12)),
+                            title: Text(
+                                r['contactId']
+                                        ?.toString()
+                                        .replaceAll('@c.us', '') ??
+                                    '',
+                                style: const TextStyle(
+                                    color: WAColors.textSec, fontSize: 12)),
                             trailing: Text(ok ? 'Enviado' : 'Fallido',
                                 style: TextStyle(
                                     color: ok ? WAColors.green : WAColors.error,
@@ -897,7 +1064,8 @@ class _TemplatePreviewCard extends StatelessWidget {
 
   String _resolve(String text) {
     String r = text;
-    varValues.forEach((k, v) => r = r.replaceAll('{{$k}}', v.isEmpty ? '{{$k}}' : v));
+    varValues.forEach(
+        (k, v) => r = r.replaceAll('{{$k}}', v.isEmpty ? '{{$k}}' : v));
     return r;
   }
 
@@ -922,19 +1090,27 @@ class _TemplatePreviewCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: WAColors.green, size: 14),
+                const Icon(Icons.check_circle_rounded,
+                    color: WAColors.green, size: 14),
                 const SizedBox(width: 8),
                 Text('Plantilla: ${template.name}',
-                    style: const TextStyle(color: WAColors.green, fontWeight: FontWeight.w700, fontSize: 13)),
+                    style: const TextStyle(
+                        color: WAColors.green,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: WAColors.green.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text('APROBADA',
-                      style: TextStyle(color: WAColors.green, fontSize: 9, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          color: WAColors.green,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
@@ -961,11 +1137,15 @@ class _TemplatePreviewCard extends StatelessWidget {
                         const SizedBox(height: 8),
                       ],
                       Text(_resolve(template.body),
-                          style: const TextStyle(color: WAColors.textPri, fontSize: 13, height: 1.5)),
+                          style: const TextStyle(
+                              color: WAColors.textPri,
+                              fontSize: 13,
+                              height: 1.5)),
                       if (template.footer.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(template.footer,
-                            style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                            style: const TextStyle(
+                                color: WAColors.textMuted, fontSize: 11)),
                       ],
                     ],
                   ),
@@ -974,40 +1154,53 @@ class _TemplatePreviewCard extends StatelessWidget {
                 if (vars.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const Text('Completa las variables:',
-                      style: TextStyle(color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500)),
+                      style: TextStyle(
+                          color: WAColors.textSec,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   ...vars.map((v) => Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: WAColors.accent.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text('{{$v}}',
-                                  style: const TextStyle(color: WAColors.accent, fontSize: 11, fontWeight: FontWeight.w700)),
+                                  style: const TextStyle(
+                                      color: WAColors.accent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: TextField(
-                                style: const TextStyle(color: WAColors.textPri, fontSize: 12),
+                                style: const TextStyle(
+                                    color: WAColors.textPri, fontSize: 12),
                                 decoration: InputDecoration(
                                   hintText: 'Valor para variable $v',
-                                  hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 12),
+                                  hintStyle: const TextStyle(
+                                      color: WAColors.textMuted, fontSize: 12),
                                   filled: true,
                                   fillColor: WAColors.bg,
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: WAColors.border)),
+                                      borderSide: const BorderSide(
+                                          color: WAColors.border)),
                                   enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: WAColors.border)),
+                                      borderSide: const BorderSide(
+                                          color: WAColors.border)),
                                   focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: WAColors.accent)),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      borderSide: const BorderSide(
+                                          color: WAColors.accent)),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
                                 ),
                                 onChanged: (val) => onVarChanged(v, val),
                               ),
@@ -1034,7 +1227,10 @@ class _HeaderPreview extends StatelessWidget {
     switch (template.headerType) {
       case 'TEXT':
         return Text(template.headerText,
-            style: const TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 15));
+            style: const TextStyle(
+                color: WAColors.textPri,
+                fontWeight: FontWeight.w700,
+                fontSize: 15));
       case 'IMAGE':
         return Container(
           height: 80,
@@ -1042,32 +1238,45 @@ class _HeaderPreview extends StatelessWidget {
             color: WAColors.cardLight,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Center(child: Icon(Icons.image_rounded, color: WAColors.textMuted, size: 32)),
+          child: const Center(
+              child: Icon(Icons.image_rounded,
+                  color: WAColors.textMuted, size: 32)),
         );
       case 'VIDEO':
         return Container(
           height: 80,
-          decoration: BoxDecoration(color: WAColors.cardLight, borderRadius: BorderRadius.circular(8)),
-          child: const Center(child: Icon(Icons.play_circle_rounded, color: WAColors.textMuted, size: 32)),
+          decoration: BoxDecoration(
+              color: WAColors.cardLight,
+              borderRadius: BorderRadius.circular(8)),
+          child: const Center(
+              child: Icon(Icons.play_circle_rounded,
+                  color: WAColors.textMuted, size: 32)),
         );
       case 'AUDIO':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: WAColors.cardLight, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+              color: WAColors.cardLight,
+              borderRadius: BorderRadius.circular(8)),
           child: const Row(children: [
             Icon(Icons.audiotrack_rounded, color: WAColors.textMuted, size: 18),
             SizedBox(width: 8),
-            Text('Audio adjunto', style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
+            Text('Audio adjunto',
+                style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
           ]),
         );
       case 'DOCUMENT':
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: WAColors.cardLight, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+              color: WAColors.cardLight,
+              borderRadius: BorderRadius.circular(8)),
           child: const Row(children: [
-            Icon(Icons.attach_file_rounded, color: WAColors.textMuted, size: 18),
+            Icon(Icons.attach_file_rounded,
+                color: WAColors.textMuted, size: 18),
             SizedBox(width: 8),
-            Text('Documento adjunto', style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
+            Text('Documento adjunto',
+                style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
           ]),
         );
       default:
@@ -1134,7 +1343,8 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
 
     // Llamar al service con datos ricos
     // ignore: use_build_context_synchronously
-    final svc = context.findAncestorStateOfType<_MassSendViewState>()?.widget.service;
+    final svc =
+        context.findAncestorStateOfType<_MassSendViewState>()?.widget.service;
     if (svc != null) {
       await svc.saveTemplateRich(
         botId: widget.botId,
@@ -1154,7 +1364,10 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
     _headerTextCtrl.clear();
     _bodyCtrl.clear();
     _footerCtrl.clear();
-    setState(() { _buttons = []; _headerType = 'NONE'; });
+    setState(() {
+      _buttons = [];
+      _headerType = 'NONE';
+    });
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Plantilla guardada'), backgroundColor: WAColors.green));
     widget.onSaved();
@@ -1168,7 +1381,10 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Nueva Plantilla',
-              style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 15)),
+              style: TextStyle(
+                  color: WAColors.textPri,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15)),
           const SizedBox(height: 14),
 
           // Nombre
@@ -1194,9 +1410,11 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
               dropdownColor: WAColors.card,
               style: const TextStyle(color: WAColors.textPri, fontSize: 13),
               items: const [
-                DropdownMenuItem(value: 'MARKETING', child: Text('🎯 Marketing')),
+                DropdownMenuItem(
+                    value: 'MARKETING', child: Text('🎯 Marketing')),
                 DropdownMenuItem(value: 'UTILITY', child: Text('🔧 Utilidad')),
-                DropdownMenuItem(value: 'AUTHENTICATION', child: Text('🔐 Autenticación')),
+                DropdownMenuItem(
+                    value: 'AUTHENTICATION', child: Text('🔐 Autenticación')),
               ],
               onChanged: (v) => setState(() => _category = v ?? 'MARKETING'),
             ),
@@ -1210,7 +1428,8 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              ...['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].map((t) {
+              ...['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT']
+                  .map((t) {
                 final icons = {
                   'NONE': Icons.block,
                   'TEXT': Icons.title,
@@ -1232,20 +1451,27 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
                   onTap: () => setState(() => _headerType = t),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: sel ? WAColors.accent.withOpacity(0.15) : WAColors.bg,
+                      color:
+                          sel ? WAColors.accent.withOpacity(0.15) : WAColors.bg,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: sel ? WAColors.accent : WAColors.border),
+                      border: Border.all(
+                          color: sel ? WAColors.accent : WAColors.border),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(icons[t]!, size: 13, color: sel ? WAColors.accent : WAColors.textMuted),
+                        Icon(icons[t]!,
+                            size: 13,
+                            color: sel ? WAColors.accent : WAColors.textMuted),
                         const SizedBox(width: 4),
                         Text(labels[t]!,
                             style: TextStyle(
-                                color: sel ? WAColors.accent : WAColors.textMuted, fontSize: 11)),
+                                color:
+                                    sel ? WAColors.accent : WAColors.textMuted,
+                                fontSize: 11)),
                       ],
                     ),
                   ),
@@ -1257,7 +1483,8 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
             const SizedBox(height: 8),
             _PanelInput(_headerTextCtrl, 'Texto del encabezado'),
           ],
-          if (['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].contains(_headerType)) ...[
+          if (['IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT']
+              .contains(_headerType)) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
@@ -1267,12 +1494,14 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: WAColors.info, size: 13),
+                  const Icon(Icons.info_outline,
+                      color: WAColors.info, size: 13),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'La URL del medio se especificará al enviar desde la API de Meta.',
-                      style: const TextStyle(color: WAColors.info, fontSize: 10),
+                      style:
+                          const TextStyle(color: WAColors.info, fontSize: 10),
                     ),
                   ),
                 ],
@@ -1286,20 +1515,27 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
             children: [
               const Expanded(
                 child: Text('Cuerpo del mensaje *',
-                    style: TextStyle(color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500)),
+                    style: TextStyle(
+                        color: WAColors.textSec,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500)),
               ),
               InkWell(
                 onTap: _insertVar,
                 borderRadius: BorderRadius.circular(6),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: WAColors.accent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: WAColors.accent.withOpacity(0.3)),
                   ),
                   child: const Text('+ Variable',
-                      style: TextStyle(color: WAColors.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          color: WAColors.accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
@@ -1310,8 +1546,10 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
             maxLines: 5,
             style: const TextStyle(color: WAColors.textPri, fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Hola {{1}}, tenemos una oferta especial para ti en {{2}}...',
-              hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 12),
+              hintText:
+                  'Hola {{1}}, tenemos una oferta especial para ti en {{2}}...',
+              hintStyle:
+                  const TextStyle(color: WAColors.textMuted, fontSize: 12),
               filled: true,
               fillColor: WAColors.bg,
               border: OutlineInputBorder(
@@ -1357,20 +1595,24 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.data_object_rounded, color: WAColors.accent, size: 12),
+                  const Icon(Icons.data_object_rounded,
+                      color: WAColors.accent, size: 12),
                   const SizedBox(width: 6),
                   Wrap(
                     spacing: 4,
                     children: _extractVars(_bodyCtrl.text)
                         .map((v) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: WAColors.accent.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text('{{$v}}',
                                   style: const TextStyle(
-                                      color: WAColors.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+                                      color: WAColors.accent,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)),
                             ))
                         .toList(),
                   ),
@@ -1391,18 +1633,26 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
             children: [
               const Expanded(
                   child: Text('Botones (opcional)',
-                      style: TextStyle(color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500))),
+                      style: TextStyle(
+                          color: WAColors.textSec,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500))),
               if (_buttons.length < 3)
                 InkWell(
-                  onTap: () => setState(() => _buttons.add({'type': 'QUICK_REPLY', 'text': ''})),
+                  onTap: () => setState(
+                      () => _buttons.add({'type': 'QUICK_REPLY', 'text': ''})),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: WAColors.info.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text('+ Botón',
-                        style: TextStyle(color: WAColors.info, fontSize: 10, fontWeight: FontWeight.w700)),
+                        style: TextStyle(
+                            color: WAColors.info,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ),
             ],
@@ -1423,40 +1673,51 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
                         value: e.value['type'],
                         underline: const SizedBox(),
                         dropdownColor: WAColors.card,
-                        style: const TextStyle(color: WAColors.textSec, fontSize: 11),
+                        style: const TextStyle(
+                            color: WAColors.textSec, fontSize: 11),
                         items: const [
-                          DropdownMenuItem(value: 'QUICK_REPLY', child: Text('Respuesta')),
+                          DropdownMenuItem(
+                              value: 'QUICK_REPLY', child: Text('Respuesta')),
                           DropdownMenuItem(value: 'URL', child: Text('URL')),
-                          DropdownMenuItem(value: 'PHONE', child: Text('Llamar')),
+                          DropdownMenuItem(
+                              value: 'PHONE', child: Text('Llamar')),
                         ],
-                        onChanged: (v) => setState(() => _buttons[e.key]['type'] = v!),
+                        onChanged: (v) =>
+                            setState(() => _buttons[e.key]['type'] = v!),
                       ),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: TextField(
-                        style: const TextStyle(color: WAColors.textPri, fontSize: 12),
+                        style: const TextStyle(
+                            color: WAColors.textPri, fontSize: 12),
                         decoration: InputDecoration(
                           hintText: 'Texto del botón',
-                          hintStyle: const TextStyle(color: WAColors.textMuted, fontSize: 11),
+                          hintStyle: const TextStyle(
+                              color: WAColors.textMuted, fontSize: 11),
                           filled: true,
                           fillColor: WAColors.bg,
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: const BorderSide(color: WAColors.border)),
+                              borderSide:
+                                  const BorderSide(color: WAColors.border)),
                           enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: const BorderSide(color: WAColors.border)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              borderSide:
+                                  const BorderSide(color: WAColors.border)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6),
                         ),
                         onChanged: (v) => _buttons[e.key]['text'] = v,
                       ),
                     ),
                     IconButton(
                       onPressed: () => setState(() => _buttons.removeAt(e.key)),
-                      icon: const Icon(Icons.remove_circle_outline_rounded, color: WAColors.error, size: 16),
+                      icon: const Icon(Icons.remove_circle_outline_rounded,
+                          color: WAColors.error, size: 16),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
                     ),
                   ],
                 ),
@@ -1478,7 +1739,8 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
                 Expanded(
                   child: Text(
                     'Esta plantilla se enviará a Meta para revisión. El proceso puede tomar 24-48h. Usa "Sync Meta" para actualizar el estado.',
-                    style: TextStyle(color: WAColors.info, fontSize: 10, height: 1.4),
+                    style: TextStyle(
+                        color: WAColors.info, fontSize: 10, height: 1.4),
                   ),
                 ),
               ],
@@ -1494,18 +1756,22 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
                 backgroundColor: WAColors.accent,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               child: _saving
                   ? const SizedBox(
-                      width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.save_rounded, size: 14),
                         SizedBox(width: 6),
-                        Text('Guardar y enviar a Meta', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text('Guardar y enviar a Meta',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ],
                     ),
             ),
@@ -1522,7 +1788,9 @@ class _TemplateBuilderPanelState extends State<_TemplateBuilderPanel> {
       final selected = text.substring(sel.start, sel.end);
       _bodyCtrl.value = TextEditingValue(
         text: text.replaceRange(sel.start, sel.end, '$marker$selected$marker'),
-        selection: TextSelection.collapsed(offset: sel.start + marker.length + selected.length + marker.length),
+        selection: TextSelection.collapsed(
+            offset:
+                sel.start + marker.length + selected.length + marker.length),
       );
     }
   }
@@ -1536,7 +1804,8 @@ class _TemplateListItem extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onSync;
 
-  const _TemplateListItem({required this.template, required this.onDelete, required this.onSync});
+  const _TemplateListItem(
+      {required this.template, required this.onDelete, required this.onSync});
 
   @override
   Widget build(BuildContext context) {
@@ -1560,33 +1829,43 @@ class _TemplateListItem extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(template.statusIcon, color: template.statusColor, size: 14),
+                Icon(template.statusIcon,
+                    color: template.statusColor, size: 14),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(template.name,
                       style: const TextStyle(
-                          color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 13)),
+                          color: WAColors.textPri,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13)),
                 ),
                 // Badge estado
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: template.statusColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(template.statusLabel,
                       style: TextStyle(
-                          color: template.statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
+                          color: template.statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: WAColors.border,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(template.category,
-                      style: const TextStyle(color: WAColors.textMuted, fontSize: 9, fontWeight: FontWeight.w600)),
+                      style: const TextStyle(
+                          color: WAColors.textMuted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(width: 8),
                 InkWell(
@@ -1594,13 +1873,15 @@ class _TemplateListItem extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                     child: const Padding(
                         padding: EdgeInsets.all(4),
-                        child: Icon(Icons.sync_rounded, color: WAColors.info, size: 14))),
+                        child: Icon(Icons.sync_rounded,
+                            color: WAColors.info, size: 14))),
                 InkWell(
                     onTap: onDelete,
                     borderRadius: BorderRadius.circular(6),
                     child: const Padding(
                         padding: EdgeInsets.all(4),
-                        child: Icon(Icons.delete_outline_rounded, color: WAColors.error, size: 14))),
+                        child: Icon(Icons.delete_outline_rounded,
+                            color: WAColors.error, size: 14))),
               ],
             ),
           ),
@@ -1617,29 +1898,37 @@ class _TemplateListItem extends StatelessWidget {
                 Text(template.body,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: WAColors.textSec, fontSize: 12, height: 1.4)),
+                    style: const TextStyle(
+                        color: WAColors.textSec, fontSize: 12, height: 1.4)),
                 if (template.footer.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(template.footer,
-                      style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                      style: const TextStyle(
+                          color: WAColors.textMuted, fontSize: 11)),
                 ],
                 if (template.buttons.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
-                    children: template.buttons.map((b) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: WAColors.info.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: WAColors.info.withOpacity(0.3)),
-                          ),
-                          child: Text(b['text'] ?? '',
-                              style: const TextStyle(color: WAColors.info, fontSize: 10)),
-                        )).toList(),
+                    children: template.buttons
+                        .map((b) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: WAColors.info.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                    color: WAColors.info.withOpacity(0.3)),
+                              ),
+                              child: Text(b['text'] ?? '',
+                                  style: const TextStyle(
+                                      color: WAColors.info, fontSize: 10)),
+                            ))
+                        .toList(),
                   ),
                 ],
-                if (template.status == 'REJECTED' && template.rejectionReason != null) ...[
+                if (template.status == 'REJECTED' &&
+                    template.rejectionReason != null) ...[
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -1649,11 +1938,13 @@ class _TemplateListItem extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.warning_amber_rounded, color: WAColors.error, size: 12),
+                        const Icon(Icons.warning_amber_rounded,
+                            color: WAColors.error, size: 12),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text('Motivo: ${template.rejectionReason}',
-                              style: const TextStyle(color: WAColors.error, fontSize: 11)),
+                              style: const TextStyle(
+                                  color: WAColors.error, fontSize: 11)),
                         ),
                       ],
                     ),
@@ -1688,7 +1979,8 @@ class _HeaderTypeBadge extends StatelessWidget {
         Icon(icon, size: 11, color: color),
         const SizedBox(width: 4),
         Text('Encabezado: $label',
-            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+            style: TextStyle(
+                color: color, fontSize: 10, fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -1731,7 +2023,8 @@ class _HistoryCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.send_rounded, color: WAColors.green, size: 14),
+                    const Icon(Icons.send_rounded,
+                        color: WAColors.green, size: 14),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1741,10 +2034,14 @@ class _HistoryCard extends StatelessWidget {
                                 : record['message']
                             : 'Envío masivo',
                         style: const TextStyle(
-                            color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 13),
+                            color: WAColors.textPri,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13),
                       ),
                     ),
-                    Text(date, style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                    Text(date,
+                        style: const TextStyle(
+                            color: WAColors.textMuted, fontSize: 11)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1765,25 +2062,30 @@ class _HistoryCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     _MiniChip('$sent enviados', WAColors.info),
                     const SizedBox(width: 6),
-                    if (failed > 0) _MiniChip('$failed fallidos', WAColors.error),
+                    if (failed > 0)
+                      _MiniChip('$failed fallidos', WAColors.error),
                     const Spacer(),
                     InkWell(
                       onTap: onExpand,
                       borderRadius: BorderRadius.circular(6),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: WAColors.accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: WAColors.accent.withOpacity(0.3)),
+                          border: Border.all(
+                              color: WAColors.accent.withOpacity(0.3)),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text('Ver detalle',
-                                style: TextStyle(color: WAColors.accent, fontSize: 11)),
+                                style: TextStyle(
+                                    color: WAColors.accent, fontSize: 11)),
                             SizedBox(width: 4),
-                            Icon(Icons.arrow_forward_ios_rounded, size: 10, color: WAColors.accent),
+                            Icon(Icons.arrow_forward_ios_rounded,
+                                size: 10, color: WAColors.accent),
                           ],
                         ),
                       ),
@@ -1807,7 +2109,8 @@ class _PanelLabel extends StatelessWidget {
   const _PanelLabel(this.text);
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500));
+      style: const TextStyle(
+          color: WAColors.textSec, fontSize: 12, fontWeight: FontWeight.w500));
 }
 
 class _PanelInput extends StatelessWidget {
@@ -1834,7 +2137,8 @@ class _PanelInput extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: WAColors.accent)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         ),
       );
 }
@@ -1844,7 +2148,11 @@ class _FormatBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool italic;
   final bool mono;
-  const _FormatBtn({required this.label, required this.onTap, this.italic = false, this.mono = false});
+  const _FormatBtn(
+      {required this.label,
+      required this.onTap,
+      this.italic = false,
+      this.mono = false});
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
@@ -1882,7 +2190,8 @@ class _SmallFormatBtn extends StatelessWidget {
             color: WAColors.border,
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(label, style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+          child: Text(label,
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
         ),
       );
 }
@@ -1891,7 +2200,8 @@ class _StatusFilterChip extends StatelessWidget {
   final String label;
   final Color color;
   final int count;
-  const _StatusFilterChip({required this.label, required this.color, required this.count});
+  const _StatusFilterChip(
+      {required this.label, required this.color, required this.count});
   @override
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(right: 6),
@@ -1904,14 +2214,20 @@ class _StatusFilterChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+            Text(label,
+                style: TextStyle(
+                    color: color, fontSize: 10, fontWeight: FontWeight.w600)),
             if (count > 0) ...[
               const SizedBox(width: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(8)),
                 child: Text('$count',
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800)),
               ),
             ],
           ],
@@ -1930,6 +2246,8 @@ class _MiniChip extends StatelessWidget {
           color: color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+        child: Text(label,
+            style: TextStyle(
+                color: color, fontSize: 10, fontWeight: FontWeight.w600)),
       );
 }

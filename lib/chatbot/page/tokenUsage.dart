@@ -44,8 +44,10 @@ class _TokenUsageViewState extends State<TokenUsageView>
   Future<void> _load() async {
     setState(() => _loading = true);
     final params = <String, String>{'period': _period};
-    if (_dateFrom != null) params['from'] = DateFormat('yyyy-MM-dd').format(_dateFrom!);
-    if (_dateTo != null) params['to'] = DateFormat('yyyy-MM-dd').format(_dateTo!);
+    if (_dateFrom != null)
+      params['from'] = DateFormat('yyyy-MM-dd').format(_dateFrom!);
+    if (_dateTo != null)
+      params['to'] = DateFormat('yyyy-MM-dd').format(_dateTo!);
     if (_botFilter != 'all') params['botId'] = _botFilter;
 
     final result = await widget.service.getTokenUsageAdvanced(params);
@@ -75,8 +77,10 @@ class _TokenUsageViewState extends State<TokenUsageView>
     );
     if (picked != null) {
       setState(() {
-        if (isFrom) _dateFrom = picked;
-        else _dateTo = picked;
+        if (isFrom)
+          _dateFrom = picked;
+        else
+          _dateTo = picked;
         _period = 'custom';
       });
       _load();
@@ -100,15 +104,22 @@ class _TokenUsageViewState extends State<TokenUsageView>
               indicatorColor: WAColors.warning,
               indicatorSize: TabBarIndicatorSize.label,
               tabs: const [
-                Tab(icon: Icon(Icons.bar_chart_rounded, size: 15), text: 'Resumen'),
-                Tab(icon: Icon(Icons.show_chart_rounded, size: 15), text: 'Gráficas'),
-                Tab(icon: Icon(Icons.table_rows_rounded, size: 15), text: 'Detalle'),
+                Tab(
+                    icon: Icon(Icons.bar_chart_rounded, size: 15),
+                    text: 'Resumen'),
+                Tab(
+                    icon: Icon(Icons.show_chart_rounded, size: 15),
+                    text: 'Gráficas'),
+                Tab(
+                    icon: Icon(Icons.table_rows_rounded, size: 15),
+                    text: 'Detalle'),
               ],
             ),
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: WAColors.warning))
+                ? const Center(
+                    child: CircularProgressIndicator(color: WAColors.warning))
                 : TabBarView(
                     controller: _tabController,
                     children: [
@@ -138,14 +149,18 @@ class _TokenUsageViewState extends State<TokenUsageView>
               color: WAColors.warning.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.token_rounded, color: WAColors.warning, size: 18),
+            child: const Icon(Icons.token_rounded,
+                color: WAColors.warning, size: 18),
           ),
           const SizedBox(width: 12),
           const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Uso de Tokens',
-                  style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: TextStyle(
+                      color: WAColors.textPri,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
               Text('Consumo de IA por interacciones',
                   style: TextStyle(color: WAColors.textMuted, fontSize: 12)),
             ],
@@ -170,34 +185,49 @@ class _TokenUsageViewState extends State<TokenUsageView>
                   padding: const EdgeInsets.only(right: 6),
                   child: InkWell(
                     onTap: () {
-                      setState(() { _period = p; _dateFrom = null; _dateTo = null; });
+                      setState(() {
+                        _period = p;
+                        _dateFrom = null;
+                        _dateTo = null;
+                      });
                       _load();
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _period == p ? WAColors.warning : WAColors.card,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _period == p ? WAColors.warning : WAColors.border),
+                        border: Border.all(
+                            color: _period == p
+                                ? WAColors.warning
+                                : WAColors.border),
                       ),
                       child: Text(p,
                           style: TextStyle(
-                              color: _period == p ? Colors.white : WAColors.textSec, fontSize: 12)),
+                              color: _period == p
+                                  ? Colors.white
+                                  : WAColors.textSec,
+                              fontSize: 12)),
                     ),
                   ),
                 )),
             const SizedBox(width: 8),
             // Fecha desde
             _DateFilterBtn(
-              label: _dateFrom != null ? DateFormat('dd/MM/yy').format(_dateFrom!) : 'Desde',
+              label: _dateFrom != null
+                  ? DateFormat('dd/MM/yy').format(_dateFrom!)
+                  : 'Desde',
               active: _dateFrom != null,
               color: WAColors.warning,
               onTap: () => _pickDate(true),
             ),
             const SizedBox(width: 6),
             _DateFilterBtn(
-              label: _dateTo != null ? DateFormat('dd/MM/yy').format(_dateTo!) : 'Hasta',
+              label: _dateTo != null
+                  ? DateFormat('dd/MM/yy').format(_dateTo!)
+                  : 'Hasta',
               active: _dateTo != null,
               color: WAColors.warning,
               onTap: () => _pickDate(false),
@@ -206,7 +236,11 @@ class _TokenUsageViewState extends State<TokenUsageView>
               const SizedBox(width: 6),
               InkWell(
                 onTap: () {
-                  setState(() { _dateFrom = null; _dateTo = null; _period = '7d'; });
+                  setState(() {
+                    _dateFrom = null;
+                    _dateTo = null;
+                    _period = '7d';
+                  });
                   _load();
                 },
                 child: Container(
@@ -215,7 +249,8 @@ class _TokenUsageViewState extends State<TokenUsageView>
                     color: WAColors.error.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(Icons.close_rounded, size: 14, color: WAColors.error),
+                  child: const Icon(Icons.close_rounded,
+                      size: 14, color: WAColors.error),
                 ),
               ),
             ],
@@ -235,10 +270,15 @@ class _TokenUsageViewState extends State<TokenUsageView>
                   dropdownColor: WAColors.card,
                   style: const TextStyle(color: WAColors.textPri, fontSize: 12),
                   items: [
-                    const DropdownMenuItem(value: 'all', child: Text('Todos los bots')),
-                    ...widget.bots.map((b) => DropdownMenuItem(value: b.id, child: Text(b.name))),
+                    const DropdownMenuItem(
+                        value: 'all', child: Text('Todos los bots')),
+                    ...widget.bots.map((b) =>
+                        DropdownMenuItem(value: b.id, child: Text(b.name))),
                   ],
-                  onChanged: (v) { setState(() => _botFilter = v ?? 'all'); _load(); },
+                  onChanged: (v) {
+                    setState(() => _botFilter = v ?? 'all');
+                    _load();
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -257,10 +297,13 @@ class _TokenUsageViewState extends State<TokenUsageView>
                 dropdownColor: WAColors.card,
                 style: const TextStyle(color: WAColors.textPri, fontSize: 12),
                 items: const [
-                  DropdownMenuItem(value: 'all', child: Text('Todos los modelos')),
-                  DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini')),
+                  DropdownMenuItem(
+                      value: 'all', child: Text('Todos los modelos')),
+                  DropdownMenuItem(
+                      value: 'gpt-4o-mini', child: Text('GPT-4o Mini')),
                   DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
-                  DropdownMenuItem(value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
+                  DropdownMenuItem(
+                      value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
                 ],
                 onChanged: (v) => setState(() => _modelFilter = v ?? 'all'),
               ),
@@ -296,7 +339,8 @@ class _TokenUsageViewState extends State<TokenUsageView>
                 value: _fmt(_usage?['promptTokens'] ?? 0),
                 icon: Icons.input_rounded,
                 color: WAColors.info,
-                sub: '${_pct(_usage?['promptTokens'], _usage?['totalTokens'])}% del total',
+                sub:
+                    '${_pct(_usage?['promptTokens'], _usage?['totalTokens'])}% del total',
               ),
               const SizedBox(width: 12),
               _TokenCard(
@@ -304,12 +348,14 @@ class _TokenUsageViewState extends State<TokenUsageView>
                 value: _fmt(_usage?['completionTokens'] ?? 0),
                 icon: Icons.output_rounded,
                 color: WAColors.accent,
-                sub: '${_pct(_usage?['completionTokens'], _usage?['totalTokens'])}% del total',
+                sub:
+                    '${_pct(_usage?['completionTokens'], _usage?['totalTokens'])}% del total',
               ),
               const SizedBox(width: 12),
               _TokenCard(
                 label: 'Costo estimado',
-                value: '\$${(_usage?['estimatedCost'] ?? 0.0).toStringAsFixed(4)}',
+                value:
+                    '\$${(_usage?['estimatedCost'] ?? 0.0).toStringAsFixed(4)}',
                 icon: Icons.attach_money_rounded,
                 color: WAColors.green,
                 sub: 'USD aproximado',
@@ -329,9 +375,11 @@ class _TokenUsageViewState extends State<TokenUsageView>
               const SizedBox(width: 12),
               _TokenCard(
                 label: 'Promedio/llamada',
-                value: _usage?['totalCalls'] != null && _usage!['totalCalls'] > 0
-                    ? _fmt((_usage!['totalTokens'] / _usage!['totalCalls']).round())
-                    : '0',
+                value:
+                    _usage?['totalCalls'] != null && _usage!['totalCalls'] > 0
+                        ? _fmt((_usage!['totalTokens'] / _usage!['totalCalls'])
+                            .round())
+                        : '0',
                 icon: Icons.analytics_rounded,
                 color: WAColors.accent,
                 sub: 'tokens por request',
@@ -345,7 +393,10 @@ class _TokenUsageViewState extends State<TokenUsageView>
           const SizedBox(height: 20),
           // Por bot
           const Text('Consumo por bot',
-              style: TextStyle(color: WAColors.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  color: WAColors.textPri,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           if (_usage?['byBot'] != null)
             ...(_usage!['byBot'] as List<dynamic>)
@@ -361,7 +412,9 @@ class _TokenUsageViewState extends State<TokenUsageView>
   // ══════════════════════════════════════════════════════
   Widget _buildChartsTab() {
     if (_history.isEmpty) {
-      return const Center(child: Text('Sin datos para graficar', style: TextStyle(color: WAColors.textMuted)));
+      return const Center(
+          child: Text('Sin datos para graficar',
+              style: TextStyle(color: WAColors.textMuted)));
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -375,10 +428,14 @@ class _TokenUsageViewState extends State<TokenUsageView>
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.show_chart_rounded, color: WAColors.warning, size: 16),
+                    Icon(Icons.show_chart_rounded,
+                        color: WAColors.warning, size: 16),
                     SizedBox(width: 8),
                     Text('Tokens consumidos por día',
-                        style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: TextStyle(
+                            color: WAColors.textPri,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -387,7 +444,8 @@ class _TokenUsageViewState extends State<TokenUsageView>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _LegendDot(color: WAColors.warning, label: 'Tokens totales'),
+                    _LegendDot(
+                        color: WAColors.warning, label: 'Tokens totales'),
                     const SizedBox(width: 16),
                     _LegendDot(color: WAColors.info, label: 'Tokens entrada'),
                     const SizedBox(width: 16),
@@ -405,10 +463,14 @@ class _TokenUsageViewState extends State<TokenUsageView>
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.bar_chart_rounded, color: WAColors.accent, size: 16),
+                    Icon(Icons.bar_chart_rounded,
+                        color: WAColors.accent, size: 16),
                     SizedBox(width: 8),
                     Text('Llamadas a la API por día',
-                        style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: TextStyle(
+                            color: WAColors.textPri,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -424,10 +486,14 @@ class _TokenUsageViewState extends State<TokenUsageView>
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.attach_money_rounded, color: WAColors.green, size: 16),
+                    Icon(Icons.attach_money_rounded,
+                        color: WAColors.green, size: 16),
                     SizedBox(width: 8),
                     Text('Costo estimado por día (USD)',
-                        style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                        style: TextStyle(
+                            color: WAColors.textPri,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -445,10 +511,14 @@ class _TokenUsageViewState extends State<TokenUsageView>
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.smart_toy_rounded, color: WAColors.human, size: 16),
+                      Icon(Icons.smart_toy_rounded,
+                          color: WAColors.human, size: 16),
                       SizedBox(width: 8),
                       Text('Distribución por bot',
-                          style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                          style: TextStyle(
+                              color: WAColors.textPri,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -465,18 +535,31 @@ class _TokenUsageViewState extends State<TokenUsageView>
   Widget _buildTokensLineChart() {
     final data = _history;
     if (data.isEmpty) return const SizedBox();
-    final spots = data.asMap().entries.map((e) =>
-        FlSpot(e.key.toDouble(), (e.value['totalTokens'] ?? 0).toDouble())).toList();
-    final spotsIn = data.asMap().entries.map((e) =>
-        FlSpot(e.key.toDouble(), (e.value['promptTokens'] ?? 0).toDouble())).toList();
-    final spotsOut = data.asMap().entries.map((e) =>
-        FlSpot(e.key.toDouble(), (e.value['completionTokens'] ?? 0).toDouble())).toList();
+    final spots = data
+        .asMap()
+        .entries
+        .map((e) =>
+            FlSpot(e.key.toDouble(), (e.value['totalTokens'] ?? 0).toDouble()))
+        .toList();
+    final spotsIn = data
+        .asMap()
+        .entries
+        .map((e) =>
+            FlSpot(e.key.toDouble(), (e.value['promptTokens'] ?? 0).toDouble()))
+        .toList();
+    final spotsOut = data
+        .asMap()
+        .entries
+        .map((e) => FlSpot(
+            e.key.toDouble(), (e.value['completionTokens'] ?? 0).toDouble()))
+        .toList();
 
     return LineChart(LineChartData(
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        getDrawingHorizontalLine: (_) => const FlLine(color: WAColors.border, strokeWidth: 1),
+        getDrawingHorizontalLine: (_) =>
+            const FlLine(color: WAColors.border, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         leftTitles: AxisTitles(
@@ -496,11 +579,13 @@ class _TokenUsageViewState extends State<TokenUsageView>
               if (idx < 0 || idx >= data.length) return const SizedBox();
               final date = data[idx]['date']?.toString() ?? '';
               return Text(date.length >= 10 ? date.substring(5) : date,
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 9));
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 9));
             },
           ),
         ),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
@@ -515,29 +600,37 @@ class _TokenUsageViewState extends State<TokenUsageView>
   Widget _buildCallsBarChart() {
     final data = _history;
     if (data.isEmpty) return const SizedBox();
-    final bars = data.asMap().entries.map((e) => BarChartGroupData(
-          x: e.key,
-          barRods: [
-            BarChartRodData(
-              toY: (e.value['calls'] ?? 0).toDouble(),
-              color: WAColors.accent,
-              width: 14,
-              borderRadius: BorderRadius.circular(4),
-              backDrawRodData: BackgroundBarChartRodData(
-                show: true,
-                toY: (data.map((d) => (d['calls'] ?? 0) as num).reduce((a, b) => a > b ? a : b)).toDouble() + 1,
-                color: WAColors.border,
-              ),
-            ),
-          ],
-        )).toList();
+    final bars = data
+        .asMap()
+        .entries
+        .map((e) => BarChartGroupData(
+              x: e.key,
+              barRods: [
+                BarChartRodData(
+                  toY: (e.value['calls'] ?? 0).toDouble(),
+                  color: WAColors.accent,
+                  width: 14,
+                  borderRadius: BorderRadius.circular(4),
+                  backDrawRodData: BackgroundBarChartRodData(
+                    show: true,
+                    toY: (data
+                            .map((d) => (d['calls'] ?? 0) as num)
+                            .reduce((a, b) => a > b ? a : b)).toDouble() +
+                        1,
+                    color: WAColors.border,
+                  ),
+                ),
+              ],
+            ))
+        .toList();
 
     return BarChart(BarChartData(
       barGroups: bars,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        getDrawingHorizontalLine: (_) => const FlLine(color: WAColors.border, strokeWidth: 1),
+        getDrawingHorizontalLine: (_) =>
+            const FlLine(color: WAColors.border, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         leftTitles: AxisTitles(
@@ -557,11 +650,13 @@ class _TokenUsageViewState extends State<TokenUsageView>
               if (idx < 0 || idx >= data.length) return const SizedBox();
               final date = data[idx]['date']?.toString() ?? '';
               return Text(date.length >= 10 ? date.substring(5) : date,
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 9));
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 9));
             },
           ),
         ),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
@@ -579,14 +674,19 @@ class _TokenUsageViewState extends State<TokenUsageView>
   Widget _buildCostLineChart() {
     final data = _history;
     if (data.isEmpty) return const SizedBox();
-    final spots = data.asMap().entries.map((e) =>
-        FlSpot(e.key.toDouble(), ((e.value['estimatedCost'] ?? 0.0) as num).toDouble())).toList();
+    final spots = data
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(),
+            ((e.value['estimatedCost'] ?? 0.0) as num).toDouble()))
+        .toList();
 
     return LineChart(LineChartData(
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        getDrawingHorizontalLine: (_) => const FlLine(color: WAColors.border, strokeWidth: 1),
+        getDrawingHorizontalLine: (_) =>
+            const FlLine(color: WAColors.border, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         leftTitles: AxisTitles(
@@ -606,11 +706,13 @@ class _TokenUsageViewState extends State<TokenUsageView>
               if (idx < 0 || idx >= data.length) return const SizedBox();
               final date = data[idx]['date']?.toString() ?? '';
               return Text(date.length >= 10 ? date.substring(5) : date,
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 9));
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 9));
             },
           ),
         ),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
@@ -619,22 +721,33 @@ class _TokenUsageViewState extends State<TokenUsageView>
   }
 
   Widget _buildBotPieChart() {
-    final byBot = (_usage!['byBot'] as List<dynamic>).cast<Map<String, dynamic>>();
+    final byBot =
+        (_usage!['byBot'] as List<dynamic>).cast<Map<String, dynamic>>();
     final total = byBot.fold<num>(0, (s, b) => s + (b['totalTokens'] ?? 0));
-    final colors = [WAColors.warning, WAColors.accent, WAColors.info, WAColors.human, WAColors.green];
+    final colors = [
+      WAColors.warning,
+      WAColors.accent,
+      WAColors.info,
+      WAColors.human,
+      WAColors.green
+    ];
 
     return Row(
       children: [
         Expanded(
           child: PieChart(PieChartData(
             sections: byBot.asMap().entries.map((e) {
-              final pct = total > 0 ? (e.value['totalTokens'] ?? 0) / total * 100 : 0.0;
+              final pct =
+                  total > 0 ? (e.value['totalTokens'] ?? 0) / total * 100 : 0.0;
               return PieChartSectionData(
                 color: colors[e.key % colors.length],
                 value: (e.value['totalTokens'] ?? 0).toDouble(),
                 title: '${pct.toStringAsFixed(1)}%',
                 radius: 70,
-                titleStyle: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                titleStyle: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700),
               );
             }).toList(),
             sectionsSpace: 2,
@@ -645,30 +758,36 @@ class _TokenUsageViewState extends State<TokenUsageView>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
-          children: byBot.asMap().entries.map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 10, height: 10,
-                      decoration: BoxDecoration(
-                        color: colors[e.key % colors.length],
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(e.value['botName'] ?? '',
-                        style: const TextStyle(color: WAColors.textSec, fontSize: 12)),
-                    const SizedBox(width: 6),
-                    Text(_fmt(e.value['totalTokens'] ?? 0),
-                        style: TextStyle(
+          children: byBot
+              .asMap()
+              .entries
+              .map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
                             color: colors[e.key % colors.length],
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              )).toList(),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(e.value['botName'] ?? '',
+                            style: const TextStyle(
+                                color: WAColors.textSec, fontSize: 12)),
+                        const SizedBox(width: 6),
+                        Text(_fmt(e.value['totalTokens'] ?? 0),
+                            style: TextStyle(
+                                color: colors[e.key % colors.length],
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ))
+              .toList(),
         ),
       ],
     );
@@ -694,7 +813,9 @@ class _TokenUsageViewState extends State<TokenUsageView>
   // ══════════════════════════════════════════════════════
   Widget _buildDetailTab() {
     if (_history.isEmpty) {
-      return const Center(child: Text('Sin datos', style: TextStyle(color: WAColors.textMuted)));
+      return const Center(
+          child:
+              Text('Sin datos', style: TextStyle(color: WAColors.textMuted)));
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -708,63 +829,93 @@ class _TokenUsageViewState extends State<TokenUsageView>
                   border: Border(bottom: BorderSide(color: WAColors.border))),
               child: Row(
                 children: [
-                  const Expanded(flex: 2,
+                  const Expanded(
+                      flex: 2,
                       child: Text('Fecha',
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                   const Expanded(
                       child: Text('Total',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                   const Expanded(
                       child: Text('Entrada',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                   const Expanded(
                       child: Text('Salida',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                   const Expanded(
                       child: Text('Llamadas',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                   const Expanded(
                       child: Text('Costo USD',
                           textAlign: TextAlign.right,
-                          style: TextStyle(color: WAColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700))),
+                          style: TextStyle(
+                              color: WAColors.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700))),
                 ],
               ),
             ),
             ..._history.map((d) => Container(
-                  padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
                   decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: WAColors.border, width: 0.5))),
+                      border: Border(
+                          bottom:
+                              BorderSide(color: WAColors.border, width: 0.5))),
                   child: Row(
                     children: [
-                      Expanded(flex: 2,
+                      Expanded(
+                          flex: 2,
                           child: Text(d['date'] ?? '',
-                              style: const TextStyle(color: WAColors.textSec, fontSize: 12))),
+                              style: const TextStyle(
+                                  color: WAColors.textSec, fontSize: 12))),
                       Expanded(
                           child: Text(_fmt(d['totalTokens'] ?? 0),
                               textAlign: TextAlign.right,
                               style: const TextStyle(
-                                  color: WAColors.warning, fontWeight: FontWeight.w700, fontSize: 12))),
+                                  color: WAColors.warning,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12))),
                       Expanded(
                           child: Text(_fmt(d['promptTokens'] ?? 0),
                               textAlign: TextAlign.right,
-                              style: const TextStyle(color: WAColors.info, fontSize: 12))),
+                              style: const TextStyle(
+                                  color: WAColors.info, fontSize: 12))),
                       Expanded(
                           child: Text(_fmt(d['completionTokens'] ?? 0),
                               textAlign: TextAlign.right,
-                              style: const TextStyle(color: WAColors.accent, fontSize: 12))),
+                              style: const TextStyle(
+                                  color: WAColors.accent, fontSize: 12))),
                       Expanded(
                           child: Text('${d['calls'] ?? 0}',
                               textAlign: TextAlign.right,
-                              style: const TextStyle(color: WAColors.human, fontSize: 12))),
+                              style: const TextStyle(
+                                  color: WAColors.human, fontSize: 12))),
                       Expanded(
                           child: Text(
                               '\$${((d['estimatedCost'] ?? 0.0) as num).toStringAsFixed(5)}',
                               textAlign: TextAlign.right,
-                              style: const TextStyle(color: WAColors.green, fontSize: 12))),
+                              style: const TextStyle(
+                                  color: WAColors.green, fontSize: 12))),
                     ],
                   ),
                 )),
@@ -777,32 +928,49 @@ class _TokenUsageViewState extends State<TokenUsageView>
               ),
               child: Row(
                 children: [
-                  const Expanded(flex: 2,
+                  const Expanded(
+                      flex: 2,
                       child: Text('TOTAL',
                           style: TextStyle(
-                              color: WAColors.textPri, fontSize: 12, fontWeight: FontWeight.w800))),
+                              color: WAColors.textPri,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800))),
                   Expanded(
                       child: Text(_fmt(_usage?['totalTokens'] ?? 0),
                           textAlign: TextAlign.right,
                           style: const TextStyle(
-                              color: WAColors.warning, fontWeight: FontWeight.w800, fontSize: 12))),
+                              color: WAColors.warning,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12))),
                   Expanded(
                       child: Text(_fmt(_usage?['promptTokens'] ?? 0),
                           textAlign: TextAlign.right,
-                          style: const TextStyle(color: WAColors.info, fontWeight: FontWeight.w700, fontSize: 12))),
+                          style: const TextStyle(
+                              color: WAColors.info,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12))),
                   Expanded(
                       child: Text(_fmt(_usage?['completionTokens'] ?? 0),
                           textAlign: TextAlign.right,
-                          style: const TextStyle(color: WAColors.accent, fontWeight: FontWeight.w700, fontSize: 12))),
+                          style: const TextStyle(
+                              color: WAColors.accent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12))),
                   Expanded(
                       child: Text('${_usage?['totalCalls'] ?? 0}',
                           textAlign: TextAlign.right,
-                          style: const TextStyle(color: WAColors.human, fontWeight: FontWeight.w700, fontSize: 12))),
+                          style: const TextStyle(
+                              color: WAColors.human,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12))),
                   Expanded(
                       child: Text(
                           '\$${(_usage?['estimatedCost'] ?? 0.0).toStringAsFixed(4)}',
                           textAlign: TextAlign.right,
-                          style: const TextStyle(color: WAColors.green, fontWeight: FontWeight.w800, fontSize: 12))),
+                          style: const TextStyle(
+                              color: WAColors.green,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12))),
                 ],
               ),
             ),
@@ -833,7 +1001,11 @@ class _TokenCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   const _TokenCard(
-      {required this.label, required this.value, required this.icon, required this.color, required this.sub});
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.color,
+      required this.sub});
 
   @override
   Widget build(BuildContext context) => Expanded(
@@ -850,16 +1022,21 @@ class _TokenCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                    color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Icon(icon, color: color, size: 15),
               ),
               const SizedBox(height: 10),
               Text(value,
-                  style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w800)),
+                  style: TextStyle(
+                      color: color, fontSize: 22, fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(label,
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
-              Text(sub, style: const TextStyle(color: WAColors.textMuted, fontSize: 10)),
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+              Text(sub,
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 10)),
             ],
           ),
         ),
@@ -888,7 +1065,8 @@ class _BotUsageCard extends StatelessWidget {
               color: WAColors.warning.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.smart_toy_rounded, color: WAColors.warning, size: 16),
+            child: const Icon(Icons.smart_toy_rounded,
+                color: WAColors.warning, size: 16),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -897,9 +1075,12 @@ class _BotUsageCard extends StatelessWidget {
               children: [
                 Text(data['botName'] ?? '',
                     style: const TextStyle(
-                        color: WAColors.textPri, fontWeight: FontWeight.w700, fontSize: 13)),
+                        color: WAColors.textPri,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
                 Text(data['model'] ?? '',
-                    style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                    style: const TextStyle(
+                        color: WAColors.textMuted, fontSize: 11)),
               ],
             ),
           ),
@@ -908,11 +1089,15 @@ class _BotUsageCard extends StatelessWidget {
             children: [
               Text('${_fmt(data['totalTokens'] ?? 0)} tokens',
                   style: const TextStyle(
-                      color: WAColors.warning, fontWeight: FontWeight.w800, fontSize: 14)),
-              Text('\$${((data['estimatedCost'] ?? 0.0) as num).toStringAsFixed(5)}',
+                      color: WAColors.warning,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14)),
+              Text(
+                  '\$${((data['estimatedCost'] ?? 0.0) as num).toStringAsFixed(5)}',
                   style: const TextStyle(color: WAColors.green, fontSize: 12)),
               Text('${data['calls'] ?? 0} llamadas',
-                  style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+                  style:
+                      const TextStyle(color: WAColors.textMuted, fontSize: 11)),
             ],
           ),
         ],
@@ -934,7 +1119,10 @@ class _DateFilterBtn extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   const _DateFilterBtn(
-      {required this.label, required this.active, required this.color, required this.onTap});
+      {required this.label,
+      required this.active,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -945,13 +1133,14 @@ class _DateFilterBtn extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? color.withOpacity(0.12) : WAColors.card,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? color.withOpacity(0.4) : WAColors.border),
+            border: Border.all(
+                color: active ? color.withOpacity(0.4) : WAColors.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.calendar_today_rounded, size: 12,
-                  color: active ? color : WAColors.textMuted),
+              Icon(Icons.calendar_today_rounded,
+                  size: 12, color: active ? color : WAColors.textMuted),
               const SizedBox(width: 5),
               Text(label,
                   style: TextStyle(
@@ -973,9 +1162,13 @@ class _LegendDot extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 5),
-          Text(label, style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+          Text(label,
+              style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
         ],
       );
 }

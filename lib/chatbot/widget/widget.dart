@@ -1,4 +1,3 @@
-
 import 'dart:developer';
 import 'dart:html' as html;
 import 'dart:async';
@@ -18,8 +17,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:digitaltv/chatbot/page/widget.dart' as widget2;
-
-
 
 class ConnectionStatusCard extends StatelessWidget {
   final String label;
@@ -50,14 +47,21 @@ class ConnectionStatusCard extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(height: 10),
-            Text(value, style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.w800)),
+            Text(value,
+                style: TextStyle(
+                    color: color, fontSize: 28, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: WAColors.textPri, fontSize: 12, fontWeight: FontWeight.w600)),
-            Text(sublabel, style: const TextStyle(color: WAColors.textMuted, fontSize: 11)),
+            Text(label,
+                style: const TextStyle(
+                    color: WAColors.textPri,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+            Text(sublabel,
+                style:
+                    const TextStyle(color: WAColors.textMuted, fontSize: 11)),
           ],
         ),
       ),
     );
   }
 }
-

@@ -1,76 +1,16 @@
-// =============================================================================
-// PROGRAMMING SCREEN — Programación Horaria Avanzada
-// Archivo independiente: programming_screen.dart
-//
-// DEPENDENCIAS requeridas en pubspec.yaml:
-//   cloud_firestore: ^4.x.x
-//   firebase_auth: ^4.x.x
-//   flutter_riverpod: ^2.x.x
-//   flutter_animate: ^4.x.x
-//   uuid: ^4.x.x
-//
-// RUTAS: Este archivo exporta ProgrammingScreen como widget principal.
-// =============================================================================
-
-// ignore_for_file: library_private_types_in_public_api, use_build_context_synchronously
-
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:digitaltv/ui/panel/panel3.dart';
+import 'package:digitaltv/ui/programming/color.dart';
+import 'package:digitaltv/ui/programming/helper/helper.dart';
+import 'package:digitaltv/ui/programming/playBack.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-
-// =============================================================================
-// DESIGN TOKENS
-// =============================================================================
-abstract class _C {
-  static const bg = Color(0xFF060A10);
-  static const surface = Color(0xFF0B0F18);
-  static const card = Color(0xFF101622);
-  static const cardHover = Color(0xFF141C2E);
-  static const border = Color(0xFF1C2A42);
-  static const borderFocus = Color(0xFF6366F1);
-  static const primary = Color(0xFF6366F1);
-  static const primaryLo = Color(0x1A6366F1);
-  static const primaryMid = Color(0x336366F1);
-  static const accent = Color(0xFF38BDF8);
-  static const accentLo = Color(0x1A38BDF8);
-  static const green = Color(0xFF22C55E);
-  static const greenLo = Color(0x1A22C55E);
-  static const amber = Color(0xFFF59E0B);
-  static const amberLo = Color(0x1AF59E0B);
-  static const red = Color(0xFFEF4444);
-  static const redLo = Color(0x1AEF4444);
-  static const purple = Color(0xFFA855F7);
-  static const purpleLo = Color(0x1AA855F7);
-  static const pink = Color(0xFFEC4899);
-  static const pinkLo = Color(0x1AEC4899);
-  static const textHi = Color(0xFFF0F4FF);
-  static const textMid = Color(0xFF7889AB);
-  static const textLo = Color(0xFF2C3B58);
-  static const divider = Color(0xFF121C2E);
-
-  // Colores para bloques de programación
-  static const blockColors = [
-    Color(0xFF6366F1),
-    Color(0xFF38BDF8),
-    Color(0xFF22C55E),
-    Color(0xFFF59E0B),
-    Color(0xFFA855F7),
-    Color(0xFFEC4899),
-    Color(0xFFEF4444),
-    Color(0xFF0EA5E9),
-    Color(0xFF10B981),
-    Color(0xFFD97706),
-    Color(0xFF8B5CF6),
-    Color(0xFFF43F5E),
-  ];
-}
 
 const _uuid = Uuid();
 
@@ -103,7 +43,7 @@ class ProgramBlock {
     required this.startMinute,
     required this.durationMinutes,
     this.isActive = true,
-    this.color = _C.primary,
+    this.color = CP.primary,
     this.description,
     this.companyId,
     this.createdAt,
@@ -160,7 +100,7 @@ class ProgramBlock {
       startMinute: (d['startMinute'] as num?)?.toInt() ?? 0,
       durationMinutes: (d['durationMinutes'] as num?)?.toInt() ?? 60,
       isActive: d['isActive'] ?? true,
-      color: Color((d['colorValue'] as num?)?.toInt() ?? _C.primary.value),
+      color: Color((d['colorValue'] as num?)?.toInt() ?? CP.primary.value),
       description: d['description'],
       companyId: d['companyId'],
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
@@ -393,56 +333,6 @@ final _selectedDayProvider = StateProvider.autoDispose<String>((ref) {
 });
 
 // =============================================================================
-// HELPERS GLOBALES
-// =============================================================================
-
-const _dayLabels = {
-  'mon': 'Lunes',
-  'tue': 'Martes',
-  'wed': 'Miércoles',
-  'thu': 'Jueves',
-  'fri': 'Viernes',
-  'sat': 'Sábado',
-  'sun': 'Domingo',
-};
-const _dayShort = {
-  'mon': 'L',
-  'tue': 'M',
-  'wed': 'X',
-  'thu': 'J',
-  'fri': 'V',
-  'sat': 'S',
-  'sun': 'D',
-};
-const _orderedDays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-
-String _fmtMinutes(int m) {
-  final h = m ~/ 60;
-  final min = m % 60;
-  return '${h.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}';
-}
-
-SnackBar _snack(String msg, {Color? bg}) => SnackBar(
-      content:
-          Text(msg, style: const TextStyle(color: _C.textHi, fontSize: 13)),
-      backgroundColor: bg ?? _C.card,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: _C.border)),
-      margin: const EdgeInsets.all(14),
-      duration: const Duration(seconds: 3),
-    );
-
-Future<String?> _getCompanyId() async {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return null;
-  final doc =
-      await FirebaseFirestore.instance.collection('users').doc(uid).get();
-  return (doc.data() as Map<String, dynamic>?)?['companyId'] as String?;
-}
-
-// =============================================================================
 // MAIN SCREEN
 // =============================================================================
 
@@ -457,7 +347,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
   Widget build(BuildContext context) {
     final schedulesAsync = ref.watch(_schedulesProvider);
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: CP.bg,
       body: Column(
         children: [
           _buildHeader(schedulesAsync),
@@ -491,8 +381,8 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
       decoration: const BoxDecoration(
-          color: _C.surface,
-          border: Border(bottom: BorderSide(color: _C.divider))),
+          color: CP.surface,
+          border: Border(bottom: BorderSide(color: CP.divider))),
       child: Row(
         children: [
           Container(
@@ -500,7 +390,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
             height: 42,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                  colors: [_C.primary, Color(0xFF818CF8)],
+                  colors: [CP.primary, Color(0xFF818CF8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(12),
@@ -514,25 +404,25 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
             children: [
               const Text('Programaciones1',
                   style: TextStyle(
-                      color: _C.textHi,
+                      color: CP.textHi,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5)),
               Text('$total programaciones · $active activas',
-                  style: const TextStyle(color: _C.textMid, fontSize: 13)),
+                  style: const TextStyle(color: CP.textMid, fontSize: 13)),
             ],
           ),
           const Spacer(),
           _StatPill(
               label: 'Total',
               value: '$total',
-              color: _C.primary,
+              color: CP.primary,
               icon: Icons.view_week_rounded),
           const SizedBox(width: 8),
           _StatPill(
               label: 'Activas',
               value: '$active',
-              color: _C.green,
+              color: CP.green,
               icon: Icons.check_circle_rounded),
           const SizedBox(width: 16),
           _PrimaryBtn(
@@ -549,7 +439,7 @@ class _ProgrammingScreenState extends ConsumerState<ProgrammingScreen> {
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _CreateScheduleSheet(),
+      builder: (_) => const CPreateScheduleSheet(),
     );
   }
 }
@@ -598,17 +488,17 @@ class _GridViewState extends ConsumerState<_GridView> {
         // ── Toolbar de vista ──────────────────────────────────────
         Container(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
-          color: _C.surface,
+          color: CP.surface,
           child: Row(
             children: [
               // Selector de día
               const Text('Día:',
                   style: TextStyle(
-                      color: _C.textMid,
+                      color: CP.textMid,
                       fontSize: 12,
                       fontWeight: FontWeight.w600)),
               const SizedBox(width: 10),
-              ..._orderedDays.map((d) {
+              ...orderedDays.map((d) {
                 final sel = d == selectedDay;
                 final hasBl = widget.blocks.any((b) => b.days.contains(d));
                 return GestureDetector(
@@ -620,21 +510,21 @@ class _GridViewState extends ConsumerState<_GridView> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: sel ? _C.primary : _C.card,
+                      color: sel ? CP.primary : CP.card,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                           color: sel
-                              ? _C.primary
+                              ? CP.primary
                               : hasBl
-                                  ? _C.border.withOpacity(0.8)
-                                  : _C.border,
+                                  ? CP.border.withOpacity(0.8)
+                                  : CP.border,
                           width: sel ? 0 : 1),
                     ),
                     child: Row(
                       children: [
-                        Text(_dayShort[d]!,
+                        Text(dayShort[d]!,
                             style: TextStyle(
-                                color: sel ? Colors.white : _C.textMid,
+                                color: sel ? Colors.white : CP.textMid,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700)),
                         if (hasBl && !sel) ...[
@@ -643,7 +533,7 @@ class _GridViewState extends ConsumerState<_GridView> {
                             width: 5,
                             height: 5,
                             decoration: BoxDecoration(
-                                color: _C.accent, shape: BoxShape.circle),
+                                color: CP.accent, shape: BoxShape.circle),
                           ),
                         ],
                       ],
@@ -654,7 +544,7 @@ class _GridViewState extends ConsumerState<_GridView> {
               const Spacer(),
               // Control horas visibles
               const Text('Horas visibles:',
-                  style: TextStyle(color: _C.textMid, fontSize: 11)),
+                  style: TextStyle(color: CP.textMid, fontSize: 11)),
               const SizedBox(width: 8),
               ...[8, 12, 16, 24].map((h) {
                 final sel = _viewHours == h;
@@ -668,14 +558,14 @@ class _GridViewState extends ConsumerState<_GridView> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                        color: sel ? _C.primaryLo : Colors.transparent,
+                        color: sel ? CP.primaryLo : Colors.transparent,
                         borderRadius: BorderRadius.circular(7),
                         border: Border.all(
                             color:
-                                sel ? _C.primary.withOpacity(0.5) : _C.border)),
+                                sel ? CP.primary.withOpacity(0.5) : CP.border)),
                     child: Text('${h}h',
                         style: TextStyle(
-                            color: sel ? _C.primary : _C.textMid,
+                            color: sel ? CP.primary : CP.textMid,
                             fontSize: 10,
                             fontWeight: FontWeight.w700)),
                   ),
@@ -697,16 +587,16 @@ class _GridViewState extends ConsumerState<_GridView> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                      color: _C.redLo,
+                      color: CP.redLo,
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: _C.red.withOpacity(0.4))),
+                      border: Border.all(color: CP.red.withOpacity(0.4))),
                   child: const Row(
                     children: [
-                      Icon(Icons.my_location_rounded, size: 11, color: _C.red),
+                      Icon(Icons.my_location_rounded, size: 11, color: CP.red),
                       SizedBox(width: 4),
                       Text('Ahora',
                           style: TextStyle(
-                              color: _C.red,
+                              color: CP.red,
                               fontSize: 10,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -722,7 +612,7 @@ class _GridViewState extends ConsumerState<_GridView> {
           Expanded(
             child: _EmptyWidget(
               icon: Icons.event_available_rounded,
-              title: 'Sin programación el ${_dayLabels[selectedDay]}',
+              title: 'Sin programación el ${dayLabels[selectedDay]}',
               subtitle:
                   'Crea un bloque para este día con el botón + Nueva programación',
               compact: true,
@@ -746,7 +636,7 @@ class _GridViewState extends ConsumerState<_GridView> {
                 // ── Panel lateral: resumen del día ──────────────────
                 _DaySummaryPanel(
                   blocks: dayBlocks,
-                  dayLabel: _dayLabels[selectedDay]!,
+                  dayLabel: dayLabels[selectedDay]!,
                 ),
               ],
             ),
@@ -787,9 +677,9 @@ class _GridViewState extends ConsumerState<_GridView> {
               top: i * _hourHeight - 8,
               left: 0,
               width: _labelW,
-              child: Text(_fmtMinutes(hour * 60),
+              child: Text(fmtMinutes(hour * 60),
                   style: TextStyle(
-                      color: _C.textLo.withOpacity(0.8),
+                      color: CP.textLo.withOpacity(0.8),
                       fontSize: 9,
                       fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center),
@@ -834,11 +724,11 @@ class _GridViewState extends ConsumerState<_GridView> {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                        color: _C.red,
+                        color: CP.red,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                              color: _C.red.withOpacity(0.5), blurRadius: 6)
+                              color: CP.red.withOpacity(0.5), blurRadius: 6)
                         ]),
                   ),
                   Expanded(
@@ -846,7 +736,7 @@ class _GridViewState extends ConsumerState<_GridView> {
                     height: 2,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                          colors: [_C.red, _C.red.withOpacity(0)]),
+                          colors: [CP.red, CP.red.withOpacity(0)]),
                     ),
                   )),
                 ],
@@ -1005,10 +895,10 @@ class _BlockTileState extends State<_BlockTile> {
                     Text(b.playlistName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _C.textMid, fontSize: 9)),
+                        style: const TextStyle(color: CP.textMid, fontSize: 9)),
                     // Horario
                     Text('${b.startTimeStr} — ${b.endTimeStr}',
-                        style: const TextStyle(color: _C.textLo, fontSize: 8)),
+                        style: const TextStyle(color: CP.textLo, fontSize: 8)),
                     // Duración badge
                     if (b.durationMinutes >= 30)
                       Container(
@@ -1062,7 +952,7 @@ class _BlockTileState extends State<_BlockTile> {
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CreateProgramSheet(editing: widget.block),
+      builder: (_) => CPreateProgramSheet(editing: widget.block),
     );
   }
 }
@@ -1085,8 +975,8 @@ class _DaySummaryPanel extends StatelessWidget {
     return Container(
       width: 260,
       decoration: const BoxDecoration(
-          color: _C.surface,
-          border: Border(left: BorderSide(color: _C.divider))),
+          color: CP.surface,
+          border: Border(left: BorderSide(color: CP.divider))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1094,15 +984,15 @@ class _DaySummaryPanel extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: _C.divider))),
+                border: Border(bottom: BorderSide(color: CP.divider))),
             child: Row(
               children: [
                 const Icon(Icons.summarize_rounded,
-                    size: 14, color: _C.primary),
+                    size: 14, color: CP.primary),
                 const SizedBox(width: 8),
                 Text('Resumen · $dayLabel',
                     style: const TextStyle(
-                        color: _C.textHi,
+                        color: CP.textHi,
                         fontSize: 12,
                         fontWeight: FontWeight.w700)),
               ],
@@ -1120,10 +1010,10 @@ class _DaySummaryPanel extends StatelessWidget {
                     value: '${covered.toStringAsFixed(1)}%',
                     subtitle: '${_fmtHoursMin(totalMin)} programadas',
                     color: covered > 80
-                        ? _C.green
+                        ? CP.green
                         : covered > 40
-                            ? _C.amber
-                            : _C.red,
+                            ? CP.amber
+                            : CP.red,
                     icon: Icons.pie_chart_rounded,
                   ),
                   const SizedBox(height: 8),
@@ -1131,9 +1021,9 @@ class _DaySummaryPanel extends StatelessWidget {
                   Container(
                     height: 8,
                     decoration: BoxDecoration(
-                        color: _C.card,
+                        color: CP.card,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _C.border)),
+                        border: Border.all(color: CP.border)),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
                       widthFactor: covered / 100,
@@ -1141,15 +1031,15 @@ class _DaySummaryPanel extends StatelessWidget {
                         decoration: BoxDecoration(
                             gradient: LinearGradient(colors: [
                               covered > 80
-                                  ? _C.green
+                                  ? CP.green
                                   : covered > 40
-                                      ? _C.amber
-                                      : _C.red,
+                                      ? CP.amber
+                                      : CP.red,
                               (covered > 80
-                                      ? _C.green
+                                      ? CP.green
                                       : covered > 40
-                                          ? _C.amber
-                                          : _C.red)
+                                          ? CP.amber
+                                          : CP.red)
                                   .withOpacity(0.6),
                             ]),
                             borderRadius: BorderRadius.circular(4)),
@@ -1163,7 +1053,7 @@ class _DaySummaryPanel extends StatelessWidget {
                     value: '${blocks.length}',
                     subtitle:
                         '${blocks.where((b) => b.isActive).length} activos',
-                    color: _C.accent,
+                    color: CP.accent,
                     icon: Icons.view_agenda_rounded,
                   ),
                   const SizedBox(height: 8),
@@ -1171,7 +1061,7 @@ class _DaySummaryPanel extends StatelessWidget {
                     label: 'Playlists únicas',
                     value: '${playlists.length}',
                     subtitle: playlists.take(2).join(', '),
-                    color: _C.purple,
+                    color: CP.purple,
                     icon: Icons.playlist_play_rounded,
                   ),
                   const SizedBox(height: 16),
@@ -1212,9 +1102,9 @@ class _SummaryStatCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-            color: _C.card,
+            color: CP.card,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _C.border)),
+            border: Border.all(color: CP.border)),
         child: Row(
           children: [
             Container(
@@ -1236,10 +1126,10 @@ class _SummaryStatCard extends StatelessWidget {
                           fontSize: 18,
                           fontWeight: FontWeight.w800)),
                   Text(label,
-                      style: const TextStyle(color: _C.textMid, fontSize: 10)),
+                      style: const TextStyle(color: CP.textMid, fontSize: 10)),
                   if (subtitle.isNotEmpty)
                     Text(subtitle,
-                        style: const TextStyle(color: _C.textLo, fontSize: 9),
+                        style: const TextStyle(color: CP.textLo, fontSize: 9),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                 ],
@@ -1277,14 +1167,14 @@ class _MiniBlockItem extends StatelessWidget {
                 children: [
                   Text(block.name,
                       style: const TextStyle(
-                          color: _C.textHi,
+                          color: CP.textHi,
                           fontSize: 10,
                           fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   Text(
                       '${block.startTimeStr} — ${block.endTimeStr} · ${block.durationStr}',
-                      style: const TextStyle(color: _C.textLo, fontSize: 9)),
+                      style: const TextStyle(color: CP.textLo, fontSize: 9)),
                 ],
               ),
             ),
@@ -1292,12 +1182,12 @@ class _MiniBlockItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                    color: _C.redLo,
+                    color: CP.redLo,
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: _C.red.withOpacity(0.3))),
+                    border: Border.all(color: CP.red.withOpacity(0.3))),
                 child: const Text('Off',
                     style: TextStyle(
-                        color: _C.red,
+                        color: CP.red,
                         fontSize: 8,
                         fontWeight: FontWeight.w700)),
               ),
@@ -1348,7 +1238,7 @@ class _ListViewState extends ConsumerState<_ListView> {
         // Toolbar
         Container(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
-          color: _C.surface,
+          color: CP.surface,
           child: Row(
             children: [
               // Búsqueda
@@ -1356,17 +1246,17 @@ class _ListViewState extends ConsumerState<_ListView> {
                 child: Container(
                   height: 38,
                   decoration: BoxDecoration(
-                      color: _C.card,
+                      color: CP.card,
                       borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: _C.border)),
+                      border: Border.all(color: CP.border)),
                   child: TextField(
                     controller: _searchCtrl,
-                    style: const TextStyle(color: _C.textHi, fontSize: 12),
+                    style: const TextStyle(color: CP.textHi, fontSize: 12),
                     decoration: const InputDecoration(
                         hintText: 'Buscar bloque o playlist...',
-                        hintStyle: TextStyle(color: _C.textLo, fontSize: 12),
+                        hintStyle: TextStyle(color: CP.textLo, fontSize: 12),
                         prefixIcon: Icon(Icons.search_rounded,
-                            size: 16, color: _C.textMid),
+                            size: 16, color: CP.textMid),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 10)),
                     onChanged: (v) => setState(() => _search = v),
@@ -1377,7 +1267,7 @@ class _ListViewState extends ConsumerState<_ListView> {
               // Filtro por día
               ...[
                 ('all', 'Todos'),
-                ..._orderedDays.map((d) => (d, _dayShort[d]!))
+                ...orderedDays.map((d) => (d, dayShort[d]!))
               ].map((t) {
                 final (id, label) = t;
                 final sel = _filterDay == id;
@@ -1389,14 +1279,14 @@ class _ListViewState extends ConsumerState<_ListView> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                        color: sel ? _C.primaryLo : Colors.transparent,
+                        color: sel ? CP.primaryLo : Colors.transparent,
                         borderRadius: BorderRadius.circular(7),
                         border: Border.all(
                             color:
-                                sel ? _C.primary.withOpacity(0.5) : _C.border)),
+                                sel ? CP.primary.withOpacity(0.5) : CP.border)),
                     child: Text(label,
                         style: TextStyle(
-                            color: sel ? _C.primary : _C.textMid,
+                            color: sel ? CP.primary : CP.textMid,
                             fontSize: 11,
                             fontWeight: FontWeight.w600)),
                   ),
@@ -1436,7 +1326,7 @@ class _BlockListCard extends StatefulWidget {
 
 class _BlockListCardState extends State<_BlockListCard> {
   bool _hovered = false;
-  bool _confirmDelete = false;
+  bool CPonfirmDelete = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1446,16 +1336,16 @@ class _BlockListCardState extends State<_BlockListCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() {
         _hovered = false;
-        _confirmDelete = false;
+        CPonfirmDelete = false;
       }),
       child: AnimatedContainer(
         duration: 130.ms,
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-            color: _hovered ? _C.cardHover : _C.card,
+            color: _hovered ? CP.cardHover : CP.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-                color: _hovered ? color.withOpacity(0.4) : _C.border)),
+                color: _hovered ? color.withOpacity(0.4) : CP.border)),
         child: Row(
           children: [
             // Barra de color
@@ -1489,7 +1379,7 @@ class _BlockListCardState extends State<_BlockListCard> {
                       children: [
                         Text(b.name,
                             style: const TextStyle(
-                                color: _C.textHi,
+                                color: CP.textHi,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14)),
                         const SizedBox(width: 8),
@@ -1500,25 +1390,25 @@ class _BlockListCardState extends State<_BlockListCard> {
                     Row(
                       children: [
                         const Icon(Icons.playlist_play_rounded,
-                            size: 12, color: _C.textMid),
+                            size: 12, color: CP.textMid),
                         const SizedBox(width: 4),
                         Text(b.playlistName,
                             style: const TextStyle(
-                                color: _C.textMid, fontSize: 12)),
+                                color: CP.textMid, fontSize: 12)),
                         const SizedBox(width: 14),
                         const Icon(Icons.schedule_rounded,
-                            size: 12, color: _C.textMid),
+                            size: 12, color: CP.textMid),
                         const SizedBox(width: 4),
                         Text(
                             '${b.startTimeStr} — ${b.endTimeStr}  (${b.durationStr})',
                             style: const TextStyle(
-                                color: _C.textMid, fontSize: 12)),
+                                color: CP.textMid, fontSize: 12)),
                       ],
                     ),
                     const SizedBox(height: 6),
                     // Días
                     Row(
-                      children: _orderedDays.map((d) {
+                      children: orderedDays.map((d) {
                         final active = b.days.contains(d);
                         return Container(
                           margin: const EdgeInsets.only(right: 4),
@@ -1533,10 +1423,10 @@ class _BlockListCardState extends State<_BlockListCard> {
                               border: Border.all(
                                   color: active
                                       ? color.withOpacity(0.5)
-                                      : _C.border)),
-                          child: Text(_dayShort[d]!,
+                                      : CP.border)),
+                          child: Text(dayShort[d]!,
                               style: TextStyle(
-                                  color: active ? color : _C.textLo,
+                                  color: active ? color : CP.textLo,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700)),
                         );
@@ -1549,22 +1439,22 @@ class _BlockListCardState extends State<_BlockListCard> {
             // Acciones
             Padding(
               padding: const EdgeInsets.only(right: 14),
-              child: _confirmDelete
+              child: CPonfirmDelete
                   ? Row(
                       children: [
                         const Text('¿Eliminar?',
-                            style: TextStyle(color: _C.red, fontSize: 11)),
+                            style: TextStyle(color: CP.red, fontSize: 11)),
                         const SizedBox(width: 8),
                         _SmallBtn(
                           label: 'Sí',
-                          color: _C.red,
+                          color: CP.red,
                           onTap: () => _delete(context),
                         ),
                         const SizedBox(width: 4),
                         _SmallBtn(
                           label: 'No',
-                          color: _C.textMid,
-                          onTap: () => setState(() => _confirmDelete = false),
+                          color: CP.textMid,
+                          onTap: () => setState(() => CPonfirmDelete = false),
                         ),
                       ],
                     )
@@ -1572,19 +1462,19 @@ class _BlockListCardState extends State<_BlockListCard> {
                       children: [
                         Switch(
                           value: b.isActive,
-                          activeColor: _C.green,
+                          activeColor: CP.green,
                           onChanged: (v) => _toggleActive(context, v),
                         ),
                         _IconBtnCard(
                           icon: Icons.edit_rounded,
-                          color: _C.primary,
+                          color: CP.primary,
                           tooltip: 'Editar',
                           onTap: () => _edit(context),
                         ),
                         const SizedBox(width: 4),
                         _IconBtnCard(
                           icon: Icons.visibility_rounded,
-                          color: _C.accent,
+                          color: CP.accent,
                           tooltip: 'Ver detalle',
                           onTap: () => showDialog(
                               context: context,
@@ -1593,9 +1483,9 @@ class _BlockListCardState extends State<_BlockListCard> {
                         const SizedBox(width: 4),
                         _IconBtnCard(
                           icon: Icons.delete_outline_rounded,
-                          color: _C.red,
+                          color: CP.red,
                           tooltip: 'Eliminar',
-                          onTap: () => setState(() => _confirmDelete = true),
+                          onTap: () => setState(() => CPonfirmDelete = true),
                         ),
                       ],
                     ),
@@ -1613,7 +1503,7 @@ class _BlockListCardState extends State<_BlockListCard> {
         .delete();
     if (ctx.mounted) {
       ScaffoldMessenger.of(ctx)
-          .showSnackBar(_snack('Bloque eliminado', bg: _C.red));
+          .showSnackBar(snack('Bloque eliminado', bg: CP.red));
     }
   }
 
@@ -1629,7 +1519,7 @@ class _BlockListCardState extends State<_BlockListCard> {
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CreateProgramSheet(editing: widget.block),
+      builder: (_) => CPreateProgramSheet(editing: widget.block),
     );
   }
 }
@@ -1638,18 +1528,18 @@ class _BlockListCardState extends State<_BlockListCard> {
 // SHEET CREAR / EDITAR BLOQUE
 // =============================================================================
 
-class _CreateProgramSheet extends ConsumerStatefulWidget {
+class CPreateProgramSheet extends ConsumerStatefulWidget {
   final ProgramBlock? editing;
   final String? scheduleId; // <-- agrega esto
-  const _CreateProgramSheet(
+  const CPreateProgramSheet(
       {this.editing, this.scheduleId}); // <-- modifica esto
-  //const _CreateProgramSheet({this.editing});
+  //const CPreateProgramSheet({this.editing});
   @override
-  ConsumerState<_CreateProgramSheet> createState() =>
-      _CreateProgramSheetState();
+  ConsumerState<CPreateProgramSheet> createState() =>
+      CPreateProgramSheetState();
 }
 
-class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
+class CPreateProgramSheetState extends ConsumerState<CPreateProgramSheet> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -1662,7 +1552,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
   bool _useCustomEnd = false;
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   final Set<String> _days = {'mon', 'tue', 'wed', 'thu', 'fri'};
-  Color _selectedColor = _C.blockColors[0];
+  Color _selectedColor = CP.blockColors[0];
   bool _loading = false;
   String? _error;
 
@@ -1740,7 +1630,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
       _error = null;
     });
     try {
-      final companyId = await _getCompanyId();
+      final companyId = await getCompanyId();
       final duration = _endMinute - _startMinute;
       final data = {
         'name': _nameCtrl.text.trim(),
@@ -1785,9 +1675,9 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
       constraints:
           BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.92),
       decoration: const BoxDecoration(
-        color: _C.surface,
+        color: CP.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        border: Border(top: BorderSide(color: _C.border)),
+        border: Border(top: BorderSide(color: CP.border)),
       ),
       child: Form(
         key: _formKey,
@@ -1800,7 +1690,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: _C.border, borderRadius: BorderRadius.circular(2)),
+                  color: CP.border, borderRadius: BorderRadius.circular(2)),
             ),
             // Header
             Padding(
@@ -1811,10 +1701,10 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                        color: _C.primaryLo,
+                        color: CP.primaryLo,
                         borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.calendar_today_rounded,
-                        size: 18, color: _C.primary),
+                        size: 18, color: CP.primary),
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -1823,11 +1713,11 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       Text(
                           isEdit ? 'Editar programación' : 'Nueva programación',
                           style: const TextStyle(
-                              color: _C.textHi,
+                              color: CP.textHi,
                               fontWeight: FontWeight.w700,
                               fontSize: 15)),
                       const Text('Configura cuándo se reproduce cada playlist',
-                          style: TextStyle(color: _C.textMid, fontSize: 11)),
+                          style: TextStyle(color: CP.textMid, fontSize: 11)),
                     ],
                   ),
                   const Spacer(),
@@ -1837,18 +1727,18 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                          color: _C.card,
+                          color: CP.card,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                       child: const Icon(Icons.close_rounded,
-                          size: 14, color: _C.textMid),
+                          size: 14, color: CP.textMid),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            const Divider(color: _C.divider, height: 1),
+            const Divider(color: CP.divider, height: 1),
 
             // Contenido scrollable
             Flexible(
@@ -1865,7 +1755,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       _SheetLabel('Nombre del bloque *'),
                       TextFormField(
                         controller: _nameCtrl,
-                        style: const TextStyle(color: _C.textHi, fontSize: 13),
+                        style: const TextStyle(color: CP.textHi, fontSize: 13),
                         validator: (v) => (v?.trim().isEmpty ?? true)
                             ? 'El nombre es obligatorio'
                             : null,
@@ -1878,7 +1768,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       TextFormField(
                         controller: _descCtrl,
                         maxLines: 2,
-                        style: const TextStyle(color: _C.textHi, fontSize: 13),
+                        style: const TextStyle(color: CP.textHi, fontSize: 13),
                         decoration: _fieldDeco(
                             'Notas sobre esta programación...',
                             Icons.notes_rounded),
@@ -1894,7 +1784,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                         loading: () => const _LoadingField(),
                         error: (e, _) => Text('Error: $e',
                             style:
-                                const TextStyle(color: _C.red, fontSize: 11)),
+                                const TextStyle(color: CP.red, fontSize: 11)),
                         data: (playlists) => playlists.isEmpty
                             ? _NoDataField(
                                 msg:
@@ -1926,7 +1816,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                                   time: _startTime,
                                   label: 'Inicio',
                                   icon: Icons.play_arrow_rounded,
-                                  color: _C.green,
+                                  color: CP.green,
                                   onPick: (t) => setState(() {
                                     _startTime = t;
                                     // Actualizar endTime si usamos modo manual
@@ -1961,7 +1851,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                                               ? '← Usar duración'
                                               : 'Hora exacta →',
                                           style: const TextStyle(
-                                              color: _C.accent,
+                                              color: CP.accent,
                                               fontSize: 10,
                                               fontWeight: FontWeight.w600)),
                                     ),
@@ -1973,7 +1863,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                                       minute: _endMinute % 60),
                                   label: 'Fin',
                                   icon: Icons.stop_rounded,
-                                  color: _C.red,
+                                  color: CP.red,
                                   onPick: _useCustomEnd
                                       ? (t) => setState(() => _endTime = t)
                                       : null,
@@ -2003,20 +1893,20 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                            color: _C.primaryLo,
+                            color: CP.primaryLo,
                             borderRadius: BorderRadius.circular(8),
                             border:
-                                Border.all(color: _C.primary.withOpacity(0.2))),
+                                Border.all(color: CP.primary.withOpacity(0.2))),
                         child: Row(
                           children: [
                             const Icon(Icons.info_outline_rounded,
-                                size: 14, color: _C.primary),
+                                size: 14, color: CP.primary),
                             const SizedBox(width: 8),
                             Text(
-                                '${_fmt(_startTime)} → ${_fmtMinutes(_endMinute % 1440)}'
+                                '${_fmt(_startTime)} → ${fmtMinutes(_endMinute % 1440)}'
                                 '  ·  ${_fmtDur(_endMinute - _startMinute)}',
                                 style: const TextStyle(
-                                    color: _C.primary,
+                                    color: CP.primary,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600)),
                           ],
@@ -2055,7 +1945,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                               onTap: () => setState(() {
                                     _days
                                       ..clear()
-                                      ..addAll(_orderedDays);
+                                      ..addAll(orderedDays);
                                   })),
                           const SizedBox(width: 6),
                           _QuickDayBtn(
@@ -2068,7 +1958,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       ),
                       const SizedBox(height: 10),
                       Row(
-                        children: _orderedDays.map((d) {
+                        children: orderedDays.map((d) {
                           final sel = _days.contains(d);
                           return Expanded(
                             child: GestureDetector(
@@ -2082,30 +1972,30 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                                 decoration: BoxDecoration(
                                     color: sel
                                         ? _selectedColor.withOpacity(0.15)
-                                        : _C.card,
+                                        : CP.card,
                                     borderRadius: BorderRadius.circular(9),
                                     border: Border.all(
                                         color: sel
                                             ? _selectedColor.withOpacity(0.6)
-                                            : _C.border,
+                                            : CP.border,
                                         width: sel ? 1.5 : 1)),
                                 child: Column(
                                   children: [
-                                    Text(_dayShort[d]!,
+                                    Text(dayShort[d]!,
                                         style: TextStyle(
                                             color: sel
                                                 ? _selectedColor
-                                                : _C.textMid,
+                                                : CP.textMid,
                                             fontSize: 13,
                                             fontWeight: FontWeight.w800),
                                         textAlign: TextAlign.center),
                                     const SizedBox(height: 2),
-                                    Text(_dayLabels[d]!.substring(0, 3),
+                                    Text(dayLabels[d]!.substring(0, 3),
                                         style: TextStyle(
                                             color: sel
                                                 ? _selectedColor
                                                     .withOpacity(0.7)
-                                                : _C.textLo,
+                                                : CP.textLo,
                                             fontSize: 8),
                                         textAlign: TextAlign.center),
                                   ],
@@ -2126,7 +2016,7 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: _C.blockColors.map((c) {
+                        children: CP.blockColors.map((c) {
                           final sel = c == _selectedColor;
                           return GestureDetector(
                             onTap: () => setState(() => _selectedColor = c),
@@ -2165,8 +2055,8 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : () => _save(existing),
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: _C.primary,
-                            disabledBackgroundColor: _C.card,
+                            backgroundColor: CP.primary,
+                            disabledBackgroundColor: CP.card,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -2209,25 +2099,25 @@ class _CreateProgramSheetState extends ConsumerState<_CreateProgramSheet> {
 
   InputDecoration _fieldDeco(String hint, IconData icon) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: _C.textLo, fontSize: 12),
-        prefixIcon: Icon(icon, size: 16, color: _C.textMid),
+        hintStyle: const TextStyle(color: CP.textLo, fontSize: 12),
+        prefixIcon: Icon(icon, size: 16, color: CP.textMid),
         filled: true,
-        fillColor: _C.card,
+        fillColor: CP.card,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _C.border)),
+            borderSide: const BorderSide(color: CP.border)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _C.border)),
+            borderSide: const BorderSide(color: CP.border)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _C.borderFocus, width: 1.5)),
+            borderSide: const BorderSide(color: CP.borderFocus, width: 1.5)),
         errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _C.red)),
-        errorStyle: const TextStyle(color: _C.red, fontSize: 10),
+            borderSide: const BorderSide(color: CP.red)),
+        errorStyle: const TextStyle(color: CP.red, fontSize: 10),
       );
 }
 
@@ -2263,12 +2153,12 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-                color: _C.card,
+                color: CP.card,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                     color: selected != null
-                        ? _C.primary.withOpacity(0.5)
-                        : _C.border,
+                        ? CP.primary.withOpacity(0.5)
+                        : CP.border,
                     width: selected != null ? 1.5 : 1)),
             child: Row(
               children: [
@@ -2276,11 +2166,11 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                      color: selected != null ? _C.primaryLo : _C.surface,
+                      color: selected != null ? CP.primaryLo : CP.surface,
                       borderRadius: BorderRadius.circular(7)),
                   child: Icon(Icons.playlist_play_rounded,
                       size: 16,
-                      color: selected != null ? _C.primary : _C.textLo),
+                      color: selected != null ? CP.primary : CP.textLo),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -2290,24 +2180,24 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                           children: [
                             Text(selected.name,
                                 style: const TextStyle(
-                                    color: _C.textHi,
+                                    color: CP.textHi,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13)),
                             Text(
                                 '${selected.itemCount} clips · '
                                 '${_fmtDurSec(selected.totalSeconds)}',
                                 style: const TextStyle(
-                                    color: _C.textMid, fontSize: 10)),
+                                    color: CP.textMid, fontSize: 10)),
                           ],
                         )
                       : const Text('Selecciona una playlist...',
-                          style: TextStyle(color: _C.textLo, fontSize: 12)),
+                          style: TextStyle(color: CP.textLo, fontSize: 12)),
                 ),
                 Icon(
                     _expanded
                         ? Icons.expand_less_rounded
                         : Icons.expand_more_rounded,
-                    color: _C.textMid,
+                    color: CP.textMid,
                     size: 18),
               ],
             ),
@@ -2322,9 +2212,9 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
           secondChild: Container(
             margin: const EdgeInsets.only(top: 6),
             decoration: BoxDecoration(
-                color: _C.card,
+                color: CP.card,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _C.border)),
+                border: Border.all(color: CP.border)),
             child: Column(
               children: widget.playlists.map((p) {
                 final sel = p.id == widget.selectedId;
@@ -2338,7 +2228,7 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                        color: sel ? _C.primaryLo : Colors.transparent,
+                        color: sel ? CP.primaryLo : Colors.transparent,
                         borderRadius: BorderRadius.circular(9)),
                     child: Row(
                       children: [
@@ -2346,7 +2236,7 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                              color: sel ? _C.primary : _C.textLo,
+                              color: sel ? CP.primary : CP.textLo,
                               shape: BoxShape.circle),
                         ),
                         const SizedBox(width: 10),
@@ -2356,20 +2246,20 @@ class _PlaylistPickerState extends State<_PlaylistPicker> {
                             children: [
                               Text(p.name,
                                   style: TextStyle(
-                                      color: sel ? _C.primary : _C.textHi,
+                                      color: sel ? CP.primary : CP.textHi,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
                               Text(
                                   '${p.itemCount} clips · '
                                   '${_fmtDurSec(p.totalSeconds)}',
                                   style: const TextStyle(
-                                      color: _C.textMid, fontSize: 10)),
+                                      color: CP.textMid, fontSize: 10)),
                             ],
                           ),
                         ),
                         if (sel)
                           const Icon(Icons.check_circle_rounded,
-                              size: 16, color: _C.primary),
+                              size: 16, color: CP.primary),
                       ],
                     ),
                   ),
@@ -2406,9 +2296,9 @@ class _DurationPicker extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-          color: _C.card,
+          color: CP.card,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _C.border)),
+          border: Border.all(color: CP.border)),
       child: Column(
         children: [
           // Horas
@@ -2417,10 +2307,10 @@ class _DurationPicker extends StatelessWidget {
               const SizedBox(
                   width: 70,
                   child: Text('Horas',
-                      style: TextStyle(color: _C.textMid, fontSize: 12))),
+                      style: TextStyle(color: CP.textMid, fontSize: 12))),
               Expanded(
                 child: SliderTheme(
-                  data: _sliderTheme(_C.primary),
+                  data: _sliderTheme(CP.primary),
                   child: Slider(
                     value: hours.toDouble(),
                     min: 0,
@@ -2433,7 +2323,7 @@ class _DurationPicker extends StatelessWidget {
                 width: 36,
                 child: Text('$hours h',
                     style: const TextStyle(
-                        color: _C.textHi,
+                        color: CP.textHi,
                         fontSize: 13,
                         fontWeight: FontWeight.w700),
                     textAlign: TextAlign.right),
@@ -2446,10 +2336,10 @@ class _DurationPicker extends StatelessWidget {
               const SizedBox(
                   width: 70,
                   child: Text('Minutos',
-                      style: TextStyle(color: _C.textMid, fontSize: 12))),
+                      style: TextStyle(color: CP.textMid, fontSize: 12))),
               Expanded(
                 child: SliderTheme(
-                  data: _sliderTheme(_C.accent),
+                  data: _sliderTheme(CP.accent),
                   child: Slider(
                     value: (minutes ~/ 5 * 5).toDouble(),
                     min: 0,
@@ -2463,7 +2353,7 @@ class _DurationPicker extends StatelessWidget {
                 width: 36,
                 child: Text('$minutes m',
                     style: const TextStyle(
-                        color: _C.textHi,
+                        color: CP.textHi,
                         fontSize: 13,
                         fontWeight: FontWeight.w700),
                     textAlign: TextAlign.right),
@@ -2488,14 +2378,14 @@ class _DurationPicker extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                       color: sel
-                          ? _C.accent.withOpacity(0.15)
+                          ? CP.accent.withOpacity(0.15)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                          color: sel ? _C.accent.withOpacity(0.5) : _C.border)),
+                          color: sel ? CP.accent.withOpacity(0.5) : CP.border)),
                   child: Text(label,
                       style: TextStyle(
-                          color: sel ? _C.accent : _C.textMid,
+                          color: sel ? CP.accent : CP.textMid,
                           fontSize: 10,
                           fontWeight: FontWeight.w600)),
                 ),
@@ -2511,7 +2401,7 @@ class _DurationPicker extends StatelessWidget {
         trackHeight: 3,
         thumbColor: c,
         activeTrackColor: c,
-        inactiveTrackColor: _C.border,
+        inactiveTrackColor: CP.border,
         overlayShape: SliderComponentShape.noOverlay,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
       );
@@ -2547,7 +2437,7 @@ class _TimePicker extends StatelessWidget {
                   builder: (ctx, child) => Theme(
                         data: ThemeData.dark().copyWith(
                             colorScheme: const ColorScheme.dark(
-                                primary: _C.primary, surface: _C.card)),
+                                primary: CP.primary, surface: CP.card)),
                         child: child!,
                       ));
               if (t != null) onPick!(t);
@@ -2555,24 +2445,24 @@ class _TimePicker extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: disabled ? _C.surface : _C.card,
+            color: disabled ? CP.surface : CP.card,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: disabled ? _C.divider : _C.border)),
+            border: Border.all(color: disabled ? CP.divider : CP.border)),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: disabled ? _C.textLo : color),
+            Icon(icon, size: 16, color: disabled ? CP.textLo : color),
             const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
                     style: TextStyle(
-                        color: disabled ? _C.textLo : _C.textLo, fontSize: 10)),
+                        color: disabled ? CP.textLo : CP.textLo, fontSize: 10)),
                 Text(
                     '${time.hour.toString().padLeft(2, '0')}'
                     ':${time.minute.toString().padLeft(2, '0')}',
                     style: TextStyle(
-                        color: disabled ? _C.textMid : _C.textHi,
+                        color: disabled ? CP.textMid : CP.textHi,
                         fontWeight: FontWeight.w800,
                         fontSize: 22)),
               ],
@@ -2600,10 +2490,10 @@ class _BlockDetailDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = block.color;
     return Dialog(
-      backgroundColor: _C.surface,
+      backgroundColor: CP.surface,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: _C.border)),
+          side: const BorderSide(color: CP.border)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: SizedBox(
@@ -2632,7 +2522,7 @@ class _BlockDetailDialog extends StatelessWidget {
                       children: [
                         Text(block.name,
                             style: const TextStyle(
-                                color: _C.textHi,
+                                color: CP.textHi,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 16)),
                         _ActiveBadge(active: block.isActive),
@@ -2645,17 +2535,17 @@ class _BlockDetailDialog extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                          color: _C.card,
+                          color: CP.card,
                           borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                       child: const Icon(Icons.close_rounded,
-                          size: 13, color: _C.textMid),
+                          size: 13, color: CP.textMid),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-              const Divider(color: _C.divider, height: 1),
+              const Divider(color: CP.divider, height: 1),
               const SizedBox(height: 16),
 
               // Playlist — clickeable
@@ -2665,34 +2555,34 @@ class _BlockDetailDialog extends StatelessWidget {
                   padding: const EdgeInsets.all(10),
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                      color: _C.primaryLo,
+                      color: CP.primaryLo,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _C.primary.withOpacity(0.3))),
+                      border: Border.all(color: CP.primary.withOpacity(0.3))),
                   child: Row(
                     children: [
                       Container(
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                              color: _C.primaryLo,
+                              color: CP.primaryLo,
                               borderRadius: BorderRadius.circular(7)),
                           child: const Icon(Icons.playlist_play_rounded,
-                              size: 14, color: _C.primary)),
+                              size: 14, color: CP.primary)),
                       const SizedBox(width: 10),
                       const SizedBox(
                           width: 70,
                           child: Text('Playlist',
                               style:
-                                  TextStyle(color: _C.textMid, fontSize: 12))),
+                                  TextStyle(color: CP.textMid, fontSize: 12))),
                       Expanded(
                         child: Text(block.playlistName,
                             style: const TextStyle(
-                                color: _C.primary,
+                                color: CP.primary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700)),
                       ),
                       const Icon(Icons.arrow_forward_ios_rounded,
-                          size: 11, color: _C.primary),
+                          size: 11, color: CP.primary),
                     ],
                   ),
                 ),
@@ -2716,29 +2606,29 @@ class _BlockDetailDialog extends StatelessWidget {
               _DetailLabel('Días de emisión'),
               const SizedBox(height: 6),
               Row(
-                children: _orderedDays.map((d) {
+                children: orderedDays.map((d) {
                   final active = block.days.contains(d);
                   return Container(
                     margin: const EdgeInsets.only(right: 6),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                        color: active ? color.withOpacity(0.15) : _C.card,
+                        color: active ? color.withOpacity(0.15) : CP.card,
                         borderRadius: BorderRadius.circular(7),
                         border: Border.all(
                             color:
-                                active ? color.withOpacity(0.4) : _C.border)),
+                                active ? color.withOpacity(0.4) : CP.border)),
                     child: Column(
                       children: [
-                        Text(_dayShort[d]!,
+                        Text(dayShort[d]!,
                             style: TextStyle(
-                                color: active ? color : _C.textLo,
+                                color: active ? color : CP.textLo,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800)),
-                        Text(_dayLabels[d]!.substring(0, 3),
+                        Text(dayLabels[d]!.substring(0, 3),
                             style: TextStyle(
                                 color:
-                                    active ? color.withOpacity(0.7) : _C.textLo,
+                                    active ? color.withOpacity(0.7) : CP.textLo,
                                 fontSize: 8)),
                       ],
                     ),
@@ -2751,7 +2641,7 @@ class _BlockDetailDialog extends StatelessWidget {
                 _DetailLabel('Descripción'),
                 Text(block.description!,
                     style: const TextStyle(
-                        color: _C.textMid, fontSize: 12, height: 1.5)),
+                        color: CP.textMid, fontSize: 12, height: 1.5)),
               ],
 
               const SizedBox(height: 20),
@@ -2767,7 +2657,7 @@ class _BlockDetailDialog extends StatelessWidget {
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (_) => _CreateProgramSheet(
+                        builder: (_) => CPreateProgramSheet(
                           editing: block,
                           scheduleId: block.scheduleId,
                         ),
@@ -2776,8 +2666,8 @@ class _BlockDetailDialog extends StatelessWidget {
                     icon: const Icon(Icons.edit_rounded, size: 14),
                     label: const Text('Editar'),
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: _C.primary,
-                        side: const BorderSide(color: _C.border),
+                        foregroundColor: CP.primary,
+                        side: const BorderSide(color: CP.border),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(9))),
                   )),
@@ -2798,7 +2688,7 @@ class _BlockDetailDialog extends StatelessWidget {
                         size: 14),
                     label: Text(block.isActive ? 'Desactivar' : 'Activar'),
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: block.isActive ? _C.amber : _C.green,
+                        backgroundColor: block.isActive ? CP.amber : CP.green,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -2844,12 +2734,12 @@ class _FormSection extends StatelessWidget {
               children: [
                 Text(title,
                     style: const TextStyle(
-                        color: _C.textHi,
+                        color: CP.textHi,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.3)),
                 const SizedBox(width: 10),
-                Expanded(child: Container(height: 1, color: _C.divider)),
+                Expanded(child: Container(height: 1, color: CP.divider)),
               ],
             ),
           ),
@@ -2866,7 +2756,7 @@ class _SheetLabel extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
             style: const TextStyle(
-                color: _C.textMid,
+                color: CP.textMid,
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0.2)),
@@ -2881,7 +2771,7 @@ class _SectionTitle extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(text,
             style: const TextStyle(
-                color: _C.textMid,
+                color: CP.textMid,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5)),
@@ -2918,7 +2808,7 @@ class _StatPill extends StatelessWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.w800)),
                 Text(label,
-                    style: const TextStyle(color: _C.textLo, fontSize: 9)),
+                    style: const TextStyle(color: CP.textLo, fontSize: 9)),
               ],
             ),
           ],
@@ -2933,15 +2823,15 @@ class _ActiveBadge extends StatelessWidget {
   Widget build(BuildContext ctx) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
-            color: active ? _C.greenLo : _C.redLo,
+            color: active ? CP.greenLo : CP.redLo,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: active
-                    ? _C.green.withOpacity(0.3)
-                    : _C.red.withOpacity(0.3))),
+                    ? CP.green.withOpacity(0.3)
+                    : CP.red.withOpacity(0.3))),
         child: Text(active ? 'Activa' : 'Inactiva',
             style: TextStyle(
-                color: active ? _C.green : _C.red,
+                color: active ? CP.green : CP.red,
                 fontSize: 9,
                 fontWeight: FontWeight.w700)),
       );
@@ -2955,17 +2845,17 @@ class _ErrorBanner extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-            color: _C.redLo,
+            color: CP.redLo,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _C.red.withOpacity(0.3))),
+            border: Border.all(color: CP.red.withOpacity(0.3))),
         child: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, size: 14, color: _C.red),
+            const Icon(Icons.error_outline_rounded, size: 14, color: CP.red),
             const SizedBox(width: 8),
             Expanded(
                 child: Text(message,
                     style: const TextStyle(
-                        color: _C.red,
+                        color: CP.red,
                         fontSize: 11,
                         fontWeight: FontWeight.w500))),
           ],
@@ -2991,22 +2881,22 @@ class _EmptyWidget extends StatelessWidget {
               width: compact ? 56 : 72,
               height: compact ? 56 : 72,
               decoration: BoxDecoration(
-                  color: _C.primaryLo,
+                  color: CP.primaryLo,
                   shape: BoxShape.circle,
-                  border: Border.all(color: _C.primary.withOpacity(0.2))),
-              child: Icon(icon, color: _C.primary, size: compact ? 26 : 34),
+                  border: Border.all(color: CP.primary.withOpacity(0.2))),
+              child: Icon(icon, color: CP.primary, size: compact ? 26 : 34),
             ),
             SizedBox(height: compact ? 12 : 16),
             Text(title,
                 style: TextStyle(
-                    color: _C.textHi,
+                    color: CP.textHi,
                     fontWeight: FontWeight.w700,
                     fontSize: compact ? 14 : 17)),
             const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(subtitle,
-                  style: const TextStyle(color: _C.textMid, fontSize: 12),
+                  style: const TextStyle(color: CP.textMid, fontSize: 12),
                   textAlign: TextAlign.center),
             ),
           ],
@@ -3022,20 +2912,20 @@ class _SkeletonScreen extends StatefulWidget {
 
 class _SkeletonScreenState extends State<_SkeletonScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
+  late AnimationController CPtrl;
   late Animation<double> _anim;
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: 1400.ms)
+    CPtrl = AnimationController(vsync: this, duration: 1400.ms)
       ..repeat(reverse: true);
     _anim = Tween<double>(begin: 0.3, end: 0.6)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+        .animate(CurvedAnimation(parent: CPtrl, curve: Curves.easeInOut));
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    CPtrl.dispose();
     super.dispose();
   }
 
@@ -3051,9 +2941,9 @@ class _SkeletonScreenState extends State<_SkeletonScreen>
                       height: 70,
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
-                          color: Color.lerp(_C.card, _C.cardHover, _anim.value),
+                          color: Color.lerp(CP.card, CP.cardHover, _anim.value),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                     ).animate().fadeIn(delay: Duration(milliseconds: i * 60))),
           ),
         ),
@@ -3066,15 +2956,15 @@ class _LoadingField extends StatelessWidget {
   Widget build(BuildContext ctx) => Container(
         height: 46,
         decoration: BoxDecoration(
-            color: _C.card,
+            color: CP.card,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _C.border)),
+            border: Border.all(color: CP.border)),
         child: const Center(
             child: SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: _C.primary))),
+                    strokeWidth: 2, color: CP.primary))),
       );
 }
 
@@ -3085,15 +2975,15 @@ class _NoDataField extends StatelessWidget {
   Widget build(BuildContext ctx) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: _C.amberLo,
+            color: CP.amberLo,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _C.amber.withOpacity(0.3))),
+            border: Border.all(color: CP.amber.withOpacity(0.3))),
         child: Row(children: [
-          const Icon(Icons.warning_amber_rounded, size: 14, color: _C.amber),
+          const Icon(Icons.warning_amber_rounded, size: 14, color: CP.amber),
           const SizedBox(width: 8),
           Expanded(
               child: Text(msg,
-                  style: const TextStyle(color: _C.amber, fontSize: 11))),
+                  style: const TextStyle(color: CP.amber, fontSize: 11))),
         ]),
       );
 }
@@ -3112,17 +3002,17 @@ class _DetailRow extends StatelessWidget {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                    color: _C.primaryLo,
+                    color: CP.primaryLo,
                     borderRadius: BorderRadius.circular(7)),
-                child: Icon(icon, size: 14, color: _C.primary)),
+                child: Icon(icon, size: 14, color: CP.primary)),
             const SizedBox(width: 10),
             SizedBox(
                 width: 70,
                 child: Text(label,
-                    style: const TextStyle(color: _C.textMid, fontSize: 12))),
+                    style: const TextStyle(color: CP.textMid, fontSize: 12))),
             Text(value,
                 style: const TextStyle(
-                    color: _C.textHi,
+                    color: CP.textHi,
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
           ],
@@ -3136,7 +3026,7 @@ class _DetailLabel extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) => Text(text,
       style: const TextStyle(
-          color: _C.textMid,
+          color: CP.textMid,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.3));
@@ -3154,15 +3044,15 @@ class _QuickDayBtn extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-              color: danger ? _C.redLo : _C.accentLo,
+              color: danger ? CP.redLo : CP.accentLo,
               borderRadius: BorderRadius.circular(7),
               border: Border.all(
                   color: danger
-                      ? _C.red.withOpacity(0.3)
-                      : _C.accent.withOpacity(0.3))),
+                      ? CP.red.withOpacity(0.3)
+                      : CP.accent.withOpacity(0.3))),
           child: Text(label,
               style: TextStyle(
-                  color: danger ? _C.red : _C.accent,
+                  color: danger ? CP.red : CP.accent,
                   fontSize: 10,
                   fontWeight: FontWeight.w600)),
         ),
@@ -3215,12 +3105,12 @@ class _PrimaryBtnState extends State<_PrimaryBtn> {
               gradient: LinearGradient(
                   colors: _hovered
                       ? [const Color(0xFF5254F0), const Color(0xFF7C7EF7)]
-                      : [_C.primary, const Color(0xFF818CF8)]),
+                      : [CP.primary, const Color(0xFF818CF8)]),
               borderRadius: BorderRadius.circular(10),
               boxShadow: _hovered
                   ? [
                       BoxShadow(
-                          color: _C.primary.withOpacity(0.4),
+                          color: CP.primary.withOpacity(0.4),
                           blurRadius: 16,
                           offset: const Offset(0, 4))
                     ]
@@ -3306,7 +3196,7 @@ class _ScheduleCard extends ConsumerStatefulWidget {
 
 class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
   bool _hovered = false;
-  bool _confirmDelete = false;
+  bool CPonfirmDelete = false;
   void _showDayPicker(BuildContext ctx) {
     showDialog(
       context: ctx,
@@ -3321,7 +3211,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() {
         _hovered = false;
-        _confirmDelete = false;
+        CPonfirmDelete = false;
       }),
       child: GestureDetector(
         onTap: () => _open(context),
@@ -3329,10 +3219,10 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
           duration: 130.ms,
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
-              color: _hovered ? _C.cardHover : _C.card,
+              color: _hovered ? CP.cardHover : CP.card,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: _hovered ? _C.primary.withOpacity(0.5) : _C.border)),
+                  color: _hovered ? CP.primary.withOpacity(0.5) : CP.border)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(6, 14, 14, 14),
             child: Row(
@@ -3343,7 +3233,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
                   height: 54,
                   margin: const EdgeInsets.only(right: 14),
                   decoration: BoxDecoration(
-                      color: s.isActive ? _C.primary : _C.textLo,
+                      color: s.isActive ? CP.primary : CP.textLo,
                       borderRadius: BorderRadius.circular(4)),
                 ),
                 // Ícono
@@ -3351,10 +3241,10 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                      color: _C.primaryLo,
+                      color: CP.primaryLo,
                       borderRadius: BorderRadius.circular(12)),
                   child: const Icon(Icons.calendar_view_week_rounded,
-                      color: _C.primary, size: 22),
+                      color: CP.primary, size: 22),
                 ),
                 const SizedBox(width: 14),
                 // Info
@@ -3366,7 +3256,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
                         children: [
                           Text(s.name,
                               style: const TextStyle(
-                                  color: _C.textHi,
+                                  color: CP.textHi,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15)),
                           const SizedBox(width: 8),
@@ -3377,7 +3267,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
                         const SizedBox(height: 3),
                         Text(s.description!,
                             style: const TextStyle(
-                                color: _C.textMid, fontSize: 12),
+                                color: CP.textMid, fontSize: 12),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                       ],
@@ -3388,54 +3278,54 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
                 ),
                 const SizedBox(width: 14),
                 // Acciones
-                _confirmDelete
+                CPonfirmDelete
                     ? Row(children: [
                         const Text('¿Eliminar?',
-                            style: TextStyle(color: _C.red, fontSize: 11)),
+                            style: TextStyle(color: CP.red, fontSize: 11)),
                         const SizedBox(width: 8),
                         _SmallBtn(
                             label: 'Sí',
-                            color: _C.red,
+                            color: CP.red,
                             onTap: () => _delete(context)),
                         const SizedBox(width: 4),
                         _SmallBtn(
                             label: 'No',
-                            color: _C.textMid,
+                            color: CP.textMid,
                             onTap: () =>
-                                setState(() => _confirmDelete = false)),
+                                setState(() => CPonfirmDelete = false)),
                       ])
                     : Row(children: [
                         Switch(
                           value: s.isActive,
-                          activeColor: _C.green,
+                          activeColor: CP.green,
                           onChanged: (v) => _toggleActive(v),
                         ),
                         _IconBtnCard(
                           icon: Icons.play_circle_rounded,
-                          color: _C.green,
+                          color: CP.green,
                           tooltip: 'Visualizar programación',
                           onTap: () => _showDayPicker(context),
                         ),
                         const SizedBox(width: 4),
                         _IconBtnCard(
                           icon: Icons.edit_rounded,
-                          color: _C.primary,
+                          color: CP.primary,
                           tooltip: 'Editar nombre',
                           onTap: () => _edit(context),
                         ),
                         const SizedBox(width: 4),
                         _IconBtnCard(
                           icon: Icons.open_in_full_rounded,
-                          color: _C.accent,
+                          color: CP.accent,
                           tooltip: 'Ver programación',
                           onTap: () => _open(context),
                         ),
                         const SizedBox(width: 4),
                         _IconBtnCard(
                           icon: Icons.delete_outline_rounded,
-                          color: _C.red,
+                          color: CP.red,
                           tooltip: 'Eliminar',
-                          onTap: () => setState(() => _confirmDelete = true),
+                          onTap: () => setState(() => CPonfirmDelete = true),
                         ),
                       ]),
               ],
@@ -3459,7 +3349,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
     await batch.commit();
     if (ctx.mounted)
       ScaffoldMessenger.of(ctx)
-          .showSnackBar(_snack('Programación eliminada', bg: _C.red));
+          .showSnackBar(snack('Programación eliminada', bg: CP.red));
   }
 
   Future<void> _toggleActive(bool val) async {
@@ -3474,7 +3364,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> {
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CreateScheduleSheet(editing: widget.schedule),
+      builder: (_) => CPreateScheduleSheet(editing: widget.schedule),
     );
   }
 
@@ -3513,7 +3403,7 @@ class _ScheduleBlocksPreview extends ConsumerWidget {
         return Row(
           children: [
             // Chips de días
-            ..._orderedDays.map((d) {
+            ...orderedDays.map((d) {
               final has = daysWithBlocks.contains(d);
               return Container(
                 margin: const EdgeInsets.only(right: 4),
@@ -3521,24 +3411,24 @@ class _ScheduleBlocksPreview extends ConsumerWidget {
                 height: 22,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                    color: has ? _C.primaryMid : Colors.transparent,
+                    color: has ? CP.primaryMid : Colors.transparent,
                     borderRadius: BorderRadius.circular(5),
                     border: Border.all(
-                        color: has ? _C.primary.withOpacity(0.5) : _C.border)),
-                child: Text(_dayShort[d]!,
+                        color: has ? CP.primary.withOpacity(0.5) : CP.border)),
+                child: Text(dayShort[d]!,
                     style: TextStyle(
-                        color: has ? _C.primary : _C.textLo,
+                        color: has ? CP.primary : CP.textLo,
                         fontSize: 9,
                         fontWeight: FontWeight.w700)),
               );
             }),
             const SizedBox(width: 10),
             Text('${blocks.length} bloques',
-                style: const TextStyle(color: _C.textMid, fontSize: 10)),
+                style: const TextStyle(color: CP.textMid, fontSize: 10)),
             const SizedBox(width: 6),
             if (totalMin > 0)
               Text('· ${_fmtMinTot(totalMin)}',
-                  style: const TextStyle(color: _C.textLo, fontSize: 10)),
+                  style: const TextStyle(color: CP.textLo, fontSize: 10)),
           ],
         );
       },
@@ -3583,7 +3473,7 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
     final blocksAsync =
         ref.watch(_blocksForScheduleProvider(widget.schedule.id));
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: CP.bg,
       body: Column(
         children: [
           _buildHeader(blocksAsync),
@@ -3618,8 +3508,8 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
       decoration: const BoxDecoration(
-          color: _C.surface,
-          border: Border(bottom: BorderSide(color: _C.divider))),
+          color: CP.surface,
+          border: Border(bottom: BorderSide(color: CP.divider))),
       child: Row(
         children: [
           GestureDetector(
@@ -3628,11 +3518,11 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                  color: _C.card,
+                  color: CP.card,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.border)),
+                  border: Border.all(color: CP.border)),
               child: const Icon(Icons.arrow_back_rounded,
-                  color: _C.textMid, size: 18),
+                  color: CP.textMid, size: 18),
             ),
           ),
           const SizedBox(width: 14),
@@ -3641,7 +3531,7 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
             height: 42,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                  colors: [_C.primary, Color(0xFF818CF8)],
+                  colors: [CP.primary, Color(0xFF818CF8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(12),
@@ -3655,25 +3545,25 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
             children: [
               Text(widget.schedule.name,
                   style: const TextStyle(
-                      color: _C.textHi,
+                      color: CP.textHi,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5)),
               Text('$total bloques · $active activos',
-                  style: const TextStyle(color: _C.textMid, fontSize: 13)),
+                  style: const TextStyle(color: CP.textMid, fontSize: 13)),
             ],
           ),
           const Spacer(),
           _StatPill(
               label: 'Semana',
               value: '$total bloques',
-              color: _C.primary,
+              color: CP.primary,
               icon: Icons.view_week_rounded),
           const SizedBox(width: 8),
           _StatPill(
               label: 'Activos',
               value: '$active',
-              color: _C.green,
+              color: CP.green,
               icon: Icons.check_circle_rounded),
           const SizedBox(width: 16),
           _PrimaryBtn(
@@ -3687,7 +3577,7 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
 
   Widget _buildTabBar() {
     return Container(
-      color: _C.surface,
+      color: CP.surface,
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
       child: Row(
         children: [
@@ -3695,11 +3585,11 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
             controller: _tabs,
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            labelColor: _C.primary,
-            unselectedLabelColor: _C.textMid,
-            indicatorColor: _C.primary,
+            labelColor: CP.primary,
+            unselectedLabelColor: CP.textMid,
+            indicatorColor: CP.primary,
             indicatorWeight: 2,
-            dividerColor: _C.divider,
+            dividerColor: CP.divider,
             labelStyle:
                 const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             tabs: const [
@@ -3708,7 +3598,7 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
             ],
           ),
           const Spacer(),
-          ..._orderedDays.map((d) {
+          ...orderedDays.map((d) {
             final sel = ref.watch(_selectedDayProvider) == d;
             return GestureDetector(
               onTap: () {
@@ -3720,13 +3610,13 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
                 margin: const EdgeInsets.only(left: 4, bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                    color: sel ? _C.primaryMid : Colors.transparent,
+                    color: sel ? CP.primaryMid : Colors.transparent,
                     borderRadius: BorderRadius.circular(7),
                     border: Border.all(
-                        color: sel ? _C.primary.withOpacity(0.6) : _C.border)),
-                child: Text(_dayShort[d]!,
+                        color: sel ? CP.primary.withOpacity(0.6) : CP.border)),
+                child: Text(dayShort[d]!,
                     style: TextStyle(
-                        color: sel ? _C.primary : _C.textMid,
+                        color: sel ? CP.primary : CP.textMid,
                         fontSize: 11,
                         fontWeight: FontWeight.w700)),
               ),
@@ -3743,20 +3633,20 @@ class _ScheduleDetailScreenState extends ConsumerState<_ScheduleDetailScreen>
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CreateProgramSheet(scheduleId: widget.schedule.id),
+      builder: (_) => CPreateProgramSheet(scheduleId: widget.schedule.id),
     );
   }
 }
 
-class _CreateScheduleSheet extends ConsumerStatefulWidget {
+class CPreateScheduleSheet extends ConsumerStatefulWidget {
   final Schedule? editing;
-  const _CreateScheduleSheet({this.editing});
+  const CPreateScheduleSheet({this.editing});
   @override
-  ConsumerState<_CreateScheduleSheet> createState() =>
-      _CreateScheduleSheetState();
+  ConsumerState<CPreateScheduleSheet> createState() =>
+      CPreateScheduleSheetState();
 }
 
-class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
+class CPreateScheduleSheetState extends ConsumerState<CPreateScheduleSheet> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -3786,7 +3676,7 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
       _error = null;
     });
     try {
-      final companyId = await _getCompanyId();
+      final companyId = await getCompanyId();
       final data = {
         'name': _nameCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
@@ -3819,9 +3709,9 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
       constraints:
           BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
       decoration: const BoxDecoration(
-        color: _C.surface,
+        color: CP.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        border: Border(top: BorderSide(color: _C.border)),
+        border: Border(top: BorderSide(color: CP.border)),
       ),
       child: Form(
         key: _formKey,
@@ -3833,7 +3723,7 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: _C.border, borderRadius: BorderRadius.circular(2)),
+                  color: CP.border, borderRadius: BorderRadius.circular(2)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
@@ -3843,10 +3733,10 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                        color: _C.primaryLo,
+                        color: CP.primaryLo,
                         borderRadius: BorderRadius.circular(10)),
                     child: const Icon(Icons.calendar_view_week_rounded,
-                        size: 18, color: _C.primary),
+                        size: 18, color: CP.primary),
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -3855,11 +3745,11 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                       Text(
                           isEdit ? 'Editar programación' : 'Nueva programación',
                           style: const TextStyle(
-                              color: _C.textHi,
+                              color: CP.textHi,
                               fontWeight: FontWeight.w700,
                               fontSize: 15)),
                       const Text('Asigna un nombre a esta programación semanal',
-                          style: TextStyle(color: _C.textMid, fontSize: 11)),
+                          style: TextStyle(color: CP.textMid, fontSize: 11)),
                     ],
                   ),
                   const Spacer(),
@@ -3869,18 +3759,18 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                          color: _C.card,
+                          color: CP.card,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                       child: const Icon(Icons.close_rounded,
-                          size: 14, color: _C.textMid),
+                          size: 14, color: CP.textMid),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
-            const Divider(color: _C.divider, height: 1),
+            const Divider(color: CP.divider, height: 1),
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
@@ -3891,30 +3781,30 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                     const _SheetLabel('Nombre de la programación *'),
                     TextFormField(
                       controller: _nameCtrl,
-                      style: const TextStyle(color: _C.textHi, fontSize: 13),
+                      style: const TextStyle(color: CP.textHi, fontSize: 13),
                       validator: (v) => (v?.trim().isEmpty ?? true)
                           ? 'El nombre es obligatorio'
                           : null,
                       decoration: InputDecoration(
                         hintText: 'Ej: Programación Principal, Verano 2025...',
                         hintStyle:
-                            const TextStyle(color: _C.textLo, fontSize: 12),
+                            const TextStyle(color: CP.textLo, fontSize: 12),
                         prefixIcon: const Icon(Icons.label_outline_rounded,
-                            size: 16, color: _C.textMid),
+                            size: 16, color: CP.textMid),
                         filled: true,
-                        fillColor: _C.card,
+                        fillColor: CP.card,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _C.border)),
+                            borderSide: const BorderSide(color: CP.border)),
                         enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _C.border)),
+                            borderSide: const BorderSide(color: CP.border)),
                         focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
-                                color: _C.borderFocus, width: 1.5)),
+                                color: CP.borderFocus, width: 1.5)),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -3922,27 +3812,27 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 2,
-                      style: const TextStyle(color: _C.textHi, fontSize: 13),
+                      style: const TextStyle(color: CP.textHi, fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Notas sobre esta programación...',
                         hintStyle:
-                            const TextStyle(color: _C.textLo, fontSize: 12),
+                            const TextStyle(color: CP.textLo, fontSize: 12),
                         prefixIcon: const Icon(Icons.notes_rounded,
-                            size: 16, color: _C.textMid),
+                            size: 16, color: CP.textMid),
                         filled: true,
-                        fillColor: _C.card,
+                        fillColor: CP.card,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _C.border)),
+                            borderSide: const BorderSide(color: CP.border)),
                         enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: _C.border)),
+                            borderSide: const BorderSide(color: CP.border)),
                         focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
-                                color: _C.borderFocus, width: 1.5)),
+                                color: CP.borderFocus, width: 1.5)),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -3952,8 +3842,8 @@ class _CreateScheduleSheetState extends ConsumerState<_CreateScheduleSheet> {
                       child: ElevatedButton(
                         onPressed: _loading ? null : _save,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: _C.primary,
-                            disabledBackgroundColor: _C.card,
+                            backgroundColor: CP.primary,
+                            disabledBackgroundColor: CP.card,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -3992,10 +3882,10 @@ class _PlaylistPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: _C.surface,
+      backgroundColor: CP.surface,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: _C.border)),
+          side: const BorderSide(color: CP.border)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: SizedBox(
@@ -4011,10 +3901,10 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                        color: _C.primaryLo,
+                        color: CP.primaryLo,
                         borderRadius: BorderRadius.circular(11)),
                     child: const Icon(Icons.playlist_play_rounded,
-                        color: _C.primary, size: 22),
+                        color: CP.primary, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -4023,11 +3913,11 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                       children: [
                         Text(playlistName,
                             style: const TextStyle(
-                                color: _C.textHi,
+                                color: CP.textHi,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 16)),
                         const Text('Contenido de la playlist',
-                            style: TextStyle(color: _C.textMid, fontSize: 11)),
+                            style: TextStyle(color: CP.textMid, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -4037,17 +3927,17 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                          color: _C.card,
+                          color: CP.card,
                           borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                       child: const Icon(Icons.close_rounded,
-                          size: 13, color: _C.textMid),
+                          size: 13, color: CP.textMid),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(color: _C.divider, height: 1),
+              const Divider(color: CP.divider, height: 1),
               const SizedBox(height: 12),
 
               // Clips de la playlist desde Firestore
@@ -4062,7 +3952,7 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                       child: Padding(
                         padding: EdgeInsets.all(24),
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: _C.primary),
+                            strokeWidth: 2, color: CP.primary),
                       ),
                     );
                   }
@@ -4070,7 +3960,7 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                     return const Padding(
                       padding: EdgeInsets.all(16),
                       child: Text('Playlist no encontrada',
-                          style: TextStyle(color: _C.textMid, fontSize: 13)),
+                          style: TextStyle(color: CP.textMid, fontSize: 13)),
                     );
                   }
                   final data = snap.data!.data() as Map<String, dynamic>;
@@ -4083,7 +3973,7 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Center(
                         child: Text('Esta playlist no tiene clips',
-                            style: TextStyle(color: _C.textMid, fontSize: 13)),
+                            style: TextStyle(color: CP.textMid, fontSize: 13)),
                       ),
                     );
                   }
@@ -4097,13 +3987,13 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                           _StatPill(
                               label: 'Clips',
                               value: '${clips.length}',
-                              color: _C.primary,
+                              color: CP.primary,
                               icon: Icons.video_library_rounded),
                           const SizedBox(width: 8),
                           _StatPill(
                               label: 'Duración total',
                               value: _fmtSec(totalSec),
-                              color: _C.accent,
+                              color: CP.accent,
                               icon: Icons.timer_rounded),
                         ],
                       ),
@@ -4126,9 +4016,9 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 9),
                               decoration: BoxDecoration(
-                                  color: _C.card,
+                                  color: CP.card,
                                   borderRadius: BorderRadius.circular(9),
-                                  border: Border.all(color: _C.border)),
+                                  border: Border.all(color: CP.border)),
                               child: Row(
                                 children: [
                                   // Número
@@ -4136,12 +4026,12 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                                     width: 26,
                                     height: 26,
                                     decoration: BoxDecoration(
-                                        color: _C.primaryLo,
+                                        color: CP.primaryLo,
                                         borderRadius: BorderRadius.circular(6)),
                                     child: Center(
                                       child: Text('${i + 1}',
                                           style: const TextStyle(
-                                              color: _C.primary,
+                                              color: CP.primary,
                                               fontSize: 10,
                                               fontWeight: FontWeight.w700)),
                                     ),
@@ -4155,13 +4045,13 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                                               ? Icons.language_rounded
                                               : Icons.video_file_rounded,
                                       size: 14,
-                                      color: _C.textMid),
+                                      color: CP.textMid),
                                   const SizedBox(width: 8),
                                   // Nombre
                                   Expanded(
                                     child: Text(name,
                                         style: const TextStyle(
-                                            color: _C.textHi,
+                                            color: CP.textHi,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500),
                                         maxLines: 1,
@@ -4173,12 +4063,12 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 7, vertical: 2),
                                       decoration: BoxDecoration(
-                                          color: _C.accentLo,
+                                          color: CP.accentLo,
                                           borderRadius:
                                               BorderRadius.circular(5)),
                                       child: Text(_fmtSec(dur),
                                           style: const TextStyle(
-                                              color: _C.accent,
+                                              color: CP.accent,
                                               fontSize: 9,
                                               fontWeight: FontWeight.w700)),
                                     ),
@@ -4198,8 +4088,8 @@ class _PlaylistPreviewDialog extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
-                      foregroundColor: _C.textMid,
-                      side: const BorderSide(color: _C.border),
+                      foregroundColor: CP.textMid,
+                      side: const BorderSide(color: CP.border),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(9))),
                   child: const Text('Cerrar'),
@@ -4232,15 +4122,15 @@ class _ScheduleDayPickerDialog extends StatefulWidget {
 }
 
 class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
-  String _selectedDay = _orderedDays[DateTime.now().weekday - 1];
+  String _selectedDay = orderedDays[DateTime.now().weekday - 1];
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: _C.surface,
+      backgroundColor: CP.surface,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: _C.border)),
+          side: const BorderSide(color: CP.border)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: SizedBox(
@@ -4256,10 +4146,10 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                        color: _C.greenLo,
+                        color: CP.greenLo,
                         borderRadius: BorderRadius.circular(11)),
                     child: const Icon(Icons.play_circle_rounded,
-                        color: _C.green, size: 22),
+                        color: CP.green, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -4268,11 +4158,11 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
                       children: [
                         Text(widget.schedule.name,
                             style: const TextStyle(
-                                color: _C.textHi,
+                                color: CP.textHi,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 15)),
                         const Text('¿Qué día deseas visualizar?',
-                            style: TextStyle(color: _C.textMid, fontSize: 11)),
+                            style: TextStyle(color: CP.textMid, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -4282,28 +4172,28 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                          color: _C.card,
+                          color: CP.card,
                           borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: _C.border)),
+                          border: Border.all(color: CP.border)),
                       child: const Icon(Icons.close_rounded,
-                          size: 13, color: _C.textMid),
+                          size: 13, color: CP.textMid),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-              const Divider(color: _C.divider, height: 1),
+              const Divider(color: CP.divider, height: 1),
               const SizedBox(height: 16),
 
               // Selector de días
               const Text('Selecciona el día',
                   style: TextStyle(
-                      color: _C.textMid,
+                      color: CP.textMid,
                       fontSize: 11,
                       fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               Row(
-                children: _orderedDays.map((d) {
+                children: orderedDays.map((d) {
                   final sel = d == _selectedDay;
                   return Expanded(
                     child: GestureDetector(
@@ -4313,26 +4203,26 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
                         margin: const EdgeInsets.only(right: 4),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                            color: sel ? _C.greenLo : _C.card,
+                            color: sel ? CP.greenLo : CP.card,
                             borderRadius: BorderRadius.circular(9),
                             border: Border.all(
                                 color:
-                                    sel ? _C.green.withOpacity(0.6) : _C.border,
+                                    sel ? CP.green.withOpacity(0.6) : CP.border,
                                 width: sel ? 1.5 : 1)),
                         child: Column(
                           children: [
-                            Text(_dayShort[d]!,
+                            Text(dayShort[d]!,
                                 style: TextStyle(
-                                    color: sel ? _C.green : _C.textMid,
+                                    color: sel ? CP.green : CP.textMid,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800),
                                 textAlign: TextAlign.center),
                             const SizedBox(height: 2),
-                            Text(_dayLabels[d]!.substring(0, 3),
+                            Text(dayLabels[d]!.substring(0, 3),
                                 style: TextStyle(
                                     color: sel
-                                        ? _C.green.withOpacity(0.7)
-                                        : _C.textLo,
+                                        ? CP.green.withOpacity(0.7)
+                                        : CP.textLo,
                                     fontSize: 8),
                                 textAlign: TextAlign.center),
                           ],
@@ -4353,19 +4243,18 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
                     Navigator.pop(context);
                     showDialog(
                       context: context,
-                      builder: (_) => _SchedulePlaybackDialog(
+                      builder: (_) => SchedulePlaybackDialog(
                         schedule: widget.schedule,
                         day: _selectedDay,
                       ),
                     );
                   },
                   icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                  label: Text(
-                      'Ver programación del ${_dayLabels[_selectedDay]}',
+                  label: Text('Ver programación del ${dayLabels[_selectedDay]}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 13)),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: _C.green,
+                      backgroundColor: CP.green,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -4377,305 +4266,5 @@ class _ScheduleDayPickerDialogState extends State<_ScheduleDayPickerDialog> {
         ),
       ),
     );
-  }
-}
-
-class _SchedulePlaybackDialog extends StatefulWidget {
-  final Schedule schedule;
-  final String day;
-  const _SchedulePlaybackDialog({required this.schedule, required this.day});
-  @override
-  State<_SchedulePlaybackDialog> createState() =>
-      _SchedulePlaybackDialogState();
-}
-
-class _SchedulePlaybackDialogState extends State<_SchedulePlaybackDialog> {
-  List<ProgramBlock>? _blocks;
-  int _currentIndex = 0;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBlocks();
-  }
-
-  Future<void> _loadBlocks() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('program_blocks')
-        .where('scheduleId', isEqualTo: widget.schedule.id)
-        .get();
-    final all = snap.docs
-        .map((d) =>
-            ProgramBlock.fromFirestore(d.data() as Map<String, dynamic>, d.id))
-        .where((b) => b.days.contains(widget.day) && b.isActive)
-        .toList()
-      ..sort((a, b) => a.startMinute.compareTo(b.startMinute));
-    if (mounted)
-      setState(() {
-        _blocks = all;
-        _loading = false;
-      });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: _C.surface,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: _C.border)),
-      child: SizedBox(
-        width: 560,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-              decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: _C.divider))),
-              child: Row(
-                children: [
-                  const Icon(Icons.play_circle_rounded,
-                      size: 18, color: _C.green),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.schedule.name,
-                            style: const TextStyle(
-                                color: _C.textHi,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14)),
-                        Text('Programación del ${_dayLabels[widget.day]}',
-                            style: const TextStyle(
-                                color: _C.textMid, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                          color: _C.card,
-                          borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: _C.border)),
-                      child: const Icon(Icons.close_rounded,
-                          size: 13, color: _C.textMid),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(40),
-                child:
-                    CircularProgressIndicator(strokeWidth: 2, color: _C.green),
-              )
-            else if (_blocks == null || _blocks!.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.event_busy_rounded,
-                        color: _C.textMid, size: 40),
-                    const SizedBox(height: 12),
-                    Text('Sin bloques el ${_dayLabels[widget.day]}',
-                        style: const TextStyle(
-                            color: _C.textHi,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
-                    const SizedBox(height: 6),
-                    const Text('No hay playlists programadas para este día',
-                        style: TextStyle(color: _C.textMid, fontSize: 12)),
-                  ],
-                ),
-              )
-            else ...[
-              // Lista de bloques del día
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${_blocks!.length} bloques programados',
-                        style: const TextStyle(
-                            color: _C.textMid,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 10),
-                    ...List.generate(_blocks!.length, (i) {
-                      final b = _blocks![i];
-                      final isCurrent = i == _currentIndex;
-                      return GestureDetector(
-                        onTap: () => setState(() => _currentIndex = i),
-                        child: AnimatedContainer(
-                          duration: 130.ms,
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                              color: isCurrent
-                                  ? b.color.withOpacity(0.15)
-                                  : _C.card,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: isCurrent
-                                      ? b.color.withOpacity(0.6)
-                                      : _C.border,
-                                  width: isCurrent ? 1.5 : 1)),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                    color: b.color,
-                                    borderRadius: BorderRadius.circular(2)),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(b.name,
-                                        style: TextStyle(
-                                            color:
-                                                isCurrent ? b.color : _C.textHi,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12)),
-                                    Text(
-                                        '${b.startTimeStr} — ${b.endTimeStr} · ${b.durationStr} · ${b.playlistName}',
-                                        style: const TextStyle(
-                                            color: _C.textMid, fontSize: 10)),
-                                  ],
-                                ),
-                              ),
-                              if (isCurrent)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                      color: b.color.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6)),
-                                  child: Text('Seleccionado',
-                                      style: TextStyle(
-                                          color: b.color,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700)),
-                                ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => _playBlock(context, b),
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                      color: b.color.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                          color: b.color.withOpacity(0.4))),
-                                  child: Icon(Icons.play_arrow_rounded,
-                                      size: 16, color: b.color),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Botón reproducir seleccionado
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: () =>
-                        _playBlock(context, _blocks![_currentIndex]),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: Text(
-                        'Reproducir: ${_blocks![_currentIndex].playlistName}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: _blocks![_currentIndex].color,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12))),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _playBlock(BuildContext ctx, ProgramBlock block) {
-    FirebaseFirestore.instance
-        .collection('playlists')
-        .doc(block.playlistId)
-        .get()
-        .then((doc) {
-      if (!doc.exists || !ctx.mounted) return;
-      final data = doc.data() as Map<String, dynamic>;
-      final rawClips = (data['clips'] as List? ?? []);
-
-      final clips = rawClips.map((c) {
-        try {
-          return EditorClip.fromMap(c as Map<String, dynamic>);
-        } catch (e) {
-          return EditorClip(
-            id: const Uuid().v4(),
-            type: EditorLayerType.text,
-            label: 'Clip',
-            text: '',
-            startSec: 0,
-            durationSec: 5,
-            trackIndex: 0,
-          );
-        }
-      }).toList();
-      DateTime _parseDate(dynamic raw) {
-        if (raw == null) return DateTime.now();
-        if (raw is Timestamp) return raw.toDate();
-        if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
-        return DateTime.now();
-      }
-
-      final playlist = SavedPlaylist(
-        id: doc.id,
-        name: data['name'] ?? block.playlistName,
-        clips: clips,
-        createdAt: _parseDate(data['createdAt']),
-        viewLink: '',
-      );
-
-      showDialog(
-        context: ctx,
-        builder: (_) => PlaylistViewerDialog(playlist: playlist),
-      );
-    }).catchError((e) {
-      if (ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-          content: Text('Error al cargar playlist: $e'),
-          backgroundColor: const Color(0xFFEF4444),
-        ));
-      }
-    });
   }
 }

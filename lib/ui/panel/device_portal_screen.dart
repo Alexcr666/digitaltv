@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:ui_web' as ui_web;
 import 'dart:html' as html;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:digitaltv/logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -420,26 +421,7 @@ class _DevicePortalScreenState extends State<DevicePortalScreen>
                     ),
                     child: Column(
                       children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [_P.primary, Color(0xFF818CF8)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: _P.primary.withOpacity(0.4),
-                                  blurRadius: 30,
-                                  offset: const Offset(0, 10)),
-                            ],
-                          ),
-                          child: const Icon(Icons.tv_rounded,
-                              color: Colors.white, size: 36),
-                        ),
+                        AppLogo(height: 250, showBadge: false),
                         const SizedBox(height: 16),
                         const Text('Portal de Pantallas',
                             style: TextStyle(
@@ -980,6 +962,7 @@ class _Sidebar extends StatelessWidget {
   color: _P.accent,
   onTap: () => _launchDisplay(context, device),
 ),*/
+
           const Spacer(),
           Container(
             width: 36,
@@ -1262,6 +1245,14 @@ class _PlaylistsPanelState extends State<_PlaylistsPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Container(
+                        width: 250,
+                        child: AppLogo(height: 200, showBadge: false)),
+                  ],
+                ),
+
                 const Text('Mis Playlists',
                     style: TextStyle(
                         color: _P.textHi,
@@ -4152,6 +4143,12 @@ class _SchedulesListPanelState extends State<_SchedulesListPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                  width: 250, child: AppLogo(height: 200, showBadge: false)),
+            ],
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
             child: Column(

@@ -38,13 +38,11 @@ class StatCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(value,
                 style: TextStyle(
-                    color: color,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800)),
+                    color: color, fontSize: 26, fontWeight: FontWeight.w800)),
             const SizedBox(height: 4),
             Text(label,
-                style: const TextStyle(
-                    color: WAColors.textMuted, fontSize: 12)),
+                style:
+                    const TextStyle(color: WAColors.textMuted, fontSize: 12)),
           ],
         ),
       ),
@@ -79,7 +77,8 @@ class BotCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: bot.statusColor.withOpacity(0.15),
                   ),
-                  child: const Icon(Icons.chat, size: 18, color: WAColors.white),
+                  child:
+                      const Icon(Icons.chat, size: 18, color: WAColors.white),
                 ),
                 const Spacer(),
                 Container(
@@ -104,17 +103,12 @@ class BotCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     fontSize: 14),
                 overflow: TextOverflow.ellipsis),
-            Text(
-                bot.companyName.isNotEmpty
-                    ? bot.companyName
-                    : bot.aiModel,
-                style: const TextStyle(
-                    color: WAColors.textMuted, fontSize: 11),
+            Text(bot.companyName.isNotEmpty ? bot.companyName : bot.aiModel,
+                style: const TextStyle(color: WAColors.textMuted, fontSize: 11),
                 overflow: TextOverflow.ellipsis),
             const Spacer(),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: bot.statusColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
@@ -250,8 +244,6 @@ class BotListTile extends StatelessWidget {
     );
   }
 
-
-
   void confirmDelete(BuildContext context) {
     showDialog(
       context: context,
@@ -259,7 +251,8 @@ class BotListTile extends StatelessWidget {
         backgroundColor: WAColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Eliminar Bot',
-            style: TextStyle(color: WAColors.textPri, fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                color: WAColors.textPri, fontWeight: FontWeight.w700)),
         content: Text(
           '¿Seguro que quieres eliminar "${bot.name}"? Esta acción no se puede deshacer.',
           style: const TextStyle(color: WAColors.textSec, fontSize: 13),
@@ -282,7 +275,8 @@ class BotListTile extends StatelessWidget {
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Eliminar'),
           ),
@@ -291,14 +285,13 @@ class BotListTile extends StatelessWidget {
     );
   }
 }
+
 class DashboardView extends StatefulWidget {
   final WAService service;
   final List<WAChatbot> bots;
   final Function(WAChatbot) onSelectBot;
   const DashboardView(
-      {required this.service,
-      required this.bots,
-      required this.onSelectBot});
+      {required this.service, required this.bots, required this.onSelectBot});
 
   @override
   State<DashboardView> createState() => _DashboardViewState();
@@ -333,10 +326,7 @@ class _DashboardViewState extends State<DashboardView> {
             icon: Icons.dashboard_rounded,
             iconColor: WAColors.green,
             actions: [
-              HeaderBtn(
-                  icon: Icons.refresh,
-                  label: 'Actualizar',
-                  onTap: _load),
+              HeaderBtn(icon: Icons.refresh, label: 'Actualizar', onTap: _load),
             ],
           ),
           Expanded(

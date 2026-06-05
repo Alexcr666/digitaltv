@@ -1,4 +1,3 @@
-
 import 'dart:developer';
 import 'dart:html' as html;
 import 'dart:async';
@@ -26,11 +25,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:digitaltv/chatbot/page/widget.dart' as widget2;
 
 import 'page/analitics.dart';
+
 // ─────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────
 const String kWABaseUrl = 'https://gettranscribeai.onrender.com';
-
 
 class WhatsappChatbotPage extends StatefulWidget {
   final String userId;
@@ -59,7 +58,6 @@ class _WhatsappChatbotPageState extends State<WhatsappChatbotPage> {
     _service = WAService(widget.userId);
     _loadBots();
   }
- 
 
   Future<void> _loadBots() async {
     setState(() => _loading = true);
@@ -67,33 +65,57 @@ class _WhatsappChatbotPageState extends State<WhatsappChatbotPage> {
     setState(() => _loading = false);
   }
 
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: WAColors.bg,
-    body: _loading
-        ? const Center(
-            child: CircularProgressIndicator(color: WAColors.green))
-        : Row(
-            children: [
-             // _buildSidebar(),
-              Expanded(child: _buildContent()),
-            ],
-          ),
-  );
-}
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: WAColors.bg,
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: WAColors.green))
+          : Row(
+              children: [
+                // _buildSidebar(),
+                Expanded(child: _buildContent()),
+              ],
+            ),
+    );
+  }
 
   Widget _buildSidebar() {
-final items = [
-  {'icon': Icons.dashboard_rounded, 'label': 'Dashboard', 'view': 'dashboard'},
-  {'icon': Icons.smart_toy_rounded, 'label': 'Mis Bots', 'view': 'bots'},
-  {'icon': Icons.chat_bubble_rounded, 'label': 'Conversaciones', 'view': 'chat'},
-  {'icon': Icons.link_rounded, 'label': 'Conexión', 'view': 'connection'},
-  {'icon': Icons.analytics_rounded, 'label': 'Analytics', 'view': 'analyticsGlobal'},
-  {'icon': Icons.view_kanban_rounded, 'label': 'Kanban Ventas', 'view': 'kanban'},
-  {'icon': Icons.send_rounded, 'label': 'Envíos Masivos', 'view': 'massSend'},       // NUEVO
-  {'icon': Icons.token_rounded, 'label': 'Tokens IA', 'view': 'tokenUsage'},         // NUEVO
-];
+    final items = [
+      {
+        'icon': Icons.dashboard_rounded,
+        'label': 'Dashboard',
+        'view': 'dashboard'
+      },
+      {'icon': Icons.smart_toy_rounded, 'label': 'Mis Bots', 'view': 'bots'},
+      {
+        'icon': Icons.chat_bubble_rounded,
+        'label': 'Conversaciones',
+        'view': 'chat'
+      },
+      {'icon': Icons.link_rounded, 'label': 'Conexión', 'view': 'connection'},
+      {
+        'icon': Icons.analytics_rounded,
+        'label': 'Analytics',
+        'view': 'analyticsGlobal'
+      },
+      {
+        'icon': Icons.view_kanban_rounded,
+        'label': 'Kanban Ventas',
+        'view': 'kanban'
+      },
+      {
+        'icon': Icons.send_rounded,
+        'label': 'Envíos Masivos',
+        'view': 'massSend'
+      }, // NUEVO
+      {
+        'icon': Icons.token_rounded,
+        'label': 'Tokens IA',
+        'view': 'tokenUsage'
+      }, // NUEVO
+    ];
     return Container(
       width: 220,
       color: WAColors.surface,
@@ -209,47 +231,46 @@ final items = [
     }
     switch (_currentView) {
       case 'kanban':
-  return KanbanView(
-    service: _service,
-    bots: _bots,
-    onOpenTrace: (convId, botId) => setState(() {
-      _selectedBot = _bots.firstWhere((b) => b.id == botId, orElse: () => _bots.first);
-      _currentView = 'analytics';
-    }),
-  );
+        return KanbanView(
+          service: _service,
+          bots: _bots,
+          onOpenTrace: (convId, botId) => setState(() {
+            _selectedBot = _bots.firstWhere((b) => b.id == botId,
+                orElse: () => _bots.first);
+            _currentView = 'analytics';
+          }),
+        );
       case 'dashboard':
         return DashboardView(
           service: _service,
           bots: _bots,
-          onSelectBot: (bot) =>
-              setState(() {
-                _selectedBot = bot;
-                _currentView = 'botDetail';
-              }),
+          onSelectBot: (bot) => setState(() {
+            _selectedBot = bot;
+            _currentView = 'botDetail';
+          }),
         );
-        case 'massSend':
+      case 'massSend':
         return MassSendView(service: _service, bots: _bots);
       case 'tokenUsage':
         return TokenUsageView(service: _service, bots: _bots);
-        case 'analyticsGlobal':
-  return GlobalAnalyticsView(
-    service: _service,
-    bots: _bots,
-    onSelectBot: (bot) => setState(() {
-      _selectedBot = bot;
-      _currentView = 'analytics';
-    }),
-  );
+      case 'analyticsGlobal':
+        return GlobalAnalyticsView(
+          service: _service,
+          bots: _bots,
+          onSelectBot: (bot) => setState(() {
+            _selectedBot = bot;
+            _currentView = 'analytics';
+          }),
+        );
       case 'bots':
         return _BotsListView(
           service: _service,
           bots: _bots,
           onRefresh: _loadBots,
-          onSelectBot: (bot) =>
-              setState(() {
-                _selectedBot = bot;
-                _currentView = 'botDetail';
-              }),
+          onSelectBot: (bot) => setState(() {
+            _selectedBot = bot;
+            _currentView = 'botDetail';
+          }),
         );
       case 'botDetail':
         if (_selectedBot == null) {
@@ -265,7 +286,7 @@ final items = [
           }),
           onOpenChat: () => setState(() => _currentView = 'chat'),
           onOpenStats: () => setState(() => _currentView = 'stats'),
-            onOpenAnalytics: () => setState(() => _currentView = 'analytics'),
+          onOpenAnalytics: () => setState(() => _currentView = 'analytics'),
           onEdit: () => setState(() => _currentView = 'config'),
           onRefresh: () async {
             await _loadBots();
@@ -277,27 +298,27 @@ final items = [
             }
           },
         );
-        case 'connection':
-  return ConnectionView(
-    service: _service,
-    bots: _bots,
-  );
+      case 'connection':
+        return ConnectionView(
+          service: _service,
+          bots: _bots,
+        );
 
-  case 'analytics':
-  if (_selectedBot == null) return const SizedBox();
-  return AnalyticsView(
-    bot: _selectedBot!,
-    service: _service,
-    onBack: () => setState(() => _currentView = 'botDetail'),
-  );
+      case 'analytics':
+        if (_selectedBot == null) return const SizedBox();
+        return AnalyticsView(
+          bot: _selectedBot!,
+          service: _service,
+          onBack: () => setState(() => _currentView = 'botDetail'),
+        );
       case 'chat':
         return ChatView(
           bot: _selectedBot,
           bots: _bots,
           service: _service,
           onSelectBot: (bot) => setState(() => _selectedBot = bot),
-          onBack: () => setState(() =>
-              _currentView = _selectedBot != null ? 'botDetail' : 'bots'),
+          onBack: () => setState(
+              () => _currentView = _selectedBot != null ? 'botDetail' : 'bots'),
         );
       case 'stats':
         if (_selectedBot == null) return const SizedBox();
@@ -379,7 +400,6 @@ class _SidebarItem extends StatelessWidget {
 // DASHBOARD VIEW
 // ─────────────────────────────────────────
 
-
 // ─────────────────────────────────────────
 // BOTS LIST VIEW
 // ─────────────────────────────────────────
@@ -407,25 +427,29 @@ class _BotsListView extends StatelessWidget {
             icon: Icons.smart_toy_rounded,
             iconColor: WAColors.accent,
             actions: [
-           ElevatedButton(
-  onPressed: () => _showCreateDialog(context),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: WAColors.green,
-    foregroundColor: Colors.white,
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    minimumSize: Size.zero, // ✅
-    tapTargetSize: MaterialTapTargetSize.shrinkWrap, // ✅
-  ),
-  child:Container(padding: EdgeInsets.all(10),child:  Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(Icons.add, size: 16),
-      SizedBox(width: 8),
-      Text('Nuevo Bot'),
-    ],
-  )),
-),
+              ElevatedButton(
+                onPressed: () => _showCreateDialog(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WAColors.green,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  minimumSize: Size.zero, // ✅
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap, // ✅
+                ),
+                child: Container(
+                    padding: EdgeInsets.all(10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 16),
+                        SizedBox(width: 8),
+                        Text('Nuevo Bot'),
+                      ],
+                    )),
+              ),
             ],
           ),
           Expanded(
@@ -463,8 +487,7 @@ class _BotsListView extends StatelessWidget {
   void _showCreateDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) =>
-          CreateBotDialog(service: service, onCreated: onRefresh),
+      builder: (_) => CreateBotDialog(service: service, onCreated: onRefresh),
     );
   }
 }
@@ -538,8 +561,7 @@ class _BotDetailViewState extends State<_BotDetailView> {
             onBack: widget.onBack,
             actions: [
               StatusBadge(
-                  label: widget.bot.statusLabel,
-                  color: widget.bot.statusColor),
+                  label: widget.bot.statusLabel, color: widget.bot.statusColor),
               const SizedBox(width: 8),
               ActionButton(
                   icon: Icons.bar_chart_rounded,
@@ -556,10 +578,10 @@ class _BotDetailViewState extends State<_BotDetailView> {
                   label: 'Chat',
                   onTap: widget.onOpenChat),
 
-      ActionButton(
-    icon: Icons.analytics_rounded,
-    label: 'Analytics',
-    onTap: widget.onOpenAnalytics), // en el padre
+              ActionButton(
+                  icon: Icons.analytics_rounded,
+                  label: 'Analytics',
+                  onTap: widget.onOpenAnalytics), // en el padre
             ],
           ),
           Expanded(
@@ -621,8 +643,8 @@ class _BotDetailViewState extends State<_BotDetailView> {
                                                   'https://wa.me/${widget.bot.phoneNumber.replaceAll('+', '').replaceAll(' ', '')}'));
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(const SnackBar(
-                                                  content: Text(
-                                                      'Link copiado')));
+                                                  content:
+                                                      Text('Link copiado')));
                                         },
                                         child: Text(
                                           'wa.me/${widget.bot.phoneNumber}',
@@ -685,8 +707,7 @@ class _BotDetailViewState extends State<_BotDetailView> {
                                     ? WAColors.green
                                     : WAColors.textMuted,
                                 onTap: () async {
-                                  await widget.service
-                                      .toggleAI(widget.bot.id);
+                                  await widget.service.toggleAI(widget.bot.id);
                                   widget.onRefresh();
                                 },
                               ),
@@ -798,14 +819,17 @@ class _BotDetailViewState extends State<_BotDetailView> {
                               ),
                               const SizedBox(height: 12),
                               ConfigRow('Modelo IA', widget.bot.aiModel),
-                              ConfigRow('Temperatura',
-                                  '${widget.bot.temperature}'),
+                              ConfigRow(
+                                  'Temperatura', '${widget.bot.temperature}'),
                               ConfigRow(
                                   'Max tokens', '${widget.bot.maxTokens}'),
                               ConfigRow('Contexto msgs',
                                   '${widget.bot.contextMessages}'),
-                              ConfigRow('Número WA',
-                                  widget.bot.phoneNumber.isNotEmpty ? widget.bot.phoneNumber : 'No configurado'),
+                              ConfigRow(
+                                  'Número WA',
+                                  widget.bot.phoneNumber.isNotEmpty
+                                      ? widget.bot.phoneNumber
+                                      : 'No configurado'),
                               if (widget.bot.humanKeywords.isNotEmpty)
                                 ConfigRow('Palabras clave',
                                     widget.bot.humanKeywords.join(', ')),
@@ -852,5 +876,3 @@ class _BotDetailViewState extends State<_BotDetailView> {
     );
   }
 }
-
-

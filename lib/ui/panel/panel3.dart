@@ -1021,51 +1021,51 @@ class CustomTemplatesNotifier extends StateNotifier<List<TemplateItem>> {
             .toList(),
       };
 
- TemplateItem _templateFromFirestore(Map<String, dynamic> data) {
-  final List<EditorClip> clips =
-      (data['clips'] as List<dynamic>? ?? [])
-          .map(
-            (clip) => EditorClip.fromMap(
-              Map<String, dynamic>.from(clip as Map),
-            ),
-          )
-          .toList();
+  TemplateItem _templateFromFirestore(Map<String, dynamic> data) {
+    final List<EditorClip> clips = (data['clips'] as List<dynamic>? ?? [])
+        .map(
+          (clip) => EditorClip.fromMap(
+            Map<String, dynamic>.from(clip as Map),
+          ),
+        )
+        .toList();
 
-  final int iconCodePoint = data['iconCodePoint'] as int? ?? Icons.help.codePoint;
-  final String iconFontFamily =
-      data['iconFontFamily'] as String? ?? 'MaterialIcons';
+    final int iconCodePoint =
+        data['iconCodePoint'] as int? ?? Icons.help.codePoint;
+    final String iconFontFamily =
+        data['iconFontFamily'] as String? ?? 'MaterialIcons';
 
-  final int colorValue =
-      data['colorValue'] as int? ?? Colors.blue.value;
+    final int colorValue = data['colorValue'] as int? ?? Colors.blue.value;
 
-  return TemplateItem(
-    id: data['id'] as String? ?? '',
-    name: data['name'] as String? ?? '',
-    category: data['category'] as String? ?? '',
-    icon: _iconFromCodePoint(iconCodePoint),
-    color: Color(colorValue),
-    clips: clips,
-  );
-}
-IconData _iconFromCodePoint(int codePoint) {
-  const known = <int, IconData>{
-    0xe5d2: Icons.star_rounded,
-    0xf06b3: Icons.waving_hand_rounded,
-    0xe54e: Icons.local_offer_rounded,
-    0xef56: Icons.restaurant_menu_rounded,
-    0xf05d4: Icons.newspaper_rounded,
-    0xea65: Icons.celebration_rounded,
-    0xe88e: Icons.info_rounded,
-    0xe0b7: Icons.campaign_rounded,
-    0xf04c5: Icons.bookmark_add_rounded,
-    0xe047: Icons.image_rounded,
-    0xe04b: Icons.videocam_rounded,
-    0xe262: Icons.text_fields_rounded,
-    0xe405: Icons.music_note_rounded,
-    0xe53b: Icons.layers_rounded,
-  };
-  return known[codePoint] ?? Icons.help_rounded;
-}
+    return TemplateItem(
+      id: data['id'] as String? ?? '',
+      name: data['name'] as String? ?? '',
+      category: data['category'] as String? ?? '',
+      icon: _iconFromCodePoint(iconCodePoint),
+      color: Color(colorValue),
+      clips: clips,
+    );
+  }
+
+  IconData _iconFromCodePoint(int codePoint) {
+    const known = <int, IconData>{
+      0xe5d2: Icons.star_rounded,
+      0xf06b3: Icons.waving_hand_rounded,
+      0xe54e: Icons.local_offer_rounded,
+      0xef56: Icons.restaurant_menu_rounded,
+      0xf05d4: Icons.newspaper_rounded,
+      0xea65: Icons.celebration_rounded,
+      0xe88e: Icons.info_rounded,
+      0xe0b7: Icons.campaign_rounded,
+      0xf04c5: Icons.bookmark_add_rounded,
+      0xe047: Icons.image_rounded,
+      0xe04b: Icons.videocam_rounded,
+      0xe262: Icons.text_fields_rounded,
+      0xe405: Icons.music_note_rounded,
+      0xe53b: Icons.layers_rounded,
+    };
+    return known[codePoint] ?? Icons.help_rounded;
+  }
 }
 
 // =============================================================================
